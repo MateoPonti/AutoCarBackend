@@ -1,0 +1,5 @@
+# Todo lo que no sea un archivo real pasa por el front controller.
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.php [L,QSA]
