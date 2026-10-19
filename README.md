@@ -1,6 +1,6 @@
 # AutoCar Backend (API JSON)
 
-API en **PHP vanilla + MySQL** de AutoCar (TP Integrador, Programación en Ambiente Web, UNLu).
+API en **PHP vanilla + PostgreSQL** de AutoCar (TP Integrador, Programación en Ambiente Web, UNLu).
 Compra y venta de vehículos. Entidad principal: **vehículos**. El front (Vercel) consume esta API.
 
 - **URL desplegada:** https://autocarbackend-1.onrender.com *(HTTPS)*
@@ -71,52 +71,50 @@ src/Core/          Config, Database (PDO), Router, Request, Response, Cors, Logg
 src/Auth/          Jwt, Auth, Usuario, AuthController
 src/Catalogo/      Vehiculo (modelo + validación), CatalogoController (API pública)
 src/Admin/         AdminVehiculoController (ABM)
-database/          schema.sql, seed.sql (y ca.pem de Aiven)
+database/          schema.sql, seed.sql (PostgreSQL)
 storage/logs/      app.log (fuera de public/)
 ```
 
 ## Requisitos
 
-- PHP **8.1 o superior** con `pdo_mysql` y `mbstring` (vienen activas en XAMPP/Laragon).
-- MySQL 8 (o MariaDB 10.4+).
+- PHP **8.1 o superior** con las extensiones `pdo_pgsql` y `mbstring` (en XAMPP: descomentar `extension=pdo_pgsql` y `extension=pgsql` en `php.ini`).
+- Una base **PostgreSQL**. Se usa [Neon](https://neon.com) (plan Free); en local puede ser la misma base de Neon (rama `dev`) o un Postgres propio.
+
+## Base de datos (Neon)
+
+1. Crear el proyecto en Neon. En la consola, abrir el **SQL Editor** de la rama `production`, pegar el contenido de `database/schema.sql` y ejecutarlo. Después hacer lo mismo con `database/seed.sql` (datos de prueba).
+2. Botón **Connect** → desactivar **Connection pooling** → copiar host, base (`neondb`), usuario y contraseña. Esos valores van a `DB_HOST`, `DB_NAME`, `DB_USER` y `DB_PASS` (`DB_PORT` es 5432).
+3. Para desarrollar sin tocar producción: **Create child branch** (por ejemplo `dev`) y usar sus datos en el `.env` local.
+
+Neon usa certificados públicos: no hace falta ningún `ca.pem`; la conexión usa `sslmode=require`.
+Plan Free: el cómputo se suspende tras 5 minutos sin uso y la primera consulta después tarda un poco más.
 
 ## Levantarla en local
 
-1. Crear la base e importar los scripts (con phpMyAdmin → Importar, o por consola):
-   ```
-   mysql -u root -p -e "CREATE DATABASE autocar CHARACTER SET utf8mb4"
-   mysql -u root -p autocar < database/schema.sql
-   mysql -u root -p autocar < database/seed.sql
-   ```
-2. Copiar `.env.example` como `.env` y completar `DB_*` y **`JWT_SECRET`** (generar con `php -r "echo bin2hex(random_bytes(32));"`).
-3. Iniciar el servidor:
+1. Copiar `.env.example` como `.env` y completar `DB_*` y **`JWT_SECRET`** (generar con `php -r "echo bin2hex(random_bytes(32));"`).
+2. Iniciar el servidor:
    ```
    php -S localhost:8000 -t public public/index.php
    ```
-4. Probar: http://localhost:8000/api/vehiculos
+3. Probar: http://localhost:8000/api/vehiculos
 
 ### Crear el primer administrador
 
-El registro público siempre crea usuarios con rol `usuario`. Para tener un admin, registrate con `POST /api/registro` y después ejecutá en la base:
+El registro público siempre crea usuarios con rol `usuario`. Para tener un admin, registrarse con `POST /api/registro` y después ejecutar en el SQL Editor de Neon:
 
 ```sql
 UPDATE users SET rol = 'admin' WHERE email = 'tu@email.com';
 ```
 
-Volvé a hacer login para obtener un token. (El rol se consulta en la base en cada pedido a `/api/admin`.)
+Volver a hacer login para obtener un token. (El rol se consulta en la base en cada pedido a `/api/admin`.)
 
-## Despliegue (Render + Aiven)
+## Despliegue (Render + Neon)
 
-1. **Base en Aiven** (MySQL, plan Free). Descargar el *CA certificate* y guardarlo como `database/ca.pem` (es público, se sube al repo).
-2. Importar el esquema contra Aiven:
-   ```
-   mysql -h HOST -P PUERTO -u USUARIO -p --ssl-ca=database/ca.pem defaultdb < database/schema.sql
-   mysql -h HOST -P PUERTO -u USUARIO -p --ssl-ca=database/ca.pem defaultdb < database/seed.sql
-   ```
-3. **Render → New → Web Service**, elegir el repo (runtime Docker, plan Free).
-4. En *Environment* cargar: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASS`, `DB_NAME` (Aiven), `JWT_SECRET` (distinto al local) y `FRONT_URL` (URL del front en Vercel, sin barra final; varias separadas por coma).
-5. En **Vercel**, variable `VITE_API_URL` (o el prefijo de tu framework) con la URL de Render, y redeploy.
-6. Cada `git push` a `main` redespliega solo. Errores: pestaña **Logs** de Render.
+1. Base creada e importada en Neon (ver arriba).
+2. **Render → New → Web Service**, elegir el repo (runtime Docker, plan Free).
+3. En *Environment* cargar: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS` (Neon), `JWT_SECRET` (distinto al local) y `FRONT_URL` (URL del front en Vercel, sin barra final; varias separadas por coma).
+4. En **Vercel**, variable `VITE_API_URL` (o el prefijo de tu framework) con la URL de Render, y redeploy.
+5. Cada `git push` a `main` redespliega solo. Errores: pestaña **Logs** de Render. `GET /health` responde sin tocar la base.
 
 Plan Free de Render: el servicio se duerme tras ~15 min sin visitas y la primera respuesta tarda cerca de un minuto.
 

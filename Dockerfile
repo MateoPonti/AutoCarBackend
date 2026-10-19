@@ -1,8 +1,12 @@
 # PHP vanilla + Apache, con la raíz del sitio en public/ (para Render).
 FROM php:8.3-apache
 
-RUN docker-php-ext-install pdo pdo_mysql \
- && a2enmod rewrite
+# pdo_pgsql necesita las cabeceras de libpq
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libpq-dev \
+ && docker-php-ext-install pdo pdo_pgsql \
+ && a2enmod rewrite \
+ && rm -rf /var/lib/apt/lists/*
 
 # Configuración de producción: display_errors desactivado, errores al log
 RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"

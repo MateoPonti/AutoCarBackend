@@ -1,7 +1,6 @@
--- Datos de prueba (solo vehículos). Los usuarios se crean desde /registro;
+-- Datos de prueba (solo vehículos). Ejecutar UNA vez, después de schema.sql. Los usuarios se crean desde POST /api/registro;
 -- para tener un administrador, ver README ("Crear el primer administrador").
 
-SET NAMES utf8mb4;
 
 INSERT INTO vehiculos (marca, modelo, anio, precio, kilometraje, combustible, transmision, estado, descripcion) VALUES
 ('Toyota',     'Corolla XEi',  2021, 24500000, 48000,  'nafta',     'automatica', 'disponible', 'Único dueño, service oficial al día. Cubiertas nuevas.'),

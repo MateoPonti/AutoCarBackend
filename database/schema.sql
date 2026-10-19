@@ -1,35 +1,30 @@
--- AutoCar · esquema de la base (MySQL 8 / Aiven). Se importa una sola vez:
---   mysql -h HOST -P PUERTO -u USUARIO -p --ssl-ca=database/ca.pem NOMBRE_BASE < database/schema.sql
--- (en local, sin --ssl-ca). Es idempotente: se puede volver a correr sin romper datos.
-
-SET NAMES utf8mb4;
+-- AutoCar · esquema de la base (PostgreSQL / Neon). Se ejecuta una vez en el SQL Editor de Neon
+-- (o con psql). Es idempotente: se puede volver a correr sin romper datos.
 
 CREATE TABLE IF NOT EXISTS users (
-  id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  id            INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   nombre        VARCHAR(80)  NOT NULL,
-  email         VARCHAR(254) NOT NULL,
+  email         VARCHAR(254) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
-  rol           ENUM('usuario','admin') NOT NULL DEFAULT 'usuario',
-  created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  UNIQUE KEY uq_users_email (email)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  rol           VARCHAR(10)  NOT NULL DEFAULT 'usuario' CHECK (rol IN ('usuario', 'admin')),
+  created_at    TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
 
 CREATE TABLE IF NOT EXISTS vehiculos (
-  id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
-  marca       VARCHAR(50)  NOT NULL,
-  modelo      VARCHAR(60)  NOT NULL,
-  anio        SMALLINT UNSIGNED NOT NULL,
-  precio      DECIMAL(11,2) NOT NULL,
-  kilometraje INT UNSIGNED NOT NULL DEFAULT 0,
-  combustible ENUM('nafta','diesel','gnc','hibrido','electrico') NOT NULL,
-  transmision ENUM('manual','automatica') NOT NULL,
-  estado      ENUM('disponible','vendido') NOT NULL DEFAULT 'disponible',
-  descripcion TEXT NULL,
-  imagen_url  VARCHAR(255) NULL,
-  created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (id),
-  KEY idx_vehiculos_marca (marca),
-  KEY idx_vehiculos_estado_precio (estado, precio)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  id          INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  marca       VARCHAR(50)   NOT NULL,
+  modelo      VARCHAR(60)   NOT NULL,
+  anio        SMALLINT      NOT NULL CHECK (anio BETWEEN 1950 AND 2100),
+  precio      NUMERIC(11,2) NOT NULL CHECK (precio > 0),
+  kilometraje INTEGER       NOT NULL DEFAULT 0 CHECK (kilometraje >= 0),
+  combustible VARCHAR(10)   NOT NULL CHECK (combustible IN ('nafta', 'diesel', 'gnc', 'hibrido', 'electrico')),
+  transmision VARCHAR(10)   NOT NULL CHECK (transmision IN ('manual', 'automatica')),
+  estado      VARCHAR(12)   NOT NULL DEFAULT 'disponible' CHECK (estado IN ('disponible', 'vendido')),
+  descripcion TEXT,
+  imagen_url  VARCHAR(255),
+  created_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_vehiculos_marca ON vehiculos (marca);
+CREATE INDEX IF NOT EXISTS idx_vehiculos_estado_precio ON vehiculos (estado, precio);

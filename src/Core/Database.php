@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-/** Conexión PDO única. Todas las consultas del proyecto usan sentencias preparadas. */
+/** Conexión PDO única (PostgreSQL / Neon). Todas las consultas del proyecto usan sentencias preparadas. */
 final class Database
 {
     private static ?PDO $pdo = null;
@@ -12,28 +12,25 @@ final class Database
             return self::$pdo;
         }
 
+        // Neon exige SSL (require). En un Postgres local sin SSL se usa DB_SSLMODE=disable.
+        $ssl = Config::get('DB_SSLMODE', 'require');
+        if (!in_array($ssl, ['disable', 'allow', 'prefer', 'require', 'verify-ca', 'verify-full'], true)) {
+            $ssl = 'require';
+        }
+
         $dsn = sprintf(
-            'mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4',
+            'pgsql:host=%s;port=%s;dbname=%s;sslmode=%s;connect_timeout=15',
             Config::get('DB_HOST', '127.0.0.1'),
-            Config::get('DB_PORT', '3306'),
-            Config::get('DB_NAME', 'autocar')
+            Config::get('DB_PORT', '5432'),
+            Config::get('DB_NAME', 'neondb'),
+            $ssl
         );
-        $opciones = [
+
+        self::$pdo = new PDO($dsn, Config::get('DB_USER', 'postgres'), Config::get('DB_PASS', ''), [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES   => false,
-        ];
-
-        // Aiven exige SSL: el certificado público va en database/ca.pem (o en DB_SSL_CA).
-        $ca = Config::get('DB_SSL_CA') ?? BASE_PATH . '/database/ca.pem';
-        if ($ca[0] !== '/') {
-            $ca = BASE_PATH . '/' . $ca;
-        }
-        if (Config::get('DB_SSL') !== '0' && is_file($ca)) {
-            $opciones[PDO::MYSQL_ATTR_SSL_CA] = $ca;
-        }
-
-        self::$pdo = new PDO($dsn, Config::get('DB_USER', 'root'), Config::get('DB_PASS', ''), $opciones);
+        ]);
         return self::$pdo;
     }
 }

@@ -34,7 +34,7 @@ final class AuthController
         try {
             $id = Usuario::crear($nombre, $email, password_hash($pass, PASSWORD_DEFAULT));
         } catch (PDOException $e) {
-            if ($e->getCode() !== '23000') { // 23000 = email duplicado (UNIQUE)
+            if ($e->getCode() !== '23505') { // 23505 = unique_violation (email duplicado)
                 throw $e;
             }
             Response::error(422, 'validacion', 'Revisá los datos ingresados.',

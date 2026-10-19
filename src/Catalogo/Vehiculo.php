@@ -20,7 +20,7 @@ final class Vehiculo
         if (($f['q'] ?? '') !== '') {
             // se escapan % y _ para que el usuario no pueda armar comodines
             $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $f['q']) . '%';
-            $where[] = '(marca LIKE :q1 OR modelo LIKE :q2 OR descripcion LIKE :q3)';
+            $where[] = '(marca ILIKE :q1 OR modelo ILIKE :q2 OR descripcion ILIKE :q3)';
             $params += ['q1' => $like, 'q2' => $like, 'q3' => $like];
         }
         if (($f['marca'] ?? '') !== '') {
@@ -69,10 +69,11 @@ final class Vehiculo
     {
         $st = Database::pdo()->prepare(
             'INSERT INTO vehiculos (marca, modelo, anio, precio, kilometraje, combustible, transmision, estado, descripcion, imagen_url)
-             VALUES (:marca, :modelo, :anio, :precio, :kilometraje, :combustible, :transmision, :estado, :descripcion, :imagen_url)'
+             VALUES (:marca, :modelo, :anio, :precio, :kilometraje, :combustible, :transmision, :estado, :descripcion, :imagen_url)
+             RETURNING id'
         );
         $st->execute(self::columnas($d));
-        return (int)Database::pdo()->lastInsertId();
+        return (int)$st->fetchColumn();
     }
 
     public static function actualizar(int $id, array $d): void
@@ -80,7 +81,7 @@ final class Vehiculo
         $st = Database::pdo()->prepare(
             'UPDATE vehiculos SET marca = :marca, modelo = :modelo, anio = :anio, precio = :precio,
                     kilometraje = :kilometraje, combustible = :combustible, transmision = :transmision,
-                    estado = :estado, descripcion = :descripcion, imagen_url = :imagen_url
+                    estado = :estado, descripcion = :descripcion, imagen_url = :imagen_url, updated_at = now()
              WHERE id = :id'
         );
         $st->execute(self::columnas($d) + ['id' => $id]);
@@ -166,14 +167,14 @@ final class Vehiculo
         return [$datos, $errores];
     }
 
-    /** Fila de la base → JSON con los tipos correctos (DECIMAL e INT llegan como texto desde MySQL). */
+    /** Fila de la base → JSON con los tipos correctos (NUMERIC llega como texto desde la base). */
     public static function paraApi(array $v): array
     {
         return [
             'id' => (int)$v['id'], 'marca' => $v['marca'], 'modelo' => $v['modelo'], 'anio' => (int)$v['anio'],
             'precio' => (float)$v['precio'], 'kilometraje' => (int)$v['kilometraje'],
             'combustible' => $v['combustible'], 'transmision' => $v['transmision'], 'estado' => $v['estado'],
-            'descripcion' => $v['descripcion'], 'imagen_url' => $v['imagen_url'], 'creado' => $v['created_at'],
+            'descripcion' => $v['descripcion'], 'imagen_url' => $v['imagen_url'], 'creado' => date('c', (int)strtotime((string)$v['created_at'])),
         ];
     }
 }

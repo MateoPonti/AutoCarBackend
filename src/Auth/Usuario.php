@@ -22,10 +22,10 @@ final class Usuario
     {
         // El rol de un registro público es siempre 'usuario'; el admin se asigna en la base.
         $st = Database::pdo()->prepare(
-            "INSERT INTO users (nombre, email, password_hash, rol) VALUES (:nombre, :email, :hash, 'usuario')"
+            "INSERT INTO users (nombre, email, password_hash, rol) VALUES (:nombre, :email, :hash, 'usuario') RETURNING id"
         );
         $st->execute(['nombre' => $nombre, 'email' => $email, 'hash' => $hash]);
-        return (int)Database::pdo()->lastInsertId();
+        return (int)$st->fetchColumn();
     }
 
     public static function rolDe(int $id): ?string
