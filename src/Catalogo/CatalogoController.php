@@ -1,48 +1,53 @@
 <?php
 declare(strict_types=1);
 
-/** Vista pública: listado con búsqueda y filtros, y detalle. */
+/** API pública: listado con búsqueda y filtros, y detalle. */
 final class CatalogoController
 {
-    private const POR_PAGINA = 9;
+    public const POR_PAGINA = 9;
 
     public function index(): void
     {
-        $f = self::filtros($_GET);
-        $pagina = max(1, (int)($_GET['page'] ?? 1));
-        $r = Vehiculo::buscar($f, $pagina, self::POR_PAGINA, true);
-
-        View::render(SRC_PATH . '/Catalogo/views/listado.php', [
-            'titulo'   => 'Vehículos',
-            'items'    => $r['items'],
-            'total'    => $r['total'],
-            'filtros'  => $f,
-            'marcas'   => Vehiculo::marcas(),
-            'pagina'   => $pagina,
-            'paginas'  => max(1, (int)ceil($r['total'] / self::POR_PAGINA)),
-        ]);
+        Response::json(self::listado(self::filtros($_GET), true, self::POR_PAGINA));
     }
 
     public function detalle(int $id): void
     {
         $v = Vehiculo::find($id);
         if ($v === null) {
-            View::error(404);
+            Response::error(404, 'no_encontrado', 'El vehículo no existe.');
         }
-        View::render(SRC_PATH . '/Catalogo/views/detalle.php', [
-            'titulo' => $v['marca'] . ' ' . $v['modelo'],
-            'v'      => $v,
-        ]);
+        Response::json(['vehiculo' => Vehiculo::paraApi($v)]);
+    }
+
+    public function marcas(): void
+    {
+        Response::json(['marcas' => Vehiculo::marcas()]);
+    }
+
+    /** Respuesta paginada, compartida con el listado de administración. */
+    public static function listado(array $filtros, bool $soloDisponibles, int $porPagina): array
+    {
+        $pagina = max(1, (int)($_GET['page'] ?? 1));
+        $r = Vehiculo::buscar($filtros, $pagina, $porPagina, $soloDisponibles);
+        return [
+            'items'      => array_map([Vehiculo::class, 'paraApi'], $r['items']),
+            'total'      => $r['total'],
+            'pagina'     => $pagina,
+            'por_pagina' => $porPagina,
+            'paginas'    => max(1, (int)ceil($r['total'] / $porPagina)),
+        ];
     }
 
     /** Normaliza lo que llega por la URL: nada de lo que viene del navegador se usa sin validar. */
     public static function filtros(array $get): array
     {
-        $precio = str_replace(',', '.', trim((string)($get['precio_max'] ?? '')));
-        $comb = (string)($get['combustible'] ?? '');
+        $texto  = static fn(string $k, int $max): string => is_string($get[$k] ?? null) ? mb_substr(trim($get[$k]), 0, $max) : '';
+        $precio = str_replace(',', '.', $texto('precio_max', 12));
+        $comb   = $texto('combustible', 20);
         return [
-            'q'           => mb_substr(trim((string)($get['q'] ?? '')), 0, 60),
-            'marca'       => mb_substr(trim((string)($get['marca'] ?? '')), 0, 50),
+            'q'           => $texto('q', 60),
+            'marca'       => $texto('marca', 50),
             'combustible' => in_array($comb, Vehiculo::COMBUSTIBLES, true) ? $comb : '',
             'precio_max'  => preg_match('/^\d{1,9}(\.\d{1,2})?$/', $precio) ? $precio : null,
         ];

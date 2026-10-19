@@ -11,6 +11,13 @@ final class Usuario
         return $st->fetch() ?: null;
     }
 
+    public static function porId(int $id): ?array
+    {
+        $st = Database::pdo()->prepare('SELECT id, nombre, email, rol FROM users WHERE id = :id');
+        $st->execute(['id' => $id]);
+        return $st->fetch() ?: null;
+    }
+
     public static function crear(string $nombre, string $email, string $hash): int
     {
         // El rol de un registro público es siempre 'usuario'; el admin se asigna en la base.
@@ -27,5 +34,11 @@ final class Usuario
         $st->execute(['id' => $id]);
         $rol = $st->fetchColumn();
         return $rol === false ? null : (string)$rol;
+    }
+
+    /** Datos que el front puede ver (nunca el hash). */
+    public static function publico(array $u): array
+    {
+        return ['id' => (int)$u['id'], 'nombre' => $u['nombre'], 'email' => $u['email'], 'rol' => $u['rol']];
     }
 }

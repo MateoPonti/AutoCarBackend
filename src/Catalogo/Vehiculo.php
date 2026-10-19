@@ -68,8 +68,8 @@ final class Vehiculo
     public static function crear(array $d): int
     {
         $st = Database::pdo()->prepare(
-            'INSERT INTO vehiculos (marca, modelo, anio, precio, kilometraje, combustible, transmision, estado, descripcion, imagen)
-             VALUES (:marca, :modelo, :anio, :precio, :kilometraje, :combustible, :transmision, :estado, :descripcion, :imagen)'
+            'INSERT INTO vehiculos (marca, modelo, anio, precio, kilometraje, combustible, transmision, estado, descripcion, imagen_url)
+             VALUES (:marca, :modelo, :anio, :precio, :kilometraje, :combustible, :transmision, :estado, :descripcion, :imagen_url)'
         );
         $st->execute(self::columnas($d));
         return (int)Database::pdo()->lastInsertId();
@@ -80,7 +80,7 @@ final class Vehiculo
         $st = Database::pdo()->prepare(
             'UPDATE vehiculos SET marca = :marca, modelo = :modelo, anio = :anio, precio = :precio,
                     kilometraje = :kilometraje, combustible = :combustible, transmision = :transmision,
-                    estado = :estado, descripcion = :descripcion, imagen = :imagen
+                    estado = :estado, descripcion = :descripcion, imagen_url = :imagen_url
              WHERE id = :id'
         );
         $st->execute(self::columnas($d) + ['id' => $id]);
@@ -97,7 +97,7 @@ final class Vehiculo
         return [
             'marca' => $d['marca'], 'modelo' => $d['modelo'], 'anio' => $d['anio'], 'precio' => $d['precio'],
             'kilometraje' => $d['kilometraje'], 'combustible' => $d['combustible'], 'transmision' => $d['transmision'],
-            'estado' => $d['estado'], 'descripcion' => $d['descripcion'], 'imagen' => $d['imagen'] ?? null,
+            'estado' => $d['estado'], 'descripcion' => $d['descripcion'], 'imagen_url' => $d['imagen_url'],
         ];
     }
 
@@ -108,7 +108,7 @@ final class Vehiculo
     public static function validar(array $in): array
     {
         $errores = [];
-        $txt = static fn(string $k): string => trim((string)($in[$k] ?? ''));
+        $txt = static fn(string $k): string => Request::texto($in, $k);
 
         $marca = $txt('marca');
         if ($marca === '' || mb_strlen($marca) > 50) {
@@ -151,29 +151,29 @@ final class Vehiculo
             $errores['descripcion'] = 'La descripción admite hasta 2000 caracteres.';
         }
 
+        $url = $txt('imagen_url');
+        if ($url !== '' && (mb_strlen($url) > 255 || !filter_var($url, FILTER_VALIDATE_URL)
+                || !in_array(strtolower((string)parse_url($url, PHP_URL_SCHEME)), ['http', 'https'], true))) {
+            $errores['imagen_url'] = 'Ingresá una URL http(s) válida (hasta 255 caracteres) o dejalo vacío.';
+        }
+
         $datos = [
             'marca' => $marca, 'modelo' => $modelo, 'anio' => (int)$anio, 'precio' => $precioTxt,
             'kilometraje' => (int)$km, 'combustible' => $comb, 'transmision' => $trans,
             'estado' => $estado, 'descripcion' => $desc !== '' ? $desc : null,
+            'imagen_url' => $url !== '' ? $url : null,
         ];
         return [$datos, $errores];
     }
 
-    /** Texto para mostrar (con tildes) de un valor de los ENUM. */
-    public static function etiqueta(string $valor): string
+    /** Fila de la base → JSON con los tipos correctos (DECIMAL e INT llegan como texto desde MySQL). */
+    public static function paraApi(array $v): array
     {
         return [
-            'hibrido' => 'Híbrido', 'electrico' => 'Eléctrico', 'automatica' => 'Automática',
-            'gnc' => 'GNC', 'diesel' => 'Diésel',
-        ][$valor] ?? ucfirst($valor);
-    }
-
-    /** URL pública de la foto, o null si no hay (o si el archivo ya no existe en el disco). */
-    public static function imagenUrl(?string $archivo): ?string
-    {
-        if ($archivo === null || $archivo === '' || !is_file(BASE_PATH . '/public/uploads/' . basename($archivo))) {
-            return null;
-        }
-        return '/uploads/' . rawurlencode(basename($archivo));
+            'id' => (int)$v['id'], 'marca' => $v['marca'], 'modelo' => $v['modelo'], 'anio' => (int)$v['anio'],
+            'precio' => (float)$v['precio'], 'kilometraje' => (int)$v['kilometraje'],
+            'combustible' => $v['combustible'], 'transmision' => $v['transmision'], 'estado' => $v['estado'],
+            'descripcion' => $v['descripcion'], 'imagen_url' => $v['imagen_url'], 'creado' => $v['created_at'],
+        ];
     }
 }

@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS vehiculos (
   transmision ENUM('manual','automatica') NOT NULL,
   estado      ENUM('disponible','vendido') NOT NULL DEFAULT 'disponible',
   descripcion TEXT NULL,
-  imagen      VARCHAR(100) NULL,
+  imagen_url  VARCHAR(255) NULL,
   created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),

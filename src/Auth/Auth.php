@@ -1,62 +1,49 @@
 <?php
 declare(strict_types=1);
 
-/** Sesión y control de acceso. El rol se consulta en la base, no se confía en lo guardado en la sesión. */
+/**
+ * Identidad del pedido a partir del token Bearer. El rol NO se toma del token:
+ * se consulta en la base, así un cambio de rol o un usuario borrado surten efecto de inmediato.
+ */
 final class Auth
 {
-    public static function user(): ?array
+    private static ?array $claims = null;
+    private static bool $leido = false;
+
+    public static function ttl(): int
     {
-        $u = $_SESSION['user'] ?? null;
-        return is_array($u) ? $u : null;
+        return max(300, (int)(Config::get('JWT_TTL', '7200'))); // 2 horas por defecto
     }
 
-    public static function check(): bool
+    public static function emitirToken(array $usuario): string
     {
-        return self::user() !== null;
+        return Jwt::emitir(['sub' => (int)$usuario['id']], self::ttl());
     }
 
-    public static function isAdmin(): bool
+    /** ID del usuario autenticado, o null. */
+    public static function id(): ?int
     {
-        $u = self::user();
-        return $u !== null && Usuario::rolDe((int)$u['id']) === 'admin';
-    }
-
-    public static function login(array $usuario): void
-    {
-        session_regenerate_id(true); // evita fijación de sesión
-        $_SESSION['user'] = [
-            'id'     => (int)$usuario['id'],
-            'nombre' => (string)$usuario['nombre'],
-            'rol'    => (string)$usuario['rol'],
-        ];
-    }
-
-    public static function logout(): void
-    {
-        $_SESSION = [];
-        if (ini_get('session.use_cookies')) {
-            $p = session_get_cookie_params();
-            setcookie(session_name(), '', [
-                'expires' => time() - 3600, 'path' => $p['path'],
-                'secure' => $p['secure'], 'httponly' => true, 'samesite' => 'Lax',
-            ]);
+        if (!self::$leido) {
+            self::$leido = true;
+            $token = Request::bearer();
+            self::$claims = $token !== null ? Jwt::verificar($token) : null;
         }
-        session_destroy();
+        return self::$claims !== null ? (int)self::$claims['sub'] : null;
     }
 
     public static function requireLogin(): void
     {
-        if (!self::check()) {
-            flash_set('Ingresá para continuar.');
-            redirect('/login');
+        if (self::id() === null) {
+            header('WWW-Authenticate: Bearer');
+            Response::error(401, 'no_autenticado', 'Necesitás iniciar sesión.');
         }
     }
 
     public static function requireAdmin(): void
     {
         self::requireLogin();
-        if (!self::isAdmin()) {
-            View::error(403, 'No tenés permisos para entrar a esta sección.');
+        if (Usuario::rolDe((int)self::id()) !== 'admin') {
+            Response::error(403, 'prohibido', 'No tenés permisos para esta acción.');
         }
     }
 }

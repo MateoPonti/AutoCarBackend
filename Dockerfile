@@ -15,8 +15,8 @@ RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-av
 
 COPY . /var/www/html/
 
-# Apache corre como www-data: necesita escribir logs y fotos subidas
-RUN mkdir -p /var/www/html/storage/logs /var/www/html/public/uploads \
- && chown -R www-data:www-data /var/www/html/storage /var/www/html/public/uploads
+# Apache corre como www-data: necesita escribir el log de errores
+RUN mkdir -p /var/www/html/storage/logs \
+ && chown -R www-data:www-data /var/www/html/storage
 
 EXPOSE 80

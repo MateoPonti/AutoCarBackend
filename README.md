@@ -1,65 +1,109 @@
-# AutoCar Backend
+# AutoCar Backend (API JSON)
 
-Aplicación web en **PHP vanilla + MySQL** de AutoCar (TP Integrador, Programación en Ambiente Web, UNLu).
-Compra y venta de vehículos. Entidad principal: **vehículos**.
+API en **PHP vanilla + MySQL** de AutoCar (TP Integrador, Programación en Ambiente Web, UNLu).
+Compra y venta de vehículos. Entidad principal: **vehículos**. El front (Vercel) consume esta API.
 
 - **URL desplegada:** https://autocarbackend-1.onrender.com *(HTTPS)*
 - **Roles:** `usuario` (registrado) y `admin` (gestiona vehículos).
+- **Autenticación:** JWT (HS256) en el header `Authorization: Bearer <token>`.
 
-## Qué incluye (entrega 3)
+## Endpoints
 
-| Requisito | Dónde está |
-|---|---|
-| Registro, ingreso y salida con sesión y 2 roles | `src/Auth/` |
-| Alta, baja, modificación y listado de vehículos (admin) | `src/Admin/` → `/admin/vehiculos` |
-| Vista pública: listado con búsqueda/filtros y detalle | `src/Catalogo/` → `/vehiculos`, `/vehiculos/{id}` |
-| Despliegue con HTTPS | Render (Docker) + Aiven (MySQL) |
-| Seguridad | ver más abajo |
+Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", "mensaje": "...", "errores": {"campo": "mensaje"}}`.
+
+| Método y ruta | Acceso | Descripción |
+|---|---|---|
+| `POST /api/registro` | público | Crea una cuenta (`nombre`, `email`, `password`, `password_confirm` opcional). Rol siempre `usuario`. → 201 |
+| `POST /api/login` | público | `email`, `password` → `{token, tipo, expira_en, usuario}` |
+| `GET /api/me` | token | Datos del usuario autenticado |
+| `GET /api/vehiculos` | público | Listado. Filtros: `q`, `marca`, `combustible`, `precio_max`, `page` |
+| `GET /api/vehiculos/{id}` | público | Detalle |
+| `GET /api/marcas` | público | Marcas existentes (para armar el filtro) |
+| `GET /api/admin/vehiculos` | admin | Listado incluyendo vendidos |
+| `POST /api/admin/vehiculos` | admin | Alta → 201 |
+| `PUT /api/admin/vehiculos/{id}` | admin | Modificación (se envía el objeto completo) |
+| `DELETE /api/admin/vehiculos/{id}` | admin | Baja → 204 |
+| `GET /health` | público | Chequeo de vida (no toca la base) |
+
+Códigos: `400` JSON inválido, `401` sin token o token inválido, `403` sin rol admin, `404` no existe, `405` método no permitido, `422` validación, `500` error del servidor.
+
+Campos de un vehículo: `marca`, `modelo`, `anio`, `precio`, `kilometraje`, `combustible` (`nafta|diesel|gnc|hibrido|electrico`), `transmision` (`manual|automatica`), `estado` (`disponible|vendido`), `descripcion` (opcional), `imagen_url` (opcional, URL http/https).
+
+### Ejemplos
+
+```
+curl -X POST http://localhost:8000/api/login -H "Content-Type: application/json" \
+     -d '{"email":"tu@email.com","password":"Clave1234"}'
+
+curl http://localhost:8000/api/vehiculos?q=toyota&combustible=nafta
+
+curl -X POST http://localhost:8000/api/admin/vehiculos -H "Authorization: Bearer TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"marca":"Ford","modelo":"Focus","anio":2019,"precio":15000000,"kilometraje":60000,"combustible":"nafta","transmision":"manual"}'
+```
+
+### Cómo lo usa el front (Vercel)
+
+```js
+const API = import.meta.env.VITE_API_URL;   // https://autocarbackend-1.onrender.com (sin barra final)
+
+const r = await fetch(`${API}/api/login`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ email, password }),
+});
+const { token } = await r.json();            // guardarlo (memoria o sessionStorage)
+
+await fetch(`${API}/api/admin/vehiculos`, {
+  headers: { Authorization: `Bearer ${token}` },
+});
+```
+
+No hace falta `credentials: 'include'` (no se usan cookies). Para cerrar sesión, el front descarta el token.
 
 ## Estructura
 
 ```
-public/            única carpeta expuesta: index.php (front controller), .htaccess, assets/, uploads/
-src/bootstrap.php  autoload, errores, sesión y cabeceras de seguridad
+public/            única carpeta expuesta: index.php (front controller) y .htaccess
+src/bootstrap.php  autoload, errores, CORS y cabeceras
 src/routes.php     todas las rutas, con su guard (auth / admin)
-src/Core/          Config, Database (PDO), Router, View, Logger
-src/Auth/          Auth, Csrf, Usuario, AuthController, views/
-src/Catalogo/      Vehiculo (modelo), CatalogoController, views/ (vista pública)
-src/Admin/         AdminVehiculoController, views/ (ABM)
-src/Views/         layout y páginas de error (403, 404, 500)
-database/          schema.sql, seed.sql (y ca.pem de Aiven, ver abajo)
+src/Core/          Config, Database (PDO), Router, Request, Response, Cors, Logger
+src/Auth/          Jwt, Auth, Usuario, AuthController
+src/Catalogo/      Vehiculo (modelo + validación), CatalogoController (API pública)
+src/Admin/         AdminVehiculoController (ABM)
+database/          schema.sql, seed.sql (y ca.pem de Aiven)
 storage/logs/      app.log (fuera de public/)
 ```
 
 ## Requisitos
 
-- PHP **8.1 o superior** con las extensiones `pdo_mysql`, `mbstring` y `fileinfo` (vienen activas en XAMPP/Laragon).
+- PHP **8.1 o superior** con `pdo_mysql` y `mbstring` (vienen activas en XAMPP/Laragon).
 - MySQL 8 (o MariaDB 10.4+).
 
 ## Levantarla en local
 
-1. Crear la base e importar los scripts:
+1. Crear la base e importar los scripts (con phpMyAdmin → Importar, o por consola):
    ```
    mysql -u root -p -e "CREATE DATABASE autocar CHARACTER SET utf8mb4"
    mysql -u root -p autocar < database/schema.sql
    mysql -u root -p autocar < database/seed.sql
    ```
-2. Copiar `.env.example` como `.env` y completar `DB_*` (el `.env` no se sube al repo).
+2. Copiar `.env.example` como `.env` y completar `DB_*` y **`JWT_SECRET`** (generar con `php -r "echo bin2hex(random_bytes(32));"`).
 3. Iniciar el servidor:
    ```
    php -S localhost:8000 -t public public/index.php
    ```
-4. Abrir http://localhost:8000
+4. Probar: http://localhost:8000/api/vehiculos
 
 ### Crear el primer administrador
 
-El registro público siempre crea usuarios con rol `usuario`. Para tener un admin: registrate desde `/registro` y después ejecutá en la base:
+El registro público siempre crea usuarios con rol `usuario`. Para tener un admin, registrate con `POST /api/registro` y después ejecutá en la base:
 
 ```sql
 UPDATE users SET rol = 'admin' WHERE email = 'tu@email.com';
 ```
 
-Cerrá sesión y volvé a ingresar: aparece el enlace **Administrar**.
+Volvé a hacer login para obtener un token. (El rol se consulta en la base en cada pedido a `/api/admin`.)
 
 ## Despliegue (Render + Aiven)
 
@@ -70,23 +114,23 @@ Cerrá sesión y volvé a ingresar: aparece el enlace **Administrar**.
    mysql -h HOST -P PUERTO -u USUARIO -p --ssl-ca=database/ca.pem defaultdb < database/seed.sql
    ```
 3. **Render → New → Web Service**, elegir el repo (runtime Docker, plan Free).
-4. En *Environment* cargar: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASS`, `DB_NAME` (datos de Aiven).
-5. Cada `git push` a `main` redespliega solo. Para ver errores: pestaña **Logs** de Render. `GET /health` responde `ok` sin tocar la base.
+4. En *Environment* cargar: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASS`, `DB_NAME` (Aiven), `JWT_SECRET` (distinto al local) y `FRONT_URL` (URL del front en Vercel, sin barra final; varias separadas por coma).
+5. En **Vercel**, variable `VITE_API_URL` (o el prefijo de tu framework) con la URL de Render, y redeploy.
+6. Cada `git push` a `main` redespliega solo. Errores: pestaña **Logs** de Render.
 
-Notas del plan Free: el servicio se duerme tras ~15 min sin visitas (la primera carga tarda cerca de un minuto) y **el disco no es persistente**: las fotos subidas a `public/uploads/` se pierden en cada redeploy; el sitio muestra "Sin foto" en ese caso.
+Plan Free de Render: el servicio se duerme tras ~15 min sin visitas y la primera respuesta tarda cerca de un minuto.
 
 ## Seguridad aplicada
 
-- **Validación en el backend** de todos los formularios y filtros (`Vehiculo::validar`, `AuthController`, `CatalogoController::filtros`); la validación HTML del navegador es solo ayuda.
+- **Validación en el backend** de todo lo que entra: cuerpos JSON (`Vehiculo::validar`, `AuthController`), filtros de la URL y tipos de datos.
 - **Consultas parametrizadas** con PDO (`ATTR_EMULATE_PREPARES` desactivado); los comodines `%` y `_` de la búsqueda se escapan.
-- **Contraseñas** con `password_hash` / `password_verify` (bcrypt); nunca se guardan ni se muestran en claro.
-- **Control de rol en el servidor**: cada ruta de `/admin` lleva el guard `admin` en `src/routes.php`, que consulta el rol en la base en cada pedido (no se confía en la sesión ni en el navegador). Sin sesión → redirige a login; sin rol → 403.
-- **CSRF**: todos los POST (incluido salir) exigen token, verificado en `public/index.php`.
-- **XSS**: toda salida pasa por `e()` (`htmlspecialchars`); CSP restrictiva sin scripts en línea.
-- **Sesión**: cookie `HttpOnly`, `SameSite=Lax`, `Secure` bajo HTTPS; `session_regenerate_id` al ingresar.
-- **Errores**: `display_errors=0`; se registran en `storage/logs/app.log` y se muestra una página 500 genérica.
-- **Subida de fotos**: se valida el tipo por contenido (no por extensión), máximo 2 MB, nombre aleatorio y `public/uploads/.htaccess` bloquea la ejecución de PHP.
-- Login sin pistas: el mensaje es el mismo si el email no existe o la contraseña es incorrecta.
+- **Contraseñas** con `password_hash` / `password_verify` (bcrypt); nunca se guardan ni se devuelven en claro.
+- **JWT** HS256 firmado con `JWT_SECRET`, con vencimiento; se verifica la firma con `hash_equals` y se rechaza cualquier algoritmo distinto de HS256.
+- **Control de rol en el servidor**: cada ruta `/api/admin` lleva el guard `admin` en `src/routes.php`, que consulta el rol en la base (el rol no viaja en el token, así que un cambio de rol o un usuario borrado surten efecto al instante).
+- **CORS** restringido a los orígenes de `FRONT_URL`.
+- **Sin cookies**: el token va en un header, por lo que no hay CSRF.
+- **Errores**: `display_errors=0`; se registran en `storage/logs/app.log` y el cliente recibe un 500 genérico.
+- Login sin pistas: mismo mensaje y mismo costo si el email no existe o la contraseña es incorrecta.
 
 ## Entrega
 

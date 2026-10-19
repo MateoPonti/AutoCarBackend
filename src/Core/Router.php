@@ -3,27 +3,21 @@ declare(strict_types=1);
 
 /**
  * Router mínimo. Cada ruta puede llevar un "guard" que se aplica en el servidor:
- *   'auth'  → hace falta sesión iniciada
- *   'admin' → hace falta rol administrador
+ *   'auth'  → hace falta un token válido
+ *   'admin' → hace falta token válido y rol administrador (verificado en la base)
  */
 final class Router
 {
     private array $routes = [];
 
-    public function get(string $pattern, array $handler, ?string $guard = null): void
-    {
-        $this->add('GET', $pattern, $handler, $guard);
-    }
-
-    public function post(string $pattern, array $handler, ?string $guard = null): void
-    {
-        $this->add('POST', $pattern, $handler, $guard);
-    }
+    public function get(string $p, array $h, ?string $g = null): void    { $this->add('GET', $p, $h, $g); }
+    public function post(string $p, array $h, ?string $g = null): void   { $this->add('POST', $p, $h, $g); }
+    public function put(string $p, array $h, ?string $g = null): void    { $this->add('PUT', $p, $h, $g); }
+    public function delete(string $p, array $h, ?string $g = null): void { $this->add('DELETE', $p, $h, $g); }
 
     private function add(string $method, string $pattern, array $handler, ?string $guard): void
     {
-        // {id} captura solo dígitos
-        $regex = '#^' . preg_replace('#\{(\w+)\}#', '(?P<$1>[0-9]+)', $pattern) . '$#';
+        $regex = '#^' . preg_replace('#\{(\w+)\}#', '(?P<$1>[0-9]+)', $pattern) . '$#'; // {id} = solo dígitos
         $this->routes[] = [$method, $regex, $handler, $guard];
     }
 
@@ -51,6 +45,9 @@ final class Router
             return;
         }
 
-        View::error($existe ? 405 : 404);
+        if ($existe) {
+            Response::error(405, 'metodo_no_permitido', 'Método no permitido para esta ruta.');
+        }
+        Response::error(404, 'no_encontrado', 'La ruta no existe.');
     }
 }

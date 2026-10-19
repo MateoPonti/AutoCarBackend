@@ -1,7 +1,6 @@
 <?php
 /**
- * Arranque común: autoload, configuración, manejo de errores, sesión y cabeceras de seguridad.
- * Lo carga public/index.php antes de despachar la ruta.
+ * Arranque común de la API: autoload, configuración, manejo de errores, CORS y cabeceras.
  */
 declare(strict_types=1);
 
@@ -20,14 +19,11 @@ spl_autoload_register(static function (string $class): void {
     }
 });
 
-require SRC_PATH . '/Core/helpers.php';
-
 Config::load(BASE_PATH . '/.env');
 
-// ---------- Errores: nunca se muestran en pantalla (salvo APP_DEBUG=1 en local) ----------
-$debug = Config::get('APP_DEBUG', '0') === '1';
+// ---------- Errores: nunca se muestran al cliente; se registran en storage/logs/app.log ----------
 error_reporting(E_ALL);
-ini_set('display_errors', $debug ? '1' : '0');
+ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 
 set_error_handler(static function (int $no, string $msg, string $file, int $line): bool {
@@ -37,40 +33,19 @@ set_error_handler(static function (int $no, string $msg, string $file, int $line
     throw new ErrorException($msg, 0, $no, $file, $line);
 });
 
-set_exception_handler(static function (Throwable $e) use ($debug): void {
+set_exception_handler(static function (Throwable $e): void {
     Logger::error(get_class($e) . ': ' . $e->getMessage() . ' en ' . $e->getFile() . ':' . $e->getLine());
     while (ob_get_level() > 0) {
         ob_end_clean();
     }
-    if ($debug) {
-        http_response_code(500);
-        header('Content-Type: text/plain; charset=utf-8');
-        echo $e;
-        return;
-    }
-    View::error(500);
+    Response::error(500, 'servidor', 'Ocurrió un error inesperado. Probá de nuevo en unos minutos.');
 });
 
-// ---------- Sesión ----------
-$https = (($_SERVER['HTTPS'] ?? '') === 'on')
-    || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https'); // Render termina el HTTPS en su proxy
-session_set_cookie_params([
-    'lifetime' => 0,
-    'path'     => '/',
-    'secure'   => $https,
-    'httponly' => true,
-    'samesite' => 'Lax',
-]);
-session_name('autocar_sid');
-session_start();
-
-// ---------- Cabeceras de seguridad ----------
+// ---------- Cabeceras ----------
 header('X-Content-Type-Options: nosniff');
-header('X-Frame-Options: DENY');
-header('Referrer-Policy: strict-origin-when-cross-origin');
-header("Content-Security-Policy: default-src 'self'; style-src 'self' https://fonts.googleapis.com; "
-     . "font-src https://fonts.gstatic.com; img-src 'self' data:; script-src 'self'; "
-     . "form-action 'self'; frame-ancestors 'none'; base-uri 'self'");
+$https = (($_SERVER['HTTPS'] ?? '') === 'on') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
 if ($https) {
     header('Strict-Transport-Security: max-age=31536000');
 }
+
+Cors::handle(); // responde el preflight OPTIONS y habilita solo al front de FRONT_URL

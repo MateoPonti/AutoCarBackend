@@ -1,5 +1,8 @@
-# Todo lo que no sea un archivo real pasa por el front controller.
+# Apache no le pasa el header Authorization a PHP por defecto: se lo reenviamos (token Bearer).
 RewriteEngine On
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# Todo lo que no sea un archivo real pasa por el front controller.
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^ index.php [L,QSA]

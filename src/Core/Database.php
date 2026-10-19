@@ -29,7 +29,7 @@ final class Database
         if ($ca[0] !== '/') {
             $ca = BASE_PATH . '/' . $ca;
         }
-        if (is_file($ca)) {
+        if (Config::get('DB_SSL') !== '0' && is_file($ca)) {
             $opciones[PDO::MYSQL_ATTR_SSL_CA] = $ca;
         }
 
