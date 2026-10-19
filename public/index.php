@@ -1,12 +1,8 @@
 <?php
 /**
- * STUB DE VISTA PREVIA. Fede lo reemplaza con el front controller y el router reales.
- * Sirve sólo para mirar las pantallas de Auth antes de que existan el router, Auth y Csrf:
+ * Front controller: todo pedido que no sea un archivo real llega acá (ver public/.htaccess).
  *
- *   php -S localhost:8000 -t public public/index.php
- *
- * Abrí /login, /login?demo=error, /login?demo=ok, /registro y /registro?demo=errores.
- * Los POST no hacen nada real: sólo vuelven a mostrar la pantalla con errores de ejemplo.
+ * En local:  php -S localhost:8000 -t public public/index.php
  */
 declare(strict_types=1);
 
@@ -16,49 +12,21 @@ if (PHP_SAPI === 'cli-server' && is_file(__DIR__ . $path)) {
     return false;
 }
 
-// Stub de la clase Csrf de Mateo (app/Auth/Csrf.php). Se descarta cuando exista la real.
-if (!class_exists('Csrf')) {
-    class Csrf
-    {
-        public static function field(): string
-        {
-            return '<input type="hidden" name="csrf_token" value="stub">';
-        }
-    }
+require __DIR__ . '/../src/bootstrap.php';
+
+$metodo = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+
+if ($path === '/health') { // para chequear que el servicio está vivo, sin tocar la base
+    header('Content-Type: text/plain; charset=utf-8');
+    echo 'ok';
+    exit;
 }
 
-$viewsDir = __DIR__ . '/../app/Auth/views';
-$demo = $_GET['demo'] ?? '';
-$esPost = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST';
-
-switch ($path) {
-    case '/login':
-        $old = ['email' => $_POST['email'] ?? ''];
-        $errors = [];
-        $flash = null;
-        if ($esPost || $demo === 'error') {
-            $errors['general'] = 'El email o la contraseña no son correctos.';
-        }
-        if ($demo === 'ok') {
-            $flash = 'Cuenta creada. Ya podés ingresar.';
-        }
-        require $viewsDir . '/login.php';
-        break;
-
-    case '/registro':
-        $old = ['nombre' => $_POST['nombre'] ?? '', 'email' => $_POST['email'] ?? ''];
-        $errors = [];
-        if ($esPost || $demo === 'errores') {
-            $errors = [
-                'email' => 'Ese email ya tiene una cuenta. Ingresá o usá otro.',
-                'password' => 'La contraseña necesita al menos una letra y un número.',
-                'password_confirm' => 'Las contraseñas no coinciden.',
-            ];
-        }
-        require $viewsDir . '/registro.php';
-        break;
-
-    default:
-        http_response_code(404);
-        echo 'Página no encontrada (stub). Probá /login o /registro.';
+// Todo POST lleva token CSRF.
+if ($metodo === 'POST' && !Csrf::verify($_POST['csrf_token'] ?? null)) {
+    View::error(403, 'El formulario venció o no es válido. Volvé atrás, recargá la página e intentá de nuevo.');
 }
+
+$router = new Router();
+require SRC_PATH . '/routes.php';
+$router->dispatch($metodo, $_SERVER['REQUEST_URI'] ?? '/');
