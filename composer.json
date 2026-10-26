@@ -1,0 +1,19 @@
+{
+    "name": "autocar/backend",
+    "description": "API JSON de AutoCar (PHP + PostgreSQL en Neon)",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.2",
+        "firebase/php-jwt": "^6.10"
+    },
+    "autoload": {
+        "psr-4": {
+            "": ["src/Core/", "src/Auth/", "src/Catalogo/", "src/Admin/"]
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    }
+}

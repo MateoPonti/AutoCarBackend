@@ -1,6 +1,6 @@
 # AutoCar Backend (API JSON)
 
-API en **PHP vanilla + PostgreSQL** de AutoCar (TP Integrador, Programación en Ambiente Web, UNLu).
+API en **PHP + PostgreSQL** (con Composer) de AutoCar (TP Integrador, Programación en Ambiente Web, UNLu).
 Compra y venta de vehículos. Entidad principal: **vehículos**. El front (Vercel) consume esta API.
 
 - **URL desplegada:** https://autocarbackend-1.onrender.com *(HTTPS)*
@@ -65,19 +65,22 @@ No hace falta `credentials: 'include'` (no se usan cookies). Para cerrar sesión
 
 ```
 public/            única carpeta expuesta: index.php (front controller) y .htaccess
-src/bootstrap.php  autoload, errores, CORS y cabeceras
+composer.json      dependencias (firebase/php-jwt) y autoload de las clases propias
+src/bootstrap.php  autoload de Composer, errores, CORS y cabeceras
 src/routes.php     todas las rutas, con su guard (auth / admin)
 src/Core/          Config, Database (PDO), Router, Request, Response, Cors, Logger
-src/Auth/          Jwt, Auth, Usuario, AuthController
+src/Auth/          Jwt (envoltorio de firebase/php-jwt), Auth, Usuario, AuthController
 src/Catalogo/      Vehiculo (modelo + validación), CatalogoController (API pública)
 src/Admin/         AdminVehiculoController (ABM)
 database/          schema.sql, seed.sql (PostgreSQL)
 storage/logs/      app.log (fuera de public/)
+vendor/            librerías de Composer (se genera, no se sube al repo)
 ```
 
 ## Requisitos
 
-- PHP **8.1 o superior** con las extensiones `pdo_pgsql` y `mbstring` (en XAMPP: descomentar `extension=pdo_pgsql` y `extension=pgsql` en `php.ini`).
+- PHP **8.2 o superior** con las extensiones `pdo_pgsql` y `mbstring` (en XAMPP: descomentar `extension=pdo_pgsql` y `extension=pgsql` en `php.ini`).
+- [**Composer**](https://getcomposer.org) 2.x.
 - Una base **PostgreSQL**. Se usa [Neon](https://neon.com) (plan Free); en local puede ser la misma base de Neon (rama `dev`) o un Postgres propio.
 
 ## Base de datos (Neon)
@@ -91,12 +94,13 @@ Plan Free: el cómputo se suspende tras 5 minutos sin uso y la primera consulta 
 
 ## Levantarla en local
 
-1. Copiar `.env.example` como `.env` y completar `DB_*` y **`JWT_SECRET`** (generar con `php -r "echo bin2hex(random_bytes(32));"`).
-2. Iniciar el servidor:
+1. Instalar las dependencias: `composer install` (crea la carpeta `vendor/`).
+2. Copiar `.env.example` como `.env` y completar `DB_*` y **`JWT_SECRET`** (generar con `php -r "echo bin2hex(random_bytes(32));"`).
+3. Iniciar el servidor:
    ```
    php -S localhost:8000 -t public public/index.php
    ```
-3. Probar: http://localhost:8000/api/vehiculos
+4. Probar: http://localhost:8000/api/vehiculos
 
 ### Crear el primer administrador
 
@@ -111,7 +115,7 @@ Volver a hacer login para obtener un token. (El rol se consulta en la base en ca
 ## Despliegue (Render + Neon)
 
 1. Base creada e importada en Neon (ver arriba).
-2. **Render → New → Web Service**, elegir el repo (runtime Docker, plan Free).
+2. **Render → New → Web Service**, elegir el repo (runtime Docker, plan Free). El `Dockerfile` ejecuta `composer install` solo; hay que subir `composer.json` (y `composer.lock` si existe) al repo, pero no `vendor/`.
 3. En *Environment* cargar: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS` (Neon), `JWT_SECRET` (distinto al local) y `FRONT_URL` (URL del front en Vercel, sin barra final; varias separadas por coma).
 4. En **Vercel**, variable `VITE_API_URL` (o el prefijo de tu framework) con la URL de Render, y redeploy.
 5. Cada `git push` a `main` redespliega solo. Errores: pestaña **Logs** de Render. `GET /health` responde sin tocar la base.
@@ -123,7 +127,7 @@ Plan Free de Render: el servicio se duerme tras ~15 min sin visitas y la primera
 - **Validación en el backend** de todo lo que entra: cuerpos JSON (`Vehiculo::validar`, `AuthController`), filtros de la URL y tipos de datos.
 - **Consultas parametrizadas** con PDO (`ATTR_EMULATE_PREPARES` desactivado); los comodines `%` y `_` de la búsqueda se escapan.
 - **Contraseñas** con `password_hash` / `password_verify` (bcrypt); nunca se guardan ni se devuelven en claro.
-- **JWT** HS256 firmado con `JWT_SECRET`, con vencimiento; se verifica la firma con `hash_equals` y se rechaza cualquier algoritmo distinto de HS256.
+- **JWT** HS256 con la librería `firebase/php-jwt`, firmado con `JWT_SECRET` y con vencimiento; la librería verifica la firma y el vencimiento, y solo se acepta HS256 (se rechaza `none` y cualquier otro algoritmo).
 - **Control de rol en el servidor**: cada ruta `/api/admin` lleva el guard `admin` en `src/routes.php`, que consulta el rol en la base (el rol no viaja en el token, así que un cambio de rol o un usuario borrado surten efecto al instante).
 - **CORS** restringido a los orígenes de `FRONT_URL`.
 - **Sin cookies**: el token va en un header, por lo que no hay CSRF.

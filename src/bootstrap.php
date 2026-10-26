@@ -1,23 +1,23 @@
 <?php
 /**
- * Arranque común de la API: autoload, configuración, manejo de errores, CORS y cabeceras.
+ * Arranque común de la API: autoload (Composer), configuración, manejo de errores, CORS y cabeceras.
  */
 declare(strict_types=1);
 
 define('BASE_PATH', dirname(__DIR__));
 define('SRC_PATH', __DIR__);
 
-// Autoload sin Composer: la clase Foo se busca en src/{Core,Auth,Catalogo,Admin}/Foo.php.
-// En Linux las mayúsculas importan: el archivo se llama igual que la clase.
-spl_autoload_register(static function (string $class): void {
-    foreach (['Core', 'Auth', 'Catalogo', 'Admin'] as $dir) {
-        $file = SRC_PATH . "/$dir/$class.php";
-        if (is_file($file)) {
-            require $file;
-            return;
-        }
-    }
-});
+// Autoload de Composer (ver composer.json): carga las librerías de vendor/ y también las clases
+// propias, que se buscan en src/{Core,Auth,Catalogo,Admin}/Foo.php. En Linux las mayúsculas importan.
+// vendor/ no está en el repo: se genera con `composer install` (en Docker lo hace el Dockerfile).
+$autoload = BASE_PATH . '/vendor/autoload.php';
+if (!is_file($autoload)) {
+    error_log('Falta vendor/autoload.php: ejecutá "composer install".');
+    http_response_code(500);
+    header('Content-Type: application/json; charset=utf-8');
+    exit('{"error":"servidor","mensaje":"Ocurrió un error inesperado. Probá de nuevo en unos minutos."}');
+}
+require $autoload;
 
 Config::load(BASE_PATH . '/.env');
 

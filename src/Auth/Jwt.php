@@ -1,40 +1,37 @@
 <?php
 declare(strict_types=1);
 
-/** JWT HS256 mínimo, sin librerías. El secreto viene de JWT_SECRET (mínimo 32 caracteres). */
+use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
+
+/**
+ * Envoltorio mínimo sobre firebase/php-jwt (HS256), para que el resto del código
+ * siga usando Jwt::emitir() y Jwt::verificar(). El secreto viene de JWT_SECRET (mínimo 32 caracteres).
+ */
 final class Jwt
 {
     public static function emitir(array $claims, int $ttl): string
     {
         $ahora = time();
         $payload = $claims + ['iat' => $ahora, 'exp' => $ahora + $ttl];
-        $h = self::b64(json_encode(['alg' => 'HS256', 'typ' => 'JWT'], JSON_THROW_ON_ERROR));
-        $p = self::b64(json_encode($payload, JSON_THROW_ON_ERROR));
-        return "$h.$p." . self::b64(hash_hmac('sha256', "$h.$p", self::secreto(), true));
+        return JWT::encode($payload, self::secreto(), 'HS256');
     }
 
     /** Devuelve los claims si el token es válido y no venció; si no, null. */
     public static function verificar(string $token): ?array
     {
-        $partes = explode('.', $token);
-        if (count($partes) !== 3) {
-            return null;
-        }
-        [$h, $p, $firma] = $partes;
+        // Fuera del try: si falta JWT_SECRET es un error de configuración (500), no un token inválido (401)
+        $secreto = self::secreto();
 
-        $cabecera = json_decode((string)self::deb64($h), true);
-        if (!is_array($cabecera) || ($cabecera['alg'] ?? '') !== 'HS256') { // rechaza "none" y otros algoritmos
+        try {
+            // Key(..., 'HS256') obliga a ese algoritmo: la librería rechaza "none" y cualquier otro
+            $claims = (array)JWT::decode($token, new Key($secreto, 'HS256'));
+        } catch (\UnexpectedValueException|\DomainException|\InvalidArgumentException) {
+            // Firma incorrecta, token vencido (ExpiredException), mal formado, etc.
             return null;
         }
-        $esperada = self::b64(hash_hmac('sha256', "$h.$p", self::secreto(), true));
-        if (!hash_equals($esperada, $firma)) {
-            return null;
-        }
-        $claims = json_decode((string)self::deb64($p), true);
-        if (!is_array($claims) || !isset($claims['exp'], $claims['sub']) || (int)$claims['exp'] < time()) {
-            return null;
-        }
-        return $claims;
+
+        return isset($claims['exp'], $claims['sub']) ? $claims : null;
     }
 
     private static function secreto(): string
@@ -44,15 +41,5 @@ final class Jwt
             throw new RuntimeException('JWT_SECRET no está configurado (mínimo 32 caracteres).');
         }
         return $s;
-    }
-
-    private static function b64(string $bin): string
-    {
-        return rtrim(strtr(base64_encode($bin), '+/', '-_'), '=');
-    }
-
-    private static function deb64(string $txt): string|false
-    {
-        return base64_decode(strtr($txt, '-_', '+/'), true);
     }
 }
