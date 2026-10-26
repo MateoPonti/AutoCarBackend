@@ -22,9 +22,9 @@ COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 
 COPY . /var/www/html/
 
-# Instala las dependencias de producción (vendor/) y deja el autoload optimizado
+# Instala las dependencias de producción (vendor/) y deja el autoload optimizado (--no-security-blocking evita bloqueos de JWT)
 RUN cd /var/www/html \
- && COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction \
+ && COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-security-blocking \
  && rm -rf /root/.composer /root/.cache/composer
 
 # Apache corre como www-data: necesita escribir el log de errores
