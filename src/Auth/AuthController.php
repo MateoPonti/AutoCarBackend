@@ -1,9 +1,5 @@
 <?php
 
-namespace App\Auth;
-
-use App\Core\Response;
-use App\Core\Request;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 
