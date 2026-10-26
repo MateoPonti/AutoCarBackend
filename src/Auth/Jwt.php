@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-use Firebase\JWT\JWT;
+use Firebase\JWT\JWT as FirebaseJwt;
 use Firebase\JWT\Key;
 
 /**
@@ -14,7 +14,7 @@ final class Jwt
     {
         $ahora = time();
         $payload = $claims + ['iat' => $ahora, 'exp' => $ahora + $ttl];
-        return JWT::encode($payload, self::secreto(), 'HS256');
+        return FirebaseJwt::encode($payload, self::secreto(), 'HS256');
     }
 
     /** Devuelve los claims si el token es válido y no venció; si no, null. */
@@ -25,7 +25,7 @@ final class Jwt
 
         try {
             // Key(..., 'HS256') obliga a ese algoritmo: la librería rechaza "none" y cualquier otro
-            $claims = (array)JWT::decode($token, new Key($secreto, 'HS256'));
+            $claims = (array)FirebaseJwt::decode($token, new Key($secreto, 'HS256'));
         } catch (\UnexpectedValueException|\DomainException|\InvalidArgumentException) {
             // Firma incorrecta, token vencido (ExpiredException), mal formado, etc.
             return null;
