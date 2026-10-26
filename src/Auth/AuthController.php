@@ -1,78 +1,82 @@
 <?php
+declare(strict_types=1);
 
-use Firebase\JWT\JWT;
-use Firebase\JWT\Key;
+final class AuthController
+{
+    public function registro(): void
+    {
+        $in      = Request::json();
+        $nombre  = Request::texto($in, 'nombre');
+        $email   = mb_strtolower(Request::texto($in, 'email'));
+        $pass    = is_string($in['password'] ?? null) ? $in['password'] : '';
+        $confirm = is_string($in['password_confirm'] ?? null) ? $in['password_confirm'] : $pass; // opcional
+        $errores = [];
 
-class AuthController {
-
-    public static function login(): void {
-        $data = Request::json();
-        $email = trim($data['email'] ?? '');
-        $password = $data['password'] ?? '';
-
-        if (empty($email) || empty($password)) {
-            Response::json(['error' => 'Email y contraseña requeridos.'], 400);
-            return;
+        $len = mb_strlen($nombre);
+        if ($len < 2 || $len > 80) {
+            $errores['nombre'] = 'Ingresá tu nombre (entre 2 y 80 caracteres).';
+        }
+        if (strlen($email) > 254 || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $errores['email'] = 'Ingresá un email válido.';
+        }
+        if (strlen($pass) < 8 || strlen($pass) > 72) {
+            $errores['password'] = 'La contraseña debe tener entre 8 y 72 caracteres.';
+        } elseif (!preg_match('/[A-Za-z]/', $pass) || !preg_match('/\d/', $pass)) {
+            $errores['password'] = 'La contraseña necesita al menos una letra y un número.';
+        }
+        if ($pass !== $confirm) {
+            $errores['password_confirm'] = 'Las contraseñas no coinciden.';
+        }
+        if ($errores) {
+            Response::error(422, 'validacion', 'Revisá los datos ingresados.', $errores);
         }
 
-        $usuario = Usuario::findByEmail($email);
-
-        if (!$usuario || !password_verify($password, $usuario['password'])) {
-            Response::json(['error' => 'Credenciales inválidas.'], 401);
-            return;
+        try {
+            $id = Usuario::crear($nombre, $email, password_hash($pass, PASSWORD_DEFAULT));
+        } catch (PDOException $e) {
+            if ($e->getCode() !== '23505') { // 23505 = unique_violation (email duplicado)
+                throw $e;
+            }
+            Response::error(422, 'validacion', 'Revisá los datos ingresados.',
+                ['email' => 'Ese email ya tiene una cuenta. Ingresá o usá otro.']);
         }
+        Response::json(['usuario' => Usuario::publico(Usuario::porId($id))], 201);
+    }
 
-        // Clave secreta desde las variables de entorno de Render
-        $secretKey = getenv('JWT_SECRET') ?: 'clave_secreta_default';
+    public function login(): void
+    {
+        $in    = Request::json();
+        $email = mb_strtolower(Request::texto($in, 'email'));
+        $pass  = is_string($in['password'] ?? null) ? $in['password'] : '';
 
-        $payload = [
-            'iss' => 'autocar-backend',
-            'iat' => time(),
-            'exp' => time() + (60 * 60 * 24), // Token válido por 24 horas
-            'data' => [
-                'id' => $usuario['id'],
-                'email' => $usuario['email'],
-                'rol' => $usuario['rol'] ?? 'usuario'
-            ]
-        ];
-
-        // Generar token con la librería oficial de Firebase
-        $token = JWT::encode($payload, $secretKey, 'HS256');
+        $usuario = null;
+        if (filter_var($email, FILTER_VALIDATE_EMAIL) && $pass !== '' && strlen($pass) <= 72) {
+            $usuario = Usuario::porEmail($email);
+        }
+        if ($usuario === null) {
+            password_hash($pass, PASSWORD_DEFAULT); // mismo costo que verificar: no revela si el email existe
+            $ok = false;
+        } else {
+            $ok = password_verify($pass, $usuario['password_hash']);
+        }
+        if (!$ok) {
+            Response::error(401, 'credenciales', 'El email o la contraseña no son correctos.');
+        }
 
         Response::json([
-            'message' => 'Login exitoso',
-            'token' => $token,
-            'user' => [
-                'id' => $usuario['id'],
-                'email' => $usuario['email'],
-                'nombre' => $usuario['nombre'] ?? ''
-            ]
+            'token'      => Auth::emitirToken($usuario),
+            'tipo'       => 'Bearer',
+            'expira_en'  => Auth::ttl(),
+            'usuario'    => Usuario::publico($usuario),
         ]);
     }
 
-    public static function registro(): void {
-        $data = Request::json();
-        $email = trim($data['email'] ?? '');
-        $password = $data['password'] ?? '';
-        $nombre = trim($data['nombre'] ?? '');
-
-        if (empty($email) || empty($password)) {
-            Response::json(['error' => 'Email y contraseña requeridos.'], 400);
-            return;
+    public function me(): void
+    {
+        $u = Usuario::porId((int)Auth::id());
+        if ($u === null) { // el usuario fue borrado después de emitir el token
+            Response::error(401, 'no_autenticado', 'Necesitás iniciar sesión.');
         }
-
-        if (Usuario::findByEmail($email)) {
-            Response::json(['error' => 'El email ya está registrado.'], 409);
-            return;
-        }
-
-        $hashedPassword = password_hash($password, PASSWORD_BCRYPT);
-        $nuevoId = Usuario::crear($email, $hashedPassword, $nombre);
-
-        if ($nuevoId) {
-            Response::json(['message' => 'Usuario registrado exitosamente.'], 201);
-        } else {
-            Response::json(['error' => 'No se pudo crear el usuario.'], 500);
-        }
+        Response::json(['usuario' => Usuario::publico($u)]);
     }
 }

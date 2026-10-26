@@ -5,8 +5,6 @@
  */
 declare(strict_types=1);
 
-use App\Auth\AuthController;
-
 /** @var Router $router */
 
 // Público
