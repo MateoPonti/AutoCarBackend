@@ -14,10 +14,11 @@ final class CatalogoController
     public function detalle(int $id): void
     {
         $v = Vehiculo::find($id);
-        if ($v === null) {
+        // Una publicación pendiente o rechazada no es pública: 404 igual que si no existiera
+        if ($v === null || !in_array($v['estado'], Vehiculo::VISIBLES, true)) {
             Response::error(404, 'no_encontrado', 'El vehículo no existe.');
         }
-        Response::json(['vehiculo' => Vehiculo::paraApi($v)]);
+        Response::json(['vehiculo' => Vehiculo::paraApi($v) + ['fotos' => Foto::rutasDe($id)]]);
     }
 
     public function marcas(): void

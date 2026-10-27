@@ -17,6 +17,34 @@ final class Request
         return $datos;
     }
 
+    /**
+     * Campos de un formulario multipart/form-data (el que lleva archivos). Los archivos quedan en $_FILES.
+     * Si el pedido supera post_max_size, PHP descarta todo y $_POST llega vacío: se responde 413.
+     */
+    public static function formulario(): array
+    {
+        $tipo = strtolower($_SERVER['CONTENT_TYPE'] ?? '');
+        if (!str_starts_with($tipo, 'multipart/form-data')) {
+            Response::error(415, 'tipo_no_soportado', 'El pedido debe enviarse como multipart/form-data.');
+        }
+        if ((int)($_SERVER['CONTENT_LENGTH'] ?? 0) > self::bytes((string)ini_get('post_max_size'))) {
+            Response::error(413, 'cuerpo_muy_grande', 'Las fotos pesan demasiado en total. Probá con menos o más livianas.');
+        }
+        return $_POST;
+    }
+
+    /** "12M" → 12582912 (formato de las directivas de php.ini). */
+    private static function bytes(string $valor): int
+    {
+        $n = (int)$valor;
+        return match (strtoupper(substr(trim($valor), -1))) {
+            'G' => $n * 1024 ** 3,
+            'M' => $n * 1024 ** 2,
+            'K' => $n * 1024,
+            default => $n,
+        };
+    }
+
     /** Lee un campo como texto. Si no es un valor simple (array, objeto) lo trata como vacío. */
     public static function texto(array $datos, string $campo): string
     {

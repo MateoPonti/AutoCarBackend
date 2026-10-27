@@ -23,10 +23,13 @@ final class AdminVehiculoController
 
     public function actualizar(int $id): void
     {
-        if (Vehiculo::find($id) === null) {
+        $actual = Vehiculo::find($id);
+        if ($actual === null) {
             Response::error(404, 'no_encontrado', 'El vehículo no existe.');
         }
-        [$datos, $errores] = Vehiculo::validar(Request::json());
+        // El formulario del admin no manda los campos de la publicación (versión, localidad, canje...):
+        // los que no vienen se completan con los actuales para no borrarlos al guardar.
+        [$datos, $errores] = Vehiculo::validar(Request::json() + Vehiculo::paraApi($actual));
         if ($errores) {
             Response::error(422, 'validacion', 'Revisá los datos ingresados.', $errores);
         }

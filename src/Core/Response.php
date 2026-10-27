@@ -12,6 +12,18 @@ final class Response
         exit;
     }
 
+    /** Archivo binario (fotos). $publico = se puede cachear; si no, queda privado del navegador que lo pidió. */
+    public static function archivo(string $contenido, string $tipo, bool $publico): never
+    {
+        http_response_code(200);
+        header('Content-Type: ' . $tipo);
+        header('Content-Length: ' . strlen($contenido));
+        header('Cache-Control: ' . ($publico ? 'public, max-age=86400' : 'private, no-store'));
+        header("Content-Security-Policy: default-src 'none'; sandbox"); // si se abre directo, no ejecuta nada
+        echo $contenido;
+        exit;
+    }
+
     public static function noContent(): never
     {
         http_response_code(204);

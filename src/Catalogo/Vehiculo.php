@@ -6,7 +6,10 @@ final class Vehiculo
 {
     public const COMBUSTIBLES  = ['nafta', 'diesel', 'gnc', 'hibrido', 'electrico'];
     public const TRANSMISIONES = ['manual', 'automatica'];
-    public const ESTADOS       = ['disponible', 'vendido'];
+    public const CONDICIONES   = ['excelente', 'muy_bueno', 'bueno', 'regular'];
+    // pendiente = publicada por un usuario, espera aprobación del admin. El público sólo ve VISIBLES.
+    public const ESTADOS       = ['pendiente', 'disponible', 'rechazado', 'vendido'];
+    public const VISIBLES      = ['disponible', 'vendido'];
 
     /** @return array{items: array, total: int} */
     public static function buscar(array $f, int $pagina, int $porPagina, bool $soloDisponibles): array
@@ -42,7 +45,8 @@ final class Vehiculo
         $st->execute($params);
         $total = (int)$st->fetchColumn();
 
-        $st = $pdo->prepare("SELECT * FROM vehiculos $sqlWhere ORDER BY created_at DESC, id DESC LIMIT :lim OFFSET :off");
+        $st = $pdo->prepare('SELECT vehiculos.*, ' . self::PRIMERA_FOTO . " FROM vehiculos $sqlWhere
+                             ORDER BY created_at DESC, id DESC LIMIT :lim OFFSET :off");
         foreach ($params as $k => $v) {
             $st->bindValue(':' . $k, $v);
         }
@@ -58,30 +62,37 @@ final class Vehiculo
         return Database::pdo()->query('SELECT DISTINCT marca FROM vehiculos ORDER BY marca')->fetchAll(PDO::FETCH_COLUMN);
     }
 
+    /** Subconsulta con el id de la primera foto subida (para la ficha del listado). */
+    private const PRIMERA_FOTO = '(SELECT f.id FROM vehiculo_fotos f WHERE f.vehiculo_id = vehiculos.id ORDER BY f.orden, f.id LIMIT 1) AS foto_id';
+
     public static function find(int $id): ?array
     {
-        $st = Database::pdo()->prepare('SELECT * FROM vehiculos WHERE id = :id');
+        $st = Database::pdo()->prepare('SELECT vehiculos.*, ' . self::PRIMERA_FOTO . ' FROM vehiculos WHERE id = :id');
         $st->execute(['id' => $id]);
         return $st->fetch() ?: null;
     }
 
-    public static function crear(array $d): int
+    /** $usuarioId: dueño de la publicación; null cuando el vehículo lo carga el admin. */
+    public static function crear(array $d, ?int $usuarioId = null): int
     {
         $st = Database::pdo()->prepare(
-            'INSERT INTO vehiculos (marca, modelo, anio, precio, kilometraje, combustible, transmision, estado, descripcion, imagen_url)
-             VALUES (:marca, :modelo, :anio, :precio, :kilometraje, :combustible, :transmision, :estado, :descripcion, :imagen_url)
+            'INSERT INTO vehiculos (usuario_id, marca, modelo, version, anio, precio, kilometraje, combustible, transmision,
+                                    condicion, estado, descripcion, imagen_url, acepta_canje, busca_canje, localidad)
+             VALUES (:usuario_id, :marca, :modelo, :version, :anio, :precio, :kilometraje, :combustible, :transmision,
+                     :condicion, :estado, :descripcion, :imagen_url, :acepta_canje, :busca_canje, :localidad)
              RETURNING id'
         );
-        $st->execute(self::columnas($d));
+        $st->execute(self::columnas($d) + ['usuario_id' => $usuarioId]);
         return (int)$st->fetchColumn();
     }
 
     public static function actualizar(int $id, array $d): void
     {
         $st = Database::pdo()->prepare(
-            'UPDATE vehiculos SET marca = :marca, modelo = :modelo, anio = :anio, precio = :precio,
+            'UPDATE vehiculos SET marca = :marca, modelo = :modelo, version = :version, anio = :anio, precio = :precio,
                     kilometraje = :kilometraje, combustible = :combustible, transmision = :transmision,
-                    estado = :estado, descripcion = :descripcion, imagen_url = :imagen_url, updated_at = now()
+                    condicion = :condicion, estado = :estado, descripcion = :descripcion, imagen_url = :imagen_url,
+                    acepta_canje = :acepta_canje, busca_canje = :busca_canje, localidad = :localidad, updated_at = now()
              WHERE id = :id'
         );
         $st->execute(self::columnas($d) + ['id' => $id]);
@@ -99,14 +110,19 @@ final class Vehiculo
             'marca' => $d['marca'], 'modelo' => $d['modelo'], 'anio' => $d['anio'], 'precio' => $d['precio'],
             'kilometraje' => $d['kilometraje'], 'combustible' => $d['combustible'], 'transmision' => $d['transmision'],
             'estado' => $d['estado'], 'descripcion' => $d['descripcion'], 'imagen_url' => $d['imagen_url'],
+            'version' => $d['version'], 'condicion' => $d['condicion'], 'busca_canje' => $d['busca_canje'],
+            'localidad' => $d['localidad'],
+            'acepta_canje' => $d['acepta_canje'] ? 'true' : 'false', // PDO mandaría false como '' y PostgreSQL lo rechaza
         ];
     }
 
     /**
-     * Valida y normaliza lo que llega del formulario de administración.
+     * Valida y normaliza lo que llega del formulario de administración o del de publicar.
+     * $publicacion = true: lo publica un usuario, así que condición y localidad son obligatorias
+     * y el estado lo decide el servidor ('pendiente'), no lo que mande el cliente.
      * @return array{0: array, 1: array} [datos limpios, errores por campo]
      */
-    public static function validar(array $in): array
+    public static function validar(array $in, bool $publicacion = false): array
     {
         $errores = [];
         $txt = static fn(string $k): string => Request::texto($in, $k);
@@ -143,10 +159,30 @@ final class Vehiculo
         if (!in_array($trans, self::TRANSMISIONES, true)) {
             $errores['transmision'] = 'Elegí una transmisión de la lista.';
         }
-        $estado = $txt('estado') ?: 'disponible';
+        $estado = $publicacion ? 'pendiente' : ($txt('estado') ?: 'disponible');
         if (!in_array($estado, self::ESTADOS, true)) {
             $errores['estado'] = 'Estado inválido.';
         }
+
+        $version = $txt('version');
+        if (mb_strlen($version) > 60) {
+            $errores['version'] = 'La versión admite hasta 60 caracteres.';
+        }
+        $condicion = $txt('condicion');
+        if (($condicion !== '' || $publicacion) && !in_array($condicion, self::CONDICIONES, true)) {
+            $errores['condicion'] = 'Elegí el estado general de la lista.';
+        }
+        $localidad = $txt('localidad');
+        if (($localidad === '' && $publicacion) || mb_strlen($localidad) > 100) {
+            $errores['localidad'] = 'Ingresá la localidad (hasta 100 caracteres).';
+        }
+        // Checkbox: llega "1" (formulario) o true (JSON); si no viene, es que no acepta canje
+        $aceptaCanje = in_array(strtolower($txt('acepta_canje')), ['1', 'true', 'on'], true);
+        $buscaCanje = $aceptaCanje ? $txt('busca_canje') : '';
+        if (mb_strlen($buscaCanje) > 120) {
+            $errores['busca_canje'] = 'Este campo admite hasta 120 caracteres.';
+        }
+
         $desc = $txt('descripcion');
         if (mb_strlen($desc) > 2000) {
             $errores['descripcion'] = 'La descripción admite hasta 2000 caracteres.';
@@ -163,6 +199,9 @@ final class Vehiculo
             'kilometraje' => (int)$km, 'combustible' => $comb, 'transmision' => $trans,
             'estado' => $estado, 'descripcion' => $desc !== '' ? $desc : null,
             'imagen_url' => $url !== '' ? $url : null,
+            'version' => $version !== '' ? $version : null, 'condicion' => $condicion !== '' ? $condicion : null,
+            'acepta_canje' => $aceptaCanje, 'busca_canje' => $buscaCanje !== '' ? $buscaCanje : null,
+            'localidad' => $localidad !== '' ? $localidad : null,
         ];
         return [$datos, $errores];
     }
@@ -174,7 +213,12 @@ final class Vehiculo
             'id' => (int)$v['id'], 'marca' => $v['marca'], 'modelo' => $v['modelo'], 'anio' => (int)$v['anio'],
             'precio' => (float)$v['precio'], 'kilometraje' => (int)$v['kilometraje'],
             'combustible' => $v['combustible'], 'transmision' => $v['transmision'], 'estado' => $v['estado'],
-            'descripcion' => $v['descripcion'], 'imagen_url' => $v['imagen_url'], 'creado' => date('c', (int)strtotime((string)$v['created_at'])),
+            'descripcion' => $v['descripcion'], 'imagen_url' => $v['imagen_url'],
+            'version' => $v['version'], 'condicion' => $v['condicion'], 'acepta_canje' => (bool)$v['acepta_canje'],
+            'busca_canje' => $v['busca_canje'], 'localidad' => $v['localidad'],
+            // Ruta relativa a la API: el front le antepone API_URL
+            'foto' => isset($v['foto_id']) ? '/api/fotos/' . (int)$v['foto_id'] : null,
+            'creado' => date('c', (int)strtotime((string)$v['created_at'])),
         ];
     }
 }

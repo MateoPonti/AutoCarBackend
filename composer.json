@@ -9,7 +9,7 @@
     },
     "autoload": {
         "psr-4": {
-            "": ["src/Core/", "src/Auth/", "src/Catalogo/", "src/Admin/"]
+            "": ["src/Core/", "src/Auth/", "src/Catalogo/", "src/Publicaciones/", "src/Admin/"]
         }
     },
     "config": {
