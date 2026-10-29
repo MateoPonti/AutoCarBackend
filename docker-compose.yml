@@ -3,6 +3,9 @@
 # Al crearse por primera vez carga database/schema.sql y database/seed.sql.
 # Para empezar de cero (borra los datos): docker compose down -v && docker compose up -d
 # Puerto 5433 en la PC, para no chocar con un Postgres instalado en 5432.
+# Nombre propio: las carpetas de los dos proyectos se llaman Backend y sin esto Docker los toma como el mismo.
+name: autocar
+
 services:
   db:
     image: postgres:17
