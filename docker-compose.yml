@@ -1,0 +1,22 @@
+# Base PostgreSQL para desarrollo local (NO se usa en Render: allá la base es Neon).
+# Levantar:  docker compose up -d
+# Al crearse por primera vez carga database/schema.sql y database/seed.sql.
+# Para empezar de cero (borra los datos): docker compose down -v && docker compose up -d
+# Puerto 5433 en la PC, para no chocar con un Postgres instalado en 5432.
+services:
+  db:
+    image: postgres:17
+    container_name: autocar-db
+    environment:
+      POSTGRES_DB: autocar
+      POSTGRES_USER: autocar
+      POSTGRES_PASSWORD: autocar
+    ports:
+      - "5433:5432"
+    volumes:
+      - autocar-db:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+
+volumes:
+  autocar-db:

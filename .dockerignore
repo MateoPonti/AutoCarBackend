@@ -3,3 +3,4 @@
 storage/logs/*.log
 
 vendor
+docker-compose.yml

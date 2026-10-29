@@ -94,17 +94,31 @@ Plan Free: el cómputo se suspende tras 5 minutos sin uso y la primera consulta 
 
 ## Levantarla en local
 
+En local se usa una base PostgreSQL propia en Docker (`docker-compose.yml`), sin tocar Neon. Requiere Docker Desktop abierto.
+
 1. Instalar las dependencias: `composer install` (crea la carpeta `vendor/`).
-2. Copiar `.env.example` como `.env` y completar `DB_*` y **`JWT_SECRET`** (generar con `php -r "echo bin2hex(random_bytes(32));"`).
-3. Iniciar el servidor:
+2. Levantar la base: `docker compose up -d`. La primera vez carga `database/schema.sql` y `database/seed.sql`. Queda en el puerto **5433** (para no chocar con un Postgres instalado en 5432).
+3. Copiar `.env.example` como `.env` con estos datos y un **`JWT_SECRET`** propio (generar con `php -r "echo bin2hex(random_bytes(32));"`):
+   ```
+   DB_HOST=127.0.0.1
+   DB_PORT=5433
+   DB_NAME=autocar
+   DB_USER=autocar
+   DB_PASS=autocar
+   DB_SSLMODE=disable
+   ```
+4. Iniciar el servidor:
    ```
    php -S localhost:8000 -t public public/index.php
    ```
-4. Probar: http://localhost:8000/api/vehiculos
+5. Probar: http://localhost:8000/api/vehiculos
+
+Apagar la base: `docker compose down` (los datos quedan). Empezar de cero: `docker compose down -v` y de nuevo `docker compose up -d`.
+Los errores quedan en `storage/logs/app.log` y en la terminal del servidor.
 
 ### Crear el primer administrador
 
-El registro público siempre crea usuarios con rol `usuario`. Para tener un admin, registrarse con `POST /api/registro` y después ejecutar en el SQL Editor de Neon:
+El registro público siempre crea usuarios con rol `usuario`. Para tener un admin, registrarse con `POST /api/registro` y después ejecutar en la base (en local: `docker exec -it autocar-db psql -U autocar -d autocar`; en producción: SQL Editor de Neon):
 
 ```sql
 UPDATE users SET rol = 'admin' WHERE email = 'tu@email.com';
