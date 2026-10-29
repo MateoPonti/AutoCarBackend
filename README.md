@@ -44,8 +44,10 @@ curl -X POST http://localhost:8000/api/admin/vehiculos -H "Authorization: Bearer
 
 ### Cómo lo usa el front (Vercel)
 
+El front es HTML, CSS y JavaScript nativo, sin build. La dirección de la API está en su archivo `js/api/config.js`: si el front se abre en `localhost` o `127.0.0.1` usa `http://localhost:8000`, y en cualquier otro dominio usa `https://autocarbackend-1.onrender.com`.
+
 ```js
-const API = import.meta.env.VITE_API_URL;   // https://autocarbackend-1.onrender.com (sin barra final)
+const API = 'https://autocarbackend-1.onrender.com';   // en el front: API_URL de js/api/config.js (sin barra final)
 
 const r = await fetch(`${API}/api/login`, {
   method: 'POST',
@@ -131,7 +133,7 @@ Volver a hacer login para obtener un token. (El rol se consulta en la base en ca
 1. Base creada e importada en Neon (ver arriba).
 2. **Render → New → Web Service**, elegir el repo (runtime Docker, plan Free). El `Dockerfile` ejecuta `composer install` solo; hay que subir `composer.json` (y `composer.lock` si existe) al repo, pero no `vendor/`.
 3. En *Environment* cargar: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS` (Neon), `JWT_SECRET` (distinto al local) y `FRONT_URL` (URL del front en Vercel, sin barra final; varias separadas por coma).
-4. En **Vercel**, variable `VITE_API_URL` (o el prefijo de tu framework) con la URL de Render, y redeploy.
+4. Si cambia la URL de Render, actualizar `PRODUCCION` en `js/api/config.js` del front y volver a desplegarlo en Vercel. El front no usa variables de entorno: es estático y no tiene build.
 5. Cada `git push` a `main` redespliega solo. Errores: pestaña **Logs** de Render. `GET /health` responde sin tocar la base.
 
 Plan Free de Render: el servicio se duerme tras ~15 min sin visitas y la primera respuesta tarda cerca de un minuto.
