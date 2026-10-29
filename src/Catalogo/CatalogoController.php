@@ -1,6 +1,11 @@
 <?php
 declare(strict_types=1);
 
+namespace AutoCar\Catalogo;
+
+use AutoCar\Core\Response;
+use AutoCar\Publicaciones\Foto;
+
 /** API pública: listado con búsqueda y filtros, y detalle. */
 final class CatalogoController
 {

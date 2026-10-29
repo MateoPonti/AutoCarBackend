@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+namespace AutoCar\Core;
+
 final class Response
 {
     public static function json(mixed $datos, int $status = 200): never

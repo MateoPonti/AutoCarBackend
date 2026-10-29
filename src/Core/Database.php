@@ -1,6 +1,10 @@
 <?php
 declare(strict_types=1);
 
+namespace AutoCar\Core;
+
+use PDO;
+
 /** Conexión PDO única (PostgreSQL / Neon). Todas las consultas del proyecto usan sentencias preparadas. */
 final class Database
 {

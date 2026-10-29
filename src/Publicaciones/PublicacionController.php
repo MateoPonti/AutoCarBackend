@@ -1,6 +1,16 @@
 <?php
 declare(strict_types=1);
 
+namespace AutoCar\Publicaciones;
+
+use AutoCar\Auth\Auth;
+use AutoCar\Auth\Usuario;
+use AutoCar\Catalogo\Vehiculo;
+use AutoCar\Core\Database;
+use AutoCar\Core\Request;
+use AutoCar\Core\Response;
+use Throwable;
+
 /** Publicaciones de los usuarios. crear lleva el guard 'auth' en routes.php. */
 final class PublicacionController
 {

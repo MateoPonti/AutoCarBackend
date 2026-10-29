@@ -1,6 +1,12 @@
 <?php
 declare(strict_types=1);
 
+namespace AutoCar\Auth;
+
+use AutoCar\Core\Request;
+use AutoCar\Core\Response;
+use PDOException;
+
 final class AuthController
 {
     public function registro(): void

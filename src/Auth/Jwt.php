@@ -1,8 +1,12 @@
 <?php
 declare(strict_types=1);
 
+namespace AutoCar\Auth;
+
+use AutoCar\Core\Config;
 use Firebase\JWT\JWT as FirebaseJwt;
 use Firebase\JWT\Key;
+use RuntimeException;
 
 /**
  * Envoltorio mínimo sobre firebase/php-jwt (HS256), para que el resto del código

@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+namespace AutoCar\Core;
+
 /**
  * Configuración: primero variables de entorno reales (Render), y como alternativa el .env local.
  */

@@ -65,7 +65,7 @@ No hace falta `credentials: 'include'` (no se usan cookies). Para cerrar sesión
 
 ```
 public/            única carpeta expuesta: index.php (front controller) y .htaccess
-composer.json      dependencias (firebase/php-jwt) y autoload de las clases propias
+composer.json      dependencias (firebase/php-jwt) y autoload PSR-4: namespace AutoCar\ → src/ (AutoCar\Core\Router = src/Core/Router.php)
 src/bootstrap.php  autoload de Composer, errores, CORS y cabeceras
 src/routes.php     todas las rutas, con su guard (auth / admin)
 src/Core/          Config, Database (PDO), Router, Request, Response, Cors, Logger

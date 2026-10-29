@@ -1,6 +1,12 @@
 <?php
 declare(strict_types=1);
 
+namespace AutoCar\Catalogo;
+
+use AutoCar\Core\Database;
+use AutoCar\Core\Request;
+use PDO;
+
 /** Entidad principal. Consultas parametrizadas + validación del lado del servidor. */
 final class Vehiculo
 {

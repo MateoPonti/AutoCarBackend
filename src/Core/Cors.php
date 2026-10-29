@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+namespace AutoCar\Core;
+
 /**
  * CORS: solo se habilitan los orígenes listados en FRONT_URL (separados por coma).
  * Se usa token Bearer (no cookies), por eso no hace falta Allow-Credentials.

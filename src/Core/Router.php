@@ -1,6 +1,10 @@
 <?php
 declare(strict_types=1);
 
+namespace AutoCar\Core;
+
+use AutoCar\Auth\Auth;
+
 /**
  * Router mínimo. Cada ruta puede llevar un "guard" que se aplica en el servidor:
  *   'auth'  → hace falta un token válido

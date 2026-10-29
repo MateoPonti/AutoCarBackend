@@ -4,11 +4,16 @@
  */
 declare(strict_types=1);
 
+use AutoCar\Core\Config;
+use AutoCar\Core\Cors;
+use AutoCar\Core\Logger;
+use AutoCar\Core\Response;
+
 define('BASE_PATH', dirname(__DIR__));
 define('SRC_PATH', __DIR__);
 
 // Autoload de Composer (ver composer.json): carga las librerías de vendor/ y también las clases
-// propias, que se buscan en src/{Core,Auth,Catalogo,Admin}/Foo.php. En Linux las mayúsculas importan.
+// propias con PSR-4: AutoCar\Catalogo\Vehiculo → src/Catalogo/Vehiculo.php. En Linux las mayúsculas importan.
 // vendor/ no está en el repo: se genera con `composer install` (en Docker lo hace el Dockerfile).
 $autoload = BASE_PATH . '/vendor/autoload.php';
 if (!is_file($autoload)) {

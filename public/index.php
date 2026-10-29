@@ -6,6 +6,9 @@
  */
 declare(strict_types=1);
 
+use AutoCar\Core\Response;
+use AutoCar\Core\Router;
+
 require __DIR__ . '/../src/bootstrap.php';
 
 $path = rtrim((string)(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/'), '/') ?: '/';

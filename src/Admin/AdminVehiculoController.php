@@ -1,6 +1,13 @@
 <?php
 declare(strict_types=1);
 
+namespace AutoCar\Admin;
+
+use AutoCar\Catalogo\CatalogoController;
+use AutoCar\Catalogo\Vehiculo;
+use AutoCar\Core\Request;
+use AutoCar\Core\Response;
+
 /** ABM de vehículos. Todas las rutas llevan el guard 'admin' en routes.php (se verifica en el servidor). */
 final class AdminVehiculoController
 {

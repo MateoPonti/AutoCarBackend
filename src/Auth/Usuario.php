@@ -1,6 +1,10 @@
 <?php
 declare(strict_types=1);
 
+namespace AutoCar\Auth;
+
+use AutoCar\Core\Database;
+
 /** Acceso a la tabla users. Todo con sentencias preparadas. */
 final class Usuario
 {

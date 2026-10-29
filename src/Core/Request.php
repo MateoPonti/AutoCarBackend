@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+namespace AutoCar\Core;
+
 final class Request
 {
     /** Cuerpo JSON como array. Si no es JSON válido responde 400. */

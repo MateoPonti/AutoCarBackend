@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+namespace AutoCar\Core;
+
 /** Registra errores en storage/logs/app.log (fuera de public/) y en el log del servidor. */
 final class Logger
 {

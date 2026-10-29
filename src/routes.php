@@ -5,6 +5,12 @@
  */
 declare(strict_types=1);
 
+use AutoCar\Admin\AdminVehiculoController;
+use AutoCar\Auth\AuthController;
+use AutoCar\Catalogo\CatalogoController;
+use AutoCar\Publicaciones\PublicacionController;
+use AutoCar\Core\Router;
+
 /** @var Router $router */
 
 // Público

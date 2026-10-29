@@ -1,6 +1,12 @@
 <?php
 declare(strict_types=1);
 
+namespace AutoCar\Publicaciones;
+
+use AutoCar\Core\Database;
+use finfo;
+use PDO;
+
 /**
  * Fotos de las publicaciones, guardadas en la tabla vehiculo_fotos (BYTEA).
  * El tipo se comprueba leyendo el contenido del archivo, no con lo que declara el navegador.

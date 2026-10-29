@@ -1,6 +1,12 @@
 <?php
 declare(strict_types=1);
 
+namespace AutoCar\Auth;
+
+use AutoCar\Core\Config;
+use AutoCar\Core\Request;
+use AutoCar\Core\Response;
+
 /**
  * Identidad del pedido a partir del token Bearer. El rol NO se toma del token:
  * se consulta en la base, así un cambio de rol o un usuario borrado surten efecto de inmediato.
