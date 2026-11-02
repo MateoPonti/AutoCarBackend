@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS rol_permiso (
 INSERT INTO rol (nombre, descripcion) VALUES
   ('usuario',   'Usuario registrado: publica vehículos y chatea con otros usuarios'),
   ('moderador', 'Revisa las publicaciones: las aprueba o las rechaza'),
-  ('admin',     'Administra los usuarios y el catálogo'),
+  ('admin',     'Puede todo: usuarios, catálogo, moderación y métricas'),
   ('mecanico',  'Mecánico de un taller adherido: verifica vehículos')
 ON CONFLICT (nombre) DO NOTHING;
 
@@ -35,20 +35,25 @@ INSERT INTO permiso (nombre, descripcion) VALUES
   ('usuarios.ver',            'Ver la lista y los datos de los usuarios'),
   ('usuarios.editar',         'Editar usuarios: nombre, rol y baja lógica'),
   ('verificaciones.ver',      'Ver las verificaciones de vehículos asignadas al taller'),
-  ('verificaciones.realizar', 'Cargar el resultado de una verificación')
+  ('verificaciones.realizar', 'Cargar el resultado de una verificación'),
+  ('metricas.ver',            'Ver las métricas de la aplicación')
 ON CONFLICT (nombre) DO NOTHING;
 
 INSERT INTO rol_permiso (rol_id, permiso_id)
 SELECT r.id, p.id FROM (VALUES
   ('moderador', 'vehiculos.moderar'),
-  ('admin',     'vehiculos.gestionar'),
-  ('admin',     'usuarios.ver'),
-  ('admin',     'usuarios.editar'),
   ('mecanico',  'verificaciones.ver'),
   ('mecanico',  'verificaciones.realizar')
 ) AS rp(rol, permiso)
 JOIN rol r ON r.nombre = rp.rol
 JOIN permiso p ON p.nombre = rp.permiso
+ON CONFLICT DO NOTHING;
+
+UPDATE rol SET descripcion = 'Puede todo: usuarios, catálogo, moderación y métricas' WHERE nombre = 'admin';
+
+-- El admin tiene TODOS los permisos (también los que se agreguen después, al volver a correr esto)
+INSERT INTO rol_permiso (rol_id, permiso_id)
+SELECT r.id, p.id FROM rol r CROSS JOIN permiso p WHERE r.nombre = 'admin'
 ON CONFLICT DO NOTHING;
 
 -- usuario.rol (texto) pasa a usuario.rol_id (FK). activo = false es la baja lógica.

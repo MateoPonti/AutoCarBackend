@@ -7,6 +7,7 @@
  */
 declare(strict_types=1);
 
+use AutoCar\Admin\AdminMetricasController;
 use AutoCar\Admin\AdminUsuarioController;
 use AutoCar\Admin\AdminVehiculoController;
 use AutoCar\Auth\AuthController;
@@ -42,7 +43,7 @@ $router->post('/api/login', [AuthController::class, 'login']);
 $router->post('/api/logout', [AuthController::class, 'logout']);
 $router->get('/api/me', [AuthController::class, 'me'], 'auth');
 
-// Vehículos: el moderador revisa las publicaciones; el admin hace el ABM del catálogo. Los dos ven el listado.
+// Vehículos: el moderador revisa las publicaciones; el admin además hace el ABM del catálogo (tiene todos los permisos).
 $verVehiculos = 'permiso:vehiculos.moderar|vehiculos.gestionar';
 $router->get('/api/admin/vehiculos', [AdminVehiculoController::class, 'index'], $verVehiculos);
 $router->get('/api/admin/vehiculos/{id}', [AdminVehiculoController::class, 'detalle'], $verVehiculos);
@@ -52,6 +53,9 @@ $router->put('/api/admin/vehiculos/{id}', [AdminVehiculoController::class, 'actu
 $router->delete('/api/admin/vehiculos/{id}', [AdminVehiculoController::class, 'eliminar'], 'permiso:vehiculos.gestionar');
 
 // Usuarios (admin): ver datos, editar nombre y rol, baja lógica
+// Métricas de la app (admin)
+$router->get('/api/admin/metricas', [AdminMetricasController::class, 'index'], 'permiso:metricas.ver');
+
 $router->get('/api/admin/roles', [AdminUsuarioController::class, 'roles'], 'permiso:usuarios.ver');
 $router->get('/api/admin/usuarios', [AdminUsuarioController::class, 'index'], 'permiso:usuarios.ver');
 $router->get('/api/admin/usuarios/{id}', [AdminUsuarioController::class, 'detalle'], 'permiso:usuarios.ver');

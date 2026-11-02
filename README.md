@@ -4,7 +4,7 @@ API en **PHP + PostgreSQL** (con Composer) de AutoCar (TP Integrador, Programaci
 Compra y venta de vehículos. Entidad principal: **vehículos**. El front (Vercel) consume esta API.
 
 - **URL desplegada:** https://autocarbackend-1.onrender.com *(HTTPS)*
-- **Roles y permisos** (en tablas: `rol`, `permiso`, `rol_permiso`): `usuario` (publica y chatea), `moderador` (aprueba o rechaza publicaciones), `admin` (gestiona usuarios y el ABM del catálogo) y `mecanico` (verificaciones; endpoints pendientes). Las rutas piden **permisos**, no roles: un rol nuevo solo necesita filas en `rol_permiso`.
+- **Roles y permisos** (en tablas: `rol`, `permiso`, `rol_permiso`): `usuario` (publica y chatea), `moderador` (aprueba o rechaza publicaciones), `admin` (puede todo: usuarios, ABM del catálogo, moderación y métricas) y `mecanico` (verificaciones; endpoints pendientes). Las rutas piden **permisos**, no roles: un rol nuevo solo necesita filas en `rol_permiso`.
 - **Autenticación:** sesión de PHP (`$_SESSION`) guardada en la tabla `sesion`; el navegador solo tiene la cookie `autocar_sesion` con el id (`HttpOnly`, `Secure`, `SameSite=Strict`) + token CSRF en el header `X-CSRF-Token`.
 - **Versión:** ver `VERSION` (versionado semántico). **Autores:** `autores.txt`.
 
@@ -32,6 +32,7 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `PATCH /api/admin/usuarios/{id}` | `usuarios.editar` (admin) | `{nombre?, rol?, activo?}`. No se puede cambiar el propio rol ni darse de baja (409) |
 | `DELETE /api/admin/usuarios/{id}` | `usuarios.editar` | Baja lógica (`activo = false`): no puede ingresar y su sesión deja de valer → 204 |
 | `GET /api/admin/roles` | `usuarios.ver` | Roles con sus permisos |
+| `GET /api/admin/metricas` | `metricas.ver` (admin) | Usuarios (activos, con actividad en 30 días, por rol), publicaciones (por estado, nuevas, precio promedio, valor en venta y vendido, marcas top), moderación y chat. Ganancias: no hay cobros todavía |
 | `GET /health` | público | Chequeo de vida (no toca la base) |
 
 Las rutas con sesión o con permiso que cambian datos (`POST`, `PUT`, `PATCH`, `DELETE`) exigen además el header `X-CSRF-Token` con el valor `csrf` que devolvió el login.
@@ -88,7 +89,7 @@ src/routes.php     todas las rutas, con su guard (auth / permiso:...)
 src/Core/          Config, Database (PDO), Router, Request, Response, Cors, Logger
 src/Auth/          Auth (sesión, cookie y CSRF), SesionDb (guarda $_SESSION en la base), Usuario, AuthController
 src/Catalogo/      Vehiculo (modelo + validación), CatalogoController (API pública)
-src/Admin/         AdminVehiculoController (ABM y moderación), AdminUsuarioController (gestión de usuarios)
+src/Admin/         AdminVehiculoController (ABM y moderación), AdminUsuarioController (usuarios), AdminMetricasController (métricas)
 database/          schema.sql, seed.sql y las migraciones para bases que ya existían (PostgreSQL)
 storage/logs/      app.log (fuera de public/)
 vendor/            librerías de Composer (se genera, no se sube al repo)
