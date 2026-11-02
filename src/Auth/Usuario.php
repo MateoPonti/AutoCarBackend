@@ -5,19 +5,19 @@ namespace AutoCar\Auth;
 
 use AutoCar\Core\Database;
 
-/** Acceso a la tabla users. Todo con sentencias preparadas. */
+/** Acceso a la tabla usuario. Todo con sentencias preparadas. */
 final class Usuario
 {
     public static function porEmail(string $email): ?array
     {
-        $st = Database::pdo()->prepare('SELECT id, nombre, email, password_hash, rol FROM users WHERE email = :email LIMIT 1');
+        $st = Database::pdo()->prepare('SELECT id, nombre, email, password_hash, rol FROM usuario WHERE email = :email LIMIT 1');
         $st->execute(['email' => $email]);
         return $st->fetch() ?: null;
     }
 
     public static function porId(int $id): ?array
     {
-        $st = Database::pdo()->prepare('SELECT id, nombre, email, rol FROM users WHERE id = :id');
+        $st = Database::pdo()->prepare('SELECT id, nombre, email, rol FROM usuario WHERE id = :id');
         $st->execute(['id' => $id]);
         return $st->fetch() ?: null;
     }
@@ -26,7 +26,7 @@ final class Usuario
     {
         // El rol de un registro público es siempre 'usuario'; el admin se asigna en la base.
         $st = Database::pdo()->prepare(
-            "INSERT INTO users (nombre, email, password_hash, rol) VALUES (:nombre, :email, :hash, 'usuario') RETURNING id"
+            "INSERT INTO usuario (nombre, email, password_hash, rol) VALUES (:nombre, :email, :hash, 'usuario') RETURNING id"
         );
         $st->execute(['nombre' => $nombre, 'email' => $email, 'hash' => $hash]);
         return (int)$st->fetchColumn();
@@ -34,7 +34,7 @@ final class Usuario
 
     public static function rolDe(int $id): ?string
     {
-        $st = Database::pdo()->prepare('SELECT rol FROM users WHERE id = :id');
+        $st = Database::pdo()->prepare('SELECT rol FROM usuario WHERE id = :id');
         $st->execute(['id' => $id]);
         $rol = $st->fetchColumn();
         return $rol === false ? null : (string)$rol;

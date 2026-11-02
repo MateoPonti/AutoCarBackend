@@ -147,7 +147,7 @@ Los errores quedan en `storage/logs/app.log` y en la terminal del servidor.
 El registro público siempre crea usuarios con rol `usuario`. Para tener un admin, registrarse con `POST /api/registro` y después ejecutar en la base (en local: `docker exec -it autocar-db psql -U autocar -d autocar`; en producción: SQL Editor de Neon):
 
 ```sql
-UPDATE users SET rol = 'admin' WHERE email = 'tu@email.com';
+UPDATE usuario SET rol = 'admin' WHERE email = 'tu@email.com';
 ```
 
 Volver a hacer login. (El rol se consulta en la base en cada pedido a `/api/admin`.)

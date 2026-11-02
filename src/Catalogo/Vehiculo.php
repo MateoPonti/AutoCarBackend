@@ -53,11 +53,11 @@ final class Vehiculo
         $sqlWhere = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
         $pdo = Database::pdo();
-        $st = $pdo->prepare("SELECT COUNT(*) FROM vehiculos $sqlWhere");
+        $st = $pdo->prepare("SELECT COUNT(*) FROM vehiculo $sqlWhere");
         $st->execute($params);
         $total = (int)$st->fetchColumn();
 
-        $st = $pdo->prepare('SELECT vehiculos.*, ' . self::PRIMERA_FOTO . " FROM vehiculos $sqlWhere
+        $st = $pdo->prepare('SELECT vehiculo.*, ' . self::PRIMERA_FOTO . " FROM vehiculo $sqlWhere
                              ORDER BY created_at DESC, id DESC LIMIT :lim OFFSET :off");
         foreach ($params as $k => $v) {
             $st->bindValue(':' . $k, $v);
@@ -71,15 +71,15 @@ final class Vehiculo
 
     public static function marcas(): array
     {
-        return Database::pdo()->query('SELECT DISTINCT marca FROM vehiculos ORDER BY marca')->fetchAll(PDO::FETCH_COLUMN);
+        return Database::pdo()->query('SELECT DISTINCT marca FROM vehiculo ORDER BY marca')->fetchAll(PDO::FETCH_COLUMN);
     }
 
     /** Subconsulta con el id de la primera foto subida (para la ficha del listado). */
-    private const PRIMERA_FOTO = '(SELECT f.id FROM vehiculo_fotos f WHERE f.vehiculo_id = vehiculos.id ORDER BY f.orden, f.id LIMIT 1) AS foto_id';
+    private const PRIMERA_FOTO = '(SELECT f.id FROM vehiculo_foto f WHERE f.vehiculo_id = vehiculo.id ORDER BY f.orden, f.id LIMIT 1) AS foto_id';
 
     public static function find(int $id): ?array
     {
-        $st = Database::pdo()->prepare('SELECT vehiculos.*, ' . self::PRIMERA_FOTO . ' FROM vehiculos WHERE id = :id');
+        $st = Database::pdo()->prepare('SELECT vehiculo.*, ' . self::PRIMERA_FOTO . ' FROM vehiculo WHERE id = :id');
         $st->execute(['id' => $id]);
         return $st->fetch() ?: null;
     }
@@ -88,7 +88,7 @@ final class Vehiculo
     public static function delUsuario(int $usuarioId): array
     {
         $st = Database::pdo()->prepare(
-            'SELECT vehiculos.*, ' . self::PRIMERA_FOTO . " FROM vehiculos
+            'SELECT vehiculo.*, ' . self::PRIMERA_FOTO . " FROM vehiculo
               WHERE usuario_id = :usuario_id AND estado <> 'eliminado'
               ORDER BY created_at DESC, id DESC"
         );
@@ -100,7 +100,7 @@ final class Vehiculo
     public static function deUsuario(int $id, int $usuarioId): ?array
     {
         $st = Database::pdo()->prepare(
-            'SELECT vehiculos.*, ' . self::PRIMERA_FOTO . " FROM vehiculos
+            'SELECT vehiculo.*, ' . self::PRIMERA_FOTO . " FROM vehiculo
               WHERE id = :id AND usuario_id = :usuario_id AND estado <> 'eliminado'"
         );
         $st->execute(['id' => $id, 'usuario_id' => $usuarioId]);
@@ -111,7 +111,7 @@ final class Vehiculo
     public static function cambiarEstado(int $id, string $estado, ?string $motivo = null): void
     {
         $st = Database::pdo()->prepare(
-            'UPDATE vehiculos SET estado = :estado, motivo_rechazo = :motivo, updated_at = now() WHERE id = :id'
+            'UPDATE vehiculo SET estado = :estado, motivo_rechazo = :motivo, updated_at = now() WHERE id = :id'
         );
         $st->execute(['estado' => $estado, 'motivo' => $estado === 'rechazado' ? $motivo : null, 'id' => $id]);
     }
@@ -120,7 +120,7 @@ final class Vehiculo
     public static function crear(array $d, ?int $usuarioId = null): int
     {
         $st = Database::pdo()->prepare(
-            'INSERT INTO vehiculos (usuario_id, marca, modelo, version, anio, precio, kilometraje, combustible, transmision,
+            'INSERT INTO vehiculo (usuario_id, marca, modelo, version, anio, precio, kilometraje, combustible, transmision,
                                     condicion, estado, descripcion, imagen_url, acepta_canje, busca_canje, localidad)
              VALUES (:usuario_id, :marca, :modelo, :version, :anio, :precio, :kilometraje, :combustible, :transmision,
                      :condicion, :estado, :descripcion, :imagen_url, :acepta_canje, :busca_canje, :localidad)
@@ -133,7 +133,7 @@ final class Vehiculo
     public static function actualizar(int $id, array $d): void
     {
         $st = Database::pdo()->prepare(
-            'UPDATE vehiculos SET marca = :marca, modelo = :modelo, version = :version, anio = :anio, precio = :precio,
+            'UPDATE vehiculo SET marca = :marca, modelo = :modelo, version = :version, anio = :anio, precio = :precio,
                     kilometraje = :kilometraje, combustible = :combustible, transmision = :transmision,
                     condicion = :condicion, estado = :estado, descripcion = :descripcion, imagen_url = :imagen_url,
                     acepta_canje = :acepta_canje, busca_canje = :busca_canje, localidad = :localidad,

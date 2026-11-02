@@ -8,7 +8,7 @@ use finfo;
 use PDO;
 
 /**
- * Fotos de las publicaciones, guardadas en la tabla vehiculo_fotos (BYTEA).
+ * Fotos de las publicaciones, guardadas en la tabla vehiculo_foto (BYTEA).
  * El tipo se comprueba leyendo el contenido del archivo, no con lo que declara el navegador.
  */
 final class Foto
@@ -70,7 +70,7 @@ final class Foto
     public static function guardar(int $vehiculoId, array $fotos): void
     {
         $st = Database::pdo()->prepare(
-            'INSERT INTO vehiculo_fotos (vehiculo_id, orden, mime, datos) VALUES (:vehiculo_id, :orden, :mime, :datos)'
+            'INSERT INTO vehiculo_foto (vehiculo_id, orden, mime, datos) VALUES (:vehiculo_id, :orden, :mime, :datos)'
         );
         foreach ($fotos as $orden => [$ruta, $mime]) {
             $st->bindValue(':vehiculo_id', $vehiculoId, PDO::PARAM_INT);
@@ -84,7 +84,7 @@ final class Foto
     /** Rutas de las fotos de un vehículo, en orden (relativas a la API). */
     public static function rutasDe(int $vehiculoId): array
     {
-        $st = Database::pdo()->prepare('SELECT id FROM vehiculo_fotos WHERE vehiculo_id = :id ORDER BY orden, id');
+        $st = Database::pdo()->prepare('SELECT id FROM vehiculo_foto WHERE vehiculo_id = :id ORDER BY orden, id');
         $st->execute(['id' => $vehiculoId]);
         return array_map(static fn($id): string => '/api/fotos/' . (int)$id, $st->fetchAll(PDO::FETCH_COLUMN));
     }
@@ -94,7 +94,7 @@ final class Foto
     {
         $st = Database::pdo()->prepare(
             'SELECT f.mime, f.datos, v.estado, v.usuario_id
-               FROM vehiculo_fotos f JOIN vehiculos v ON v.id = f.vehiculo_id
+               FROM vehiculo_foto f JOIN vehiculo v ON v.id = f.vehiculo_id
               WHERE f.id = :id'
         );
         $st->execute(['id' => $id]);

@@ -2,7 +2,7 @@
 -- para tener un administrador, ver README ("Crear el primer administrador").
 
 
-INSERT INTO vehiculos (marca, modelo, anio, precio, kilometraje, combustible, transmision, estado, descripcion) VALUES
+INSERT INTO vehiculo (marca, modelo, anio, precio, kilometraje, combustible, transmision, estado, descripcion) VALUES
 ('Toyota',     'Corolla XEi',  2021, 24500000, 48000,  'nafta',     'automatica', 'disponible', 'Único dueño, service oficial al día. Cubiertas nuevas.'),
 ('Volkswagen', 'Amarok V6',    2020, 41800000, 72000,  'diesel',    'automatica', 'disponible', 'Cabina doble 4x4, full equipo. Papeles al día.'),
 ('Ford',       'Fiesta Kinetic',2018, 11200000, 95000,  'nafta',     'manual',     'disponible', 'Muy buen estado general, ideal para ciudad.'),
