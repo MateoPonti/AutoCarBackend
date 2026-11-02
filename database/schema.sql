@@ -25,7 +25,8 @@ CREATE TABLE IF NOT EXISTS vehiculos (
   transmision  VARCHAR(10)   NOT NULL CHECK (transmision IN ('manual', 'automatica')),
   condicion    VARCHAR(10)   CHECK (condicion IN ('excelente', 'muy_bueno', 'bueno', 'regular')),
   estado       VARCHAR(12)   NOT NULL DEFAULT 'disponible'
-               CONSTRAINT vehiculos_estado_check CHECK (estado IN ('pendiente', 'disponible', 'rechazado', 'vendido')),
+               CONSTRAINT vehiculos_estado_check
+               CHECK (estado IN ('pendiente', 'disponible', 'rechazado', 'vendido', 'eliminado')),
   descripcion  TEXT,
   imagen_url   VARCHAR(255),
   acepta_canje BOOLEAN       NOT NULL DEFAULT false,

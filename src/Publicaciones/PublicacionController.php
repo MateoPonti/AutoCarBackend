@@ -11,9 +11,22 @@ use AutoCar\Core\Request;
 use AutoCar\Core\Response;
 use Throwable;
 
-/** Publicaciones de los usuarios. crear lleva el guard 'auth' en routes.php. */
+/**
+ * Publicaciones de los usuarios. Las rutas /api/mis-vehiculos llevan el guard 'auth' en routes.php
+ * y sólo operan sobre vehículos del usuario logueado (los de otro dan 404).
+ */
 final class PublicacionController
 {
+    /** Cambios de estado que puede hacer el dueño (el resto los decide el admin). */
+    private const TRANSICIONES = ['disponible' => ['vendido']];
+
+    /** GET /api/mis-vehiculos */
+    public function index(): void
+    {
+        $items = Vehiculo::delUsuario((int)Auth::id());
+        Response::json(['items' => array_map([Vehiculo::class, 'paraApi'], $items)]);
+    }
+
     /** POST /api/mis-vehiculos (multipart/form-data: campos del vehículo + fotos[]) */
     public function crear(): void
     {
@@ -41,6 +54,55 @@ final class PublicacionController
 
         header('Location: /api/vehiculos/' . $id);
         Response::json(['vehiculo' => Vehiculo::paraApi(Vehiculo::find($id)) + ['fotos' => Foto::rutasDe($id)]], 201);
+    }
+
+    /**
+     * PUT /api/mis-vehiculos/{id} (JSON, sin fotos). Cualquier edición vuelve la publicación a 'pendiente'
+     * para que el admin la revise de nuevo. Los campos que no vienen se mantienen.
+     */
+    public function actualizar(int $id): void
+    {
+        $actual = self::propio($id);
+        if ($actual['estado'] === 'vendido') {
+            Response::error(409, 'no_editable', 'Un vehículo vendido no se puede editar.');
+        }
+        [$datos, $errores] = Vehiculo::validar(Request::json() + Vehiculo::paraApi($actual), true);
+        if ($errores) {
+            Response::error(422, 'validacion', 'Revisá los datos ingresados.', $errores);
+        }
+        Vehiculo::actualizar($id, $datos);
+        Response::json(['vehiculo' => Vehiculo::paraApi(Vehiculo::find($id)) + ['fotos' => Foto::rutasDe($id)]]);
+    }
+
+    /** PATCH /api/mis-vehiculos/{id}/estado  {"estado": "vendido"} */
+    public function cambiarEstado(int $id): void
+    {
+        $actual = self::propio($id);
+        $nuevo = Request::texto(Request::json(), 'estado');
+        if (!in_array($nuevo, self::TRANSICIONES[$actual['estado']] ?? [], true)) {
+            Response::error(422, 'validacion', 'Revisá los datos ingresados.',
+                ['estado' => 'Sólo podés marcar como vendida una publicación disponible.']);
+        }
+        Vehiculo::cambiarEstado($id, $nuevo);
+        Response::json(['vehiculo' => Vehiculo::paraApi(Vehiculo::find($id))]);
+    }
+
+    /** DELETE /api/mis-vehiculos/{id}. Baja lógica: pasa a 'eliminado' y deja de verse en todos lados. */
+    public function eliminar(int $id): void
+    {
+        self::propio($id);
+        Vehiculo::cambiarEstado($id, 'eliminado');
+        Response::noContent();
+    }
+
+    /** Vehículo del usuario logueado, o 404 si no existe, es de otro o está eliminado. */
+    private static function propio(int $id): array
+    {
+        $v = Vehiculo::deUsuario($id, (int)Auth::id());
+        if ($v === null) {
+            Response::error(404, 'no_encontrado', 'La publicación no existe.');
+        }
+        return $v;
     }
 
     /**

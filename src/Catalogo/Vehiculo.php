@@ -14,7 +14,8 @@ final class Vehiculo
     public const TRANSMISIONES = ['manual', 'automatica'];
     public const CONDICIONES   = ['excelente', 'muy_bueno', 'bueno', 'regular'];
     // pendiente = publicada por un usuario, espera aprobación del admin. El público sólo ve VISIBLES.
-    public const ESTADOS       = ['pendiente', 'disponible', 'rechazado', 'vendido'];
+    // eliminado = baja lógica hecha por el dueño (la fila queda para el historial y los chats).
+    public const ESTADOS       = ['pendiente', 'disponible', 'rechazado', 'vendido', 'eliminado'];
     public const VISIBLES      = ['disponible', 'vendido'];
 
     /** @return array{items: array, total: int} */
@@ -76,6 +77,35 @@ final class Vehiculo
         $st = Database::pdo()->prepare('SELECT vehiculos.*, ' . self::PRIMERA_FOTO . ' FROM vehiculos WHERE id = :id');
         $st->execute(['id' => $id]);
         return $st->fetch() ?: null;
+    }
+
+    /** Publicaciones de un usuario (todas menos las eliminadas), las más nuevas primero. */
+    public static function delUsuario(int $usuarioId): array
+    {
+        $st = Database::pdo()->prepare(
+            'SELECT vehiculos.*, ' . self::PRIMERA_FOTO . " FROM vehiculos
+              WHERE usuario_id = :usuario_id AND estado <> 'eliminado'
+              ORDER BY created_at DESC, id DESC"
+        );
+        $st->execute(['usuario_id' => $usuarioId]);
+        return $st->fetchAll();
+    }
+
+    /** El vehículo sólo si es de ese usuario y no está eliminado; si no, null (evita IDOR). */
+    public static function deUsuario(int $id, int $usuarioId): ?array
+    {
+        $st = Database::pdo()->prepare(
+            'SELECT vehiculos.*, ' . self::PRIMERA_FOTO . " FROM vehiculos
+              WHERE id = :id AND usuario_id = :usuario_id AND estado <> 'eliminado'"
+        );
+        $st->execute(['id' => $id, 'usuario_id' => $usuarioId]);
+        return $st->fetch() ?: null;
+    }
+
+    public static function cambiarEstado(int $id, string $estado): void
+    {
+        $st = Database::pdo()->prepare('UPDATE vehiculos SET estado = :estado, updated_at = now() WHERE id = :id');
+        $st->execute(['estado' => $estado, 'id' => $id]);
     }
 
     /** $usuarioId: dueño de la publicación; null cuando el vehículo lo carga el admin. */

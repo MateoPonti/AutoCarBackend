@@ -9,7 +9,7 @@ use AutoCar\Auth\Auth;
  * Router mínimo. Cada ruta puede llevar un "guard" que se aplica en el servidor:
  *   'auth'  → hace falta la cookie de sesión válida
  *   'admin' → hace falta sesión válida y rol administrador (verificado en la base)
- * En ambos casos, POST/PUT/DELETE además exigen el header X-CSRF-Token.
+ * En ambos casos, POST/PUT/PATCH/DELETE además exigen el header X-CSRF-Token.
  */
 final class Router
 {
@@ -18,6 +18,7 @@ final class Router
     public function get(string $p, array $h, ?string $g = null): void    { $this->add('GET', $p, $h, $g); }
     public function post(string $p, array $h, ?string $g = null): void   { $this->add('POST', $p, $h, $g); }
     public function put(string $p, array $h, ?string $g = null): void    { $this->add('PUT', $p, $h, $g); }
+    public function patch(string $p, array $h, ?string $g = null): void  { $this->add('PATCH', $p, $h, $g); }
     public function delete(string $p, array $h, ?string $g = null): void { $this->add('DELETE', $p, $h, $g); }
 
     private function add(string $method, string $pattern, array $handler, ?string $guard): void

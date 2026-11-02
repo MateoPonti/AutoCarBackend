@@ -10,10 +10,11 @@ ALTER TABLE vehiculos ADD COLUMN IF NOT EXISTS acepta_canje BOOLEAN NOT NULL DEF
 ALTER TABLE vehiculos ADD COLUMN IF NOT EXISTS busca_canje  VARCHAR(120);
 ALTER TABLE vehiculos ADD COLUMN IF NOT EXISTS localidad    VARCHAR(100);
 
--- Estados nuevos: 'pendiente' (espera aprobación del admin) y 'rechazado'
+-- Estados nuevos: 'pendiente' (espera aprobación del admin), 'rechazado' y 'eliminado' (baja lógica
+-- del usuario: no se borra la fila para no romper las conversaciones que la referencian)
 ALTER TABLE vehiculos DROP CONSTRAINT IF EXISTS vehiculos_estado_check;
 ALTER TABLE vehiculos ADD CONSTRAINT vehiculos_estado_check
-  CHECK (estado IN ('pendiente', 'disponible', 'rechazado', 'vendido'));
+  CHECK (estado IN ('pendiente', 'disponible', 'rechazado', 'vendido', 'eliminado'));
 
 CREATE INDEX IF NOT EXISTS idx_vehiculos_usuario ON vehiculos (usuario_id);
 
