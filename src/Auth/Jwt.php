@@ -38,6 +38,12 @@ final class Jwt
         return isset($claims['exp'], $claims['sub']) ? $claims : null;
     }
 
+    /** HMAC-SHA256 con el mismo secreto (lo usa Auth::csrf()). */
+    public static function firmar(string $dato): string
+    {
+        return hash_hmac('sha256', $dato, self::secreto());
+    }
+
     private static function secreto(): string
     {
         $s = Config::get('JWT_SECRET');

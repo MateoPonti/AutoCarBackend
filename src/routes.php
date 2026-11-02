@@ -1,7 +1,8 @@
 <?php
 /**
  * Todas las rutas de la API. El tercer argumento es el guard que se aplica en el servidor:
- *   'auth' = token válido, 'admin' = token válido + rol administrador (consultado en la base).
+ *   'auth' = cookie de sesión válida, 'admin' = sesión válida + rol administrador (consultado en la base).
+ * Con guard, POST/PUT/DELETE exigen también el header X-CSRF-Token (ver Router).
  */
 declare(strict_types=1);
 
@@ -25,6 +26,7 @@ $router->post('/api/mis-vehiculos', [PublicacionController::class, 'crear'], 'au
 // Autenticación
 $router->post('/api/registro', [AuthController::class, 'registro']);
 $router->post('/api/login', [AuthController::class, 'login']);
+$router->post('/api/logout', [AuthController::class, 'logout']);
 $router->get('/api/me', [AuthController::class, 'me'], 'auth');
 
 // Administración (solo rol admin)

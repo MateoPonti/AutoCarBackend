@@ -53,20 +53,4 @@ final class Request
         $v = $datos[$campo] ?? '';
         return is_scalar($v) ? trim((string)$v) : '';
     }
-
-    public static function bearer(): ?string
-    {
-        $h = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? null;
-        if ($h === null && function_exists('getallheaders')) {
-            foreach (getallheaders() as $k => $v) {
-                if (strcasecmp($k, 'Authorization') === 0) {
-                    $h = $v;
-                }
-            }
-        }
-        if (is_string($h) && preg_match('/^Bearer\s+(\S+)$/i', $h, $m)) {
-            return $m[1];
-        }
-        return null;
-    }
 }

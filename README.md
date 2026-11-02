@@ -5,7 +5,8 @@ Compra y venta de vehículos. Entidad principal: **vehículos**. El front (Verce
 
 - **URL desplegada:** https://autocarbackend-1.onrender.com *(HTTPS)*
 - **Roles:** `usuario` (registrado) y `admin` (gestiona vehículos).
-- **Autenticación:** JWT (HS256) en el header `Authorization: Bearer <token>`.
+- **Autenticación:** JWT (HS256) en una cookie de sesión `autocar_sesion` (`HttpOnly`, `Secure`, `SameSite=Strict`) + token CSRF en el header `X-CSRF-Token`.
+- **Versión:** ver `VERSION` (versionado semántico). **Autores:** `autores.txt`.
 
 ## Endpoints
 
@@ -14,8 +15,9 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | Método y ruta | Acceso | Descripción |
 |---|---|---|
 | `POST /api/registro` | público | Crea una cuenta (`nombre`, `email`, `password`, `password_confirm` opcional). Rol siempre `usuario`. → 201 |
-| `POST /api/login` | público | `email`, `password` → `{token, tipo, expira_en, usuario}` |
-| `GET /api/me` | token | Datos del usuario autenticado |
+| `POST /api/login` | público | `email`, `password` → `{csrf, expira_en, usuario}` y la cookie de sesión (`Set-Cookie`) |
+| `POST /api/logout` | público | Borra la cookie de sesión → 204 |
+| `GET /api/me` | sesión | `{usuario, csrf}` del usuario autenticado |
 | `GET /api/vehiculos` | público | Listado. Filtros: `q`, `marca`, `combustible`, `precio_max`, `page` |
 | `GET /api/vehiculos/{id}` | público | Detalle |
 | `GET /api/marcas` | público | Marcas existentes (para armar el filtro) |
@@ -25,43 +27,49 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `DELETE /api/admin/vehiculos/{id}` | admin | Baja → 204 |
 | `GET /health` | público | Chequeo de vida (no toca la base) |
 
-Códigos: `400` JSON inválido, `401` sin token o token inválido, `403` sin rol admin, `404` no existe, `405` método no permitido, `422` validación, `500` error del servidor.
+Las rutas con acceso **sesión** o **admin** que cambian datos (`POST`, `PUT`, `DELETE`) exigen además el header `X-CSRF-Token` con el valor `csrf` que devolvió el login.
+
+Códigos: `400` JSON inválido, `401` sin sesión o sesión vencida, `403` sin rol admin o token CSRF incorrecto, `404` no existe, `405` método no permitido, `422` validación, `500` error del servidor.
 
 Campos de un vehículo: `marca`, `modelo`, `anio`, `precio`, `kilometraje`, `combustible` (`nafta|diesel|gnc|hibrido|electrico`), `transmision` (`manual|automatica`), `estado` (`disponible|vendido`), `descripcion` (opcional), `imagen_url` (opcional, URL http/https).
 
 ### Ejemplos
 
 ```
-curl -X POST http://localhost:8000/api/login -H "Content-Type: application/json" \
+# -c guarda la cookie de sesión en cookies.txt; la respuesta trae el "csrf"
+curl -X POST http://localhost:8000/api/login -c cookies.txt -H "Content-Type: application/json" \
      -d '{"email":"tu@email.com","password":"Clave1234"}'
 
 curl http://localhost:8000/api/vehiculos?q=toyota&combustible=nafta
 
-curl -X POST http://localhost:8000/api/admin/vehiculos -H "Authorization: Bearer TOKEN" \
+# -b manda la cookie; CSRF = el valor "csrf" del login
+curl -X POST http://localhost:8000/api/admin/vehiculos -b cookies.txt -H "X-CSRF-Token: CSRF" \
      -H "Content-Type: application/json" \
      -d '{"marca":"Ford","modelo":"Focus","anio":2019,"precio":15000000,"kilometraje":60000,"combustible":"nafta","transmision":"manual"}'
 ```
 
 ### Cómo lo usa el front (Vercel)
 
-El front es HTML, CSS y JavaScript nativo, sin build. La dirección de la API está en su archivo `js/api/config.js`: si el front se abre en `localhost` o `127.0.0.1` usa `http://localhost:8000`, y en cualquier otro dominio usa `https://autocarbackend-1.onrender.com`.
+El front es HTML, CSS y JavaScript nativo, sin build. **Publicado, no llama a Render directamente**: pide `/api/...` a su propio dominio y Vercel reenvía esos pedidos a Render (archivo `vercel.json` del repo del front). Así la cookie de sesión queda como cookie del propio sitio; si el front llamara a `onrender.com`, sería una cookie de terceros y Safari (y otros navegadores) la bloquean. En local llama a `http://localhost:8000` (ver `js/api/config.js`).
 
 ```js
-const API = 'https://autocarbackend-1.onrender.com';   // en el front: API_URL de js/api/config.js (sin barra final)
-
+// En el front: API_URL de js/api/config.js ('' publicado, 'http://localhost:8000' en local)
 const r = await fetch(`${API}/api/login`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
+  credentials: 'include',                    // guarda la cookie que manda el back
   body: JSON.stringify({ email, password }),
 });
-const { token } = await r.json();            // guardarlo (memoria o sessionStorage)
+const { csrf } = await r.json();             // el JWT NO viene en el cuerpo: está en la cookie HttpOnly
 
-await fetch(`${API}/api/admin/vehiculos`, {
-  headers: { Authorization: `Bearer ${token}` },
+await fetch(`${API}/api/admin/vehiculos/3`, {
+  method: 'DELETE',
+  credentials: 'include',                    // manda la cookie
+  headers: { 'X-CSRF-Token': csrf },         // obligatorio en POST, PUT y DELETE con sesión
 });
 ```
 
-No hace falta `credentials: 'include'` (no se usan cookies). Para cerrar sesión, el front descarta el token.
+Para cerrar sesión: `POST /api/logout` (JavaScript no puede borrar una cookie `HttpOnly`).
 
 ## Estructura
 
@@ -71,7 +79,7 @@ composer.json      dependencias (firebase/php-jwt) y autoload PSR-4: namespace A
 src/bootstrap.php  autoload de Composer, errores, CORS y cabeceras
 src/routes.php     todas las rutas, con su guard (auth / admin)
 src/Core/          Config, Database (PDO), Router, Request, Response, Cors, Logger
-src/Auth/          Jwt (envoltorio de firebase/php-jwt), Auth, Usuario, AuthController
+src/Auth/          Jwt (envoltorio de firebase/php-jwt), Auth (cookie de sesión y CSRF), Usuario, AuthController
 src/Catalogo/      Vehiculo (modelo + validación), CatalogoController (API pública)
 src/Admin/         AdminVehiculoController (ABM)
 database/          schema.sql, seed.sql (PostgreSQL)
@@ -126,7 +134,7 @@ El registro público siempre crea usuarios con rol `usuario`. Para tener un admi
 UPDATE users SET rol = 'admin' WHERE email = 'tu@email.com';
 ```
 
-Volver a hacer login para obtener un token. (El rol se consulta en la base en cada pedido a `/api/admin`.)
+Volver a hacer login. (El rol se consulta en la base en cada pedido a `/api/admin`.)
 
 ## Despliegue (Render + Neon)
 
@@ -144,9 +152,10 @@ Plan Free de Render: el servicio se duerme tras ~15 min sin visitas y la primera
 - **Consultas parametrizadas** con PDO (`ATTR_EMULATE_PREPARES` desactivado); los comodines `%` y `_` de la búsqueda se escapan.
 - **Contraseñas** con `password_hash` / `password_verify` (bcrypt); nunca se guardan ni se devuelven en claro.
 - **JWT** HS256 con la librería `firebase/php-jwt`, firmado con `JWT_SECRET` y con vencimiento; la librería verifica la firma y el vencimiento, y solo se acepta HS256 (se rechaza `none` y cualquier otro algoritmo).
+- **Cookie de sesión segura** (`src/Auth/Auth.php`): el JWT va en la cookie `autocar_sesion` con `HttpOnly` (JavaScript no la puede leer, así un XSS no puede robar la sesión), `Secure` (solo viaja por HTTPS; en local con http no se pone) y `SameSite=Strict` (el navegador no la manda en pedidos que vienen de otro sitio). Vence junto con el JWT (`JWT_TTL`).
+- **Protección CSRF**: además de `SameSite`, toda ruta con sesión que cambia datos (`POST`, `PUT`, `DELETE`) exige el header `X-CSRF-Token` (`Router` → `Auth::requireCsrf`). El token es un HMAC-SHA256 del JWT con `JWT_SECRET`: queda ligado a la sesión, no hace falta guardarlo y se compara con `hash_equals`. Otro sitio puede hacer que el navegador mande la cookie, pero no puede conocer el token.
 - **Control de rol en el servidor**: cada ruta `/api/admin` lleva el guard `admin` en `src/routes.php`, que consulta el rol en la base (el rol no viaja en el token, así que un cambio de rol o un usuario borrado surten efecto al instante).
-- **CORS** restringido a los orígenes de `FRONT_URL`.
-- **Sin cookies**: el token va en un header, por lo que no hay CSRF.
+- **CORS** restringido a los orígenes de `FRONT_URL` (en producción el front usa el proxy de Vercel y no hace falta; sirve para desarrollo local).
 - **Errores**: `display_errors=0`; se registran en `storage/logs/app.log` y el cliente recibe un 500 genérico.
 - Login sin pistas: mismo mensaje y mismo costo si el email no existe o la contraseña es incorrecta.
 
