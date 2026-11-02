@@ -182,8 +182,8 @@ final class Vehiculo
         }
 
         $precioTxt = str_replace(',', '.', $txt('precio'));
-        if (!preg_match('/^\d{1,9}(\.\d{1,2})?$/', $precioTxt) || (float)$precioTxt <= 0) {
-            $errores['precio'] = 'Ingresá un precio mayor a 0 (por ejemplo 12500000 o 12500000,50).';
+        if (!preg_match('/^\d{1,9}(\.\d{1,2})?$/', $precioTxt) || (float)$precioTxt < 100000) {
+            $errores['precio'] = 'Ingresá un precio de al menos $100.000 (por ejemplo 12500000).';
         }
 
         $km = filter_var($txt('kilometraje'), FILTER_VALIDATE_INT);
