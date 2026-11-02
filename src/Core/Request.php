@@ -32,6 +32,12 @@ final class Request
         if ((int)($_SERVER['CONTENT_LENGTH'] ?? 0) > self::bytes((string)ini_get('post_max_size'))) {
             Response::error(413, 'cuerpo_muy_grande', 'Las fotos pesan demasiado en total. Probá con menos o más livianas.');
         }
+        // La base es UTF-8: un texto en otra codificación haría fallar el INSERT con un 500
+        foreach ($_POST as $v) {
+            if (is_string($v) && !mb_check_encoding($v, 'UTF-8')) {
+                Response::error(400, 'codificacion_invalida', 'El formulario debe enviarse en UTF-8.');
+            }
+        }
         return $_POST;
     }
 

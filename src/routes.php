@@ -9,6 +9,7 @@ declare(strict_types=1);
 use AutoCar\Admin\AdminVehiculoController;
 use AutoCar\Auth\AuthController;
 use AutoCar\Catalogo\CatalogoController;
+use AutoCar\Chat\ChatController;
 use AutoCar\Publicaciones\PublicacionController;
 use AutoCar\Core\Router;
 
@@ -26,6 +27,12 @@ $router->post('/api/mis-vehiculos', [PublicacionController::class, 'crear'], 'au
 $router->put('/api/mis-vehiculos/{id}', [PublicacionController::class, 'actualizar'], 'auth');
 $router->patch('/api/mis-vehiculos/{id}/estado', [PublicacionController::class, 'cambiarEstado'], 'auth');
 $router->delete('/api/mis-vehiculos/{id}', [PublicacionController::class, 'eliminar'], 'auth');
+
+// Chat entre interesado y vendedor (sólo los participantes ven cada conversación)
+$router->post('/api/vehiculos/{id}/conversacion', [ChatController::class, 'abrir'], 'auth');
+$router->get('/api/conversaciones', [ChatController::class, 'index'], 'auth');
+$router->get('/api/conversaciones/{id}/mensajes', [ChatController::class, 'mensajes'], 'auth');
+$router->post('/api/conversaciones/{id}/mensajes', [ChatController::class, 'enviar'], 'auth');
 
 // Autenticación
 $router->post('/api/registro', [AuthController::class, 'registro']);
