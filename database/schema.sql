@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS vehiculos (
   acepta_canje BOOLEAN       NOT NULL DEFAULT false,
   busca_canje  VARCHAR(120),
   localidad    VARCHAR(100),
+  motivo_rechazo VARCHAR(300), -- lo escribe el admin al rechazar; el dueño lo ve en sus publicaciones
   created_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
   updated_at   TIMESTAMPTZ   NOT NULL DEFAULT now()
 );

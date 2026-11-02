@@ -51,7 +51,9 @@ final class CatalogoController
         $texto  = static fn(string $k, int $max): string => is_string($get[$k] ?? null) ? mb_substr(trim($get[$k]), 0, $max) : '';
         $precio = str_replace(',', '.', $texto('precio_max', 12));
         $comb   = $texto('combustible', 20);
+        $estado = $texto('estado', 12);
         return [
+            'estado'      => in_array($estado, Vehiculo::ESTADOS, true) ? $estado : '', // sólo lo usa el admin
             'q'           => $texto('q', 60),
             'marca'       => $texto('marca', 50),
             'combustible' => in_array($comb, Vehiculo::COMBUSTIBLES, true) ? $comb : '',

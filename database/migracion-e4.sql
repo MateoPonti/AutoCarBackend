@@ -9,6 +9,7 @@ ALTER TABLE vehiculos ADD COLUMN IF NOT EXISTS condicion    VARCHAR(10)
 ALTER TABLE vehiculos ADD COLUMN IF NOT EXISTS acepta_canje BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE vehiculos ADD COLUMN IF NOT EXISTS busca_canje  VARCHAR(120);
 ALTER TABLE vehiculos ADD COLUMN IF NOT EXISTS localidad    VARCHAR(100);
+ALTER TABLE vehiculos ADD COLUMN IF NOT EXISTS motivo_rechazo VARCHAR(300);
 
 -- Estados nuevos: 'pendiente' (espera aprobación del admin), 'rechazado' y 'eliminado' (baja lógica
 -- del usuario: no se borra la fila para no romper las conversaciones que la referencian)

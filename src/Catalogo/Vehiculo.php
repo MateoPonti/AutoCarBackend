@@ -26,6 +26,11 @@ final class Vehiculo
 
         if ($soloDisponibles) {
             $where[] = "estado = 'disponible'";
+        } elseif (($f['estado'] ?? '') !== '') { // admin: filtro por estado (p. ej. la cola de 'pendiente')
+            $where[] = 'estado = :estado';
+            $params['estado'] = $f['estado'];
+        } else {
+            $where[] = "estado <> 'eliminado'";
         }
         if (($f['q'] ?? '') !== '') {
             // se escapan % y _ para que el usuario no pueda armar comodines
@@ -102,10 +107,13 @@ final class Vehiculo
         return $st->fetch() ?: null;
     }
 
-    public static function cambiarEstado(int $id, string $estado): void
+    /** $motivo sólo se guarda al rechazar; cualquier otro cambio de estado lo borra. */
+    public static function cambiarEstado(int $id, string $estado, ?string $motivo = null): void
     {
-        $st = Database::pdo()->prepare('UPDATE vehiculos SET estado = :estado, updated_at = now() WHERE id = :id');
-        $st->execute(['estado' => $estado, 'id' => $id]);
+        $st = Database::pdo()->prepare(
+            'UPDATE vehiculos SET estado = :estado, motivo_rechazo = :motivo, updated_at = now() WHERE id = :id'
+        );
+        $st->execute(['estado' => $estado, 'motivo' => $estado === 'rechazado' ? $motivo : null, 'id' => $id]);
     }
 
     /** $usuarioId: dueño de la publicación; null cuando el vehículo lo carga el admin. */
@@ -128,16 +136,12 @@ final class Vehiculo
             'UPDATE vehiculos SET marca = :marca, modelo = :modelo, version = :version, anio = :anio, precio = :precio,
                     kilometraje = :kilometraje, combustible = :combustible, transmision = :transmision,
                     condicion = :condicion, estado = :estado, descripcion = :descripcion, imagen_url = :imagen_url,
-                    acepta_canje = :acepta_canje, busca_canje = :busca_canje, localidad = :localidad, updated_at = now()
+                    acepta_canje = :acepta_canje, busca_canje = :busca_canje, localidad = :localidad,
+                    motivo_rechazo = CASE WHEN CAST(:estado_motivo AS VARCHAR) = \'rechazado\' THEN motivo_rechazo END, updated_at = now()
              WHERE id = :id'
         );
-        $st->execute(self::columnas($d) + ['id' => $id]);
-    }
-
-    public static function eliminar(int $id): void
-    {
-        $st = Database::pdo()->prepare('DELETE FROM vehiculos WHERE id = :id');
-        $st->execute(['id' => $id]);
+        // El motivo de rechazo se conserva sólo si sigue rechazado (al editar vuelve a 'pendiente' y se borra)
+        $st->execute(self::columnas($d) + ['estado_motivo' => $d['estado'], 'id' => $id]);
     }
 
     private static function columnas(array $d): array
@@ -252,6 +256,7 @@ final class Vehiculo
             'descripcion' => $v['descripcion'], 'imagen_url' => $v['imagen_url'],
             'version' => $v['version'], 'condicion' => $v['condicion'], 'acepta_canje' => (bool)$v['acepta_canje'],
             'busca_canje' => $v['busca_canje'], 'localidad' => $v['localidad'],
+            'motivo_rechazo' => $v['motivo_rechazo'] ?? null,
             // Ruta relativa a la API: el front le antepone API_URL
             'foto' => isset($v['foto_id']) ? '/api/fotos/' . (int)$v['foto_id'] : null,
             'creado' => date('c', (int)strtotime((string)$v['created_at'])),

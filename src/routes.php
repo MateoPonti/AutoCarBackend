@@ -35,6 +35,8 @@ $router->get('/api/me', [AuthController::class, 'me'], 'auth');
 
 // Administración (solo rol admin)
 $router->get('/api/admin/vehiculos', [AdminVehiculoController::class, 'index'], 'admin');
+$router->get('/api/admin/vehiculos/{id}', [AdminVehiculoController::class, 'detalle'], 'admin');
 $router->post('/api/admin/vehiculos', [AdminVehiculoController::class, 'crear'], 'admin');
+$router->patch('/api/admin/vehiculos/{id}/estado', [AdminVehiculoController::class, 'moderar'], 'admin');
 $router->put('/api/admin/vehiculos/{id}', [AdminVehiculoController::class, 'actualizar'], 'admin');
 $router->delete('/api/admin/vehiculos/{id}', [AdminVehiculoController::class, 'eliminar'], 'admin');

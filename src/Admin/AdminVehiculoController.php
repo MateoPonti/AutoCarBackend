@@ -3,18 +3,38 @@ declare(strict_types=1);
 
 namespace AutoCar\Admin;
 
+use AutoCar\Auth\Usuario;
 use AutoCar\Catalogo\CatalogoController;
 use AutoCar\Catalogo\Vehiculo;
 use AutoCar\Core\Request;
 use AutoCar\Core\Response;
+use AutoCar\Publicaciones\Foto;
 
-/** ABM de vehículos. Todas las rutas llevan el guard 'admin' en routes.php (se verifica en el servidor). */
+/** ABM y moderación de vehículos. Todas las rutas llevan el guard 'admin' en routes.php (se verifica en el servidor). */
 final class AdminVehiculoController
 {
+    /** Moderación: a qué estados puede pasar el admin una publicación según su estado actual. */
+    private const TRANSICIONES = [
+        'pendiente'  => ['disponible', 'rechazado'], // aprobar o rechazar
+        'disponible' => ['rechazado'],               // dar de baja una publicación ya aprobada
+        'rechazado'  => ['disponible'],              // revertir un rechazo
+    ];
+
+    /** GET /api/admin/vehiculos?estado=pendiente → la cola de moderación. Sin estado: todos menos los eliminados. */
     public function index(): void
     {
-        // El admin ve también los vendidos
         Response::json(CatalogoController::listado(CatalogoController::filtros($_GET), false, 15));
+    }
+
+    /** GET /api/admin/vehiculos/{id}: detalle para moderar (con todas las fotos y quién lo publicó). */
+    public function detalle(int $id): void
+    {
+        $v = self::existente($id);
+        $duenio = $v['usuario_id'] !== null ? Usuario::porId((int)$v['usuario_id']) : null;
+        Response::json(['vehiculo' => Vehiculo::paraApi($v) + [
+            'fotos'      => Foto::rutasDe($id),
+            'publicador' => $duenio !== null ? Usuario::publico($duenio) : null,
+        ]]);
     }
 
     public function crear(): void
@@ -30,10 +50,7 @@ final class AdminVehiculoController
 
     public function actualizar(int $id): void
     {
-        $actual = Vehiculo::find($id);
-        if ($actual === null) {
-            Response::error(404, 'no_encontrado', 'El vehículo no existe.');
-        }
+        $actual = self::existente($id);
         // El formulario del admin no manda los campos de la publicación (versión, localidad, canje...):
         // los que no vienen se completan con los actuales para no borrarlos al guardar.
         [$datos, $errores] = Vehiculo::validar(Request::json() + Vehiculo::paraApi($actual));
@@ -44,12 +61,49 @@ final class AdminVehiculoController
         Response::json(['vehiculo' => Vehiculo::paraApi(Vehiculo::find($id))]);
     }
 
+    /**
+     * PATCH /api/admin/vehiculos/{id}/estado
+     *   {"estado": "disponible"}                         → aprobar
+     *   {"estado": "rechazado", "motivo": "Fotos que..."} → rechazar (el motivo es obligatorio y lo ve el dueño)
+     */
+    public function moderar(int $id): void
+    {
+        $actual = self::existente($id);
+        $in     = Request::json();
+        $nuevo  = Request::texto($in, 'estado');
+        $motivo = Request::texto($in, 'motivo');
+
+        $errores = [];
+        if (!in_array($nuevo, self::TRANSICIONES[$actual['estado']] ?? [], true)) {
+            $errores['estado'] = "Una publicación en estado '{$actual['estado']}' no puede pasar a '{$nuevo}'.";
+        }
+        $largo = mb_strlen($motivo);
+        if ($nuevo === 'rechazado' && ($largo < 5 || $largo > 300)) {
+            $errores['motivo'] = 'Escribí el motivo del rechazo (entre 5 y 300 caracteres).';
+        }
+        if ($errores) {
+            Response::error(422, 'validacion', 'Revisá los datos ingresados.', $errores);
+        }
+
+        Vehiculo::cambiarEstado($id, $nuevo, $motivo);
+        Response::json(['vehiculo' => Vehiculo::paraApi(Vehiculo::find($id))]);
+    }
+
+    /** Baja lógica (estado 'eliminado'): la fila queda para el historial y para los chats que la referencian. */
     public function eliminar(int $id): void
     {
-        if (Vehiculo::find($id) === null) {
+        self::existente($id);
+        Vehiculo::cambiarEstado($id, 'eliminado');
+        Response::noContent();
+    }
+
+    /** Vehículo que no esté eliminado, o 404. */
+    private static function existente(int $id): array
+    {
+        $v = Vehiculo::find($id);
+        if ($v === null || $v['estado'] === 'eliminado') {
             Response::error(404, 'no_encontrado', 'El vehículo no existe.');
         }
-        Vehiculo::eliminar($id);
-        Response::noContent();
+        return $v;
     }
 }
