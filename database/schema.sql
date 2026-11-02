@@ -81,3 +81,13 @@ CREATE TABLE IF NOT EXISTS mensaje (
 );
 
 CREATE INDEX IF NOT EXISTS idx_mensaje_conversacion ON mensaje (conversacion_id, id);
+
+-- Sesiones de PHP ($_SESSION), guardadas en la base porque el disco de Render se borra en cada deploy (ver SesionDb).
+-- id = el valor de la cookie autocar_sesion; datos = $_SESSION serializado por PHP.
+CREATE TABLE IF NOT EXISTS sesion (
+  id    VARCHAR(256) PRIMARY KEY,
+  datos TEXT         NOT NULL,
+  vence TIMESTAMPTZ  NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_sesion_vence ON sesion (vence);

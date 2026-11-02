@@ -25,9 +25,9 @@ COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
 
 COPY . /var/www/html/
 
-# Instala las dependencias de producción (vendor/) y deja el autoload optimizado (--no-security-blocking evita bloqueos de JWT)
+# Genera vendor/ con el autoload optimizado (no hay librerías de terceros: solo el autoload PSR-4 de src/)
 RUN cd /var/www/html \
- && COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction --no-security-blocking \
+ && COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction \
  && rm -rf /root/.composer /root/.cache/composer
 
 # Apache corre como www-data: necesita escribir el log de errores

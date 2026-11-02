@@ -7,52 +7,55 @@ use AutoCar\Core\Config;
 use AutoCar\Core\Response;
 
 /**
- * Sesión con cookie: el JWT viaja en la cookie "autocar_sesion" (HttpOnly, así JavaScript no la puede leer
- * aunque hubiera un XSS). Como el navegador manda la cookie solo, los pedidos que cambian datos llevan
- * además el header X-CSRF-Token (ver requireCsrf).
+ * Sesión de PHP ($_SESSION) guardada en la base (ver SesionDb). El navegador solo tiene la cookie
+ * "autocar_sesion" con el id de la sesión (HttpOnly, así JavaScript no la puede leer aunque hubiera un XSS).
+ * Como el navegador manda la cookie solo, los pedidos que cambian datos llevan además el header
+ * X-CSRF-Token (ver requireCsrf).
  *
- * El rol NO se toma del token: se consulta en la base, así un cambio de rol o un usuario borrado
+ * El rol NO se guarda en la sesión: se consulta en la base, así un cambio de rol o un usuario borrado
  * surten efecto de inmediato.
  */
 final class Auth
 {
     public const COOKIE = 'autocar_sesion';
 
-    private static ?array $claims = null;
+    private static ?int $usuarioId = null;
     private static bool $leido = false;
 
     public static function ttl(): int
     {
-        return max(300, (int)(Config::get('JWT_TTL', '7200'))); // 2 horas por defecto
+        return max(300, (int)(Config::get('SESION_TTL', '7200'))); // 2 horas por defecto
     }
 
-    /** Emite el JWT y lo deja en la cookie de sesión. */
-    public static function iniciarSesion(array $usuario): void
+    /** Arranca la sesión de PHP la primera vez que se necesita en el pedido. */
+    private static function arrancar(): void
     {
-        $token = Jwt::emitir(['sub' => (int)$usuario['id']], self::ttl());
-        self::cookie($token, time() + self::ttl());
-        $_COOKIE[self::COOKIE] = $token; // para que csrf() ya lo vea en esta misma respuesta
-        self::$leido = false;
-    }
-
-    public static function cerrarSesion(): void
-    {
-        self::cookie('', time() - 3600); // vencida: el navegador la borra
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            return;
+        }
+        ini_set('session.use_strict_mode', '1');  // no acepta ids inventados por el cliente (fijación de sesión)
+        ini_set('session.use_only_cookies', '1'); // el id nunca viaja en la URL
+        ini_set('session.gc_maxlifetime', (string)self::ttl());
+        session_name(self::COOKIE);
+        session_set_cookie_params(self::atributos(self::ttl()));
+        session_cache_limiter(''); // las cabeceras de caché las decide Response (por ejemplo, las fotos públicas)
+        session_set_save_handler(new SesionDb(self::ttl()), true);
+        session_start();
     }
 
     /**
      * Secure: solo viaja por HTTPS (en local, con http, no se puede poner o el navegador la descarta).
      * SameSite=Strict: el navegador no la manda en pedidos que se originan en otro sitio (primera barrera contra CSRF).
      */
-    private static function cookie(string $valor, int $vence): void
+    private static function atributos(int $lifetime): array
     {
-        setcookie(self::COOKIE, $valor, [
-            'expires'  => $vence,
+        return [
+            'lifetime' => $lifetime,
             'path'     => '/',
             'secure'   => self::https(),
             'httponly' => true,
             'samesite' => 'Strict',
-        ]);
+        ];
     }
 
     private static function https(): bool
@@ -61,25 +64,77 @@ final class Auth
         return (($_SERVER['HTTPS'] ?? '') === 'on') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
     }
 
+    /** Login: id de sesión nuevo (evita fijación de sesión) y se guardan el usuario y el token CSRF. */
+    public static function iniciarSesion(array $usuario): void
+    {
+        self::arrancar();
+        session_regenerate_id(true); // true: borra la sesión vieja
+        $_SESSION = [
+            'usuario_id' => (int)$usuario['id'],
+            'csrf'       => bin2hex(random_bytes(32)),
+            'vence'      => time() + self::ttl(),
+        ];
+        self::$usuarioId = (int)$usuario['id'];
+        self::$leido = true;
+    }
+
+    /** Logout en los tres pasos de siempre: vaciar $_SESSION, vencer la cookie y destruir la sesión. */
+    public static function cerrarSesion(): void
+    {
+        if (self::cookieValida()) {
+            self::arrancar();
+        }
+        $_SESSION = [];
+        $a = self::atributos(0);
+        setcookie(self::COOKIE, '', [
+            'expires'  => time() - 3600, // vencida: el navegador la borra
+            'path'     => $a['path'],
+            'secure'   => $a['secure'],
+            'httponly' => $a['httponly'],
+            'samesite' => $a['samesite'],
+        ]);
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_destroy(); // borra la fila de la tabla sesion: el id deja de servir aunque alguien lo haya copiado
+        }
+        self::$usuarioId = null;
+        self::$leido = true;
+    }
+
     /** ID del usuario autenticado, o null. */
     public static function id(): ?int
     {
         if (!self::$leido) {
             self::$leido = true;
-            $token = $_COOKIE[self::COOKIE] ?? null;
-            self::$claims = is_string($token) && $token !== '' ? Jwt::verificar($token) : null;
+            self::$usuarioId = self::leer();
         }
-        return self::$claims !== null ? (int)self::$claims['sub'] : null;
+        return self::$usuarioId;
     }
 
-    /**
-     * Token CSRF ligado a la sesión: HMAC del JWT con JWT_SECRET. No hace falta guardarlo en la base,
-     * se recalcula en cada pedido. Otro sitio no lo puede conocer porque no puede leer la cookie ni las respuestas.
-     */
+    private static function leer(): ?int
+    {
+        if (!self::cookieValida()) {
+            return null; // sin cookie no se arranca la sesión: los pedidos anónimos no tocan la tabla
+        }
+        self::arrancar();
+        $id = $_SESSION['usuario_id'] ?? null;
+        if (!is_int($id) || ($_SESSION['vence'] ?? 0) < time()) {
+            $_SESSION = []; // vencida o vacía: al terminar el pedido SesionDb borra la fila
+            return null;
+        }
+        return $id;
+    }
+
+    /** Un id con otros caracteres (por ejemplo, una cookie vieja con un JWT) haría que PHP emita un warning. */
+    private static function cookieValida(): bool
+    {
+        $c = $_COOKIE[self::COOKIE] ?? null;
+        return is_string($c) && preg_match('/^[A-Za-z0-9,-]{22,256}$/', $c) === 1;
+    }
+
+    /** Token CSRF de la sesión. Se genera al azar en el login y otro sitio no lo puede conocer. */
     public static function csrf(): ?string
     {
-        $token = $_COOKIE[self::COOKIE] ?? null;
-        return is_string($token) && $token !== '' ? Jwt::firmar($token) : null;
+        return self::id() !== null && is_string($_SESSION['csrf'] ?? null) ? $_SESSION['csrf'] : null;
     }
 
     public static function requireLogin(): void

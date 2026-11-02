@@ -4,8 +4,7 @@
     "type": "project",
     "license": "proprietary",
     "require": {
-        "php": ">=8.2",
-        "firebase/php-jwt": "^7.0"
+        "php": ">=8.2"
     },
     "autoload": {
         "psr-4": {

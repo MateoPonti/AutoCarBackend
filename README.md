@@ -5,7 +5,7 @@ Compra y venta de vehículos. Entidad principal: **vehículos**. El front (Verce
 
 - **URL desplegada:** https://autocarbackend-1.onrender.com *(HTTPS)*
 - **Roles:** `usuario` (registrado) y `admin` (gestiona vehículos).
-- **Autenticación:** JWT (HS256) en una cookie de sesión `autocar_sesion` (`HttpOnly`, `Secure`, `SameSite=Strict`) + token CSRF en el header `X-CSRF-Token`.
+- **Autenticación:** sesión de PHP (`$_SESSION`) guardada en la tabla `sesion`; el navegador solo tiene la cookie `autocar_sesion` con el id (`HttpOnly`, `Secure`, `SameSite=Strict`) + token CSRF en el header `X-CSRF-Token`.
 - **Versión:** ver `VERSION` (versionado semántico). **Autores:** `autores.txt`.
 
 ## Endpoints
@@ -60,7 +60,7 @@ const r = await fetch(`${API}/api/login`, {
   credentials: 'include',                    // guarda la cookie que manda el back
   body: JSON.stringify({ email, password }),
 });
-const { csrf } = await r.json();             // el JWT NO viene en el cuerpo: está en la cookie HttpOnly
+const { csrf } = await r.json();             // el id de sesión NO viene en el cuerpo: está en la cookie HttpOnly
 
 await fetch(`${API}/api/admin/vehiculos/3`, {
   method: 'DELETE',
@@ -75,14 +75,14 @@ Para cerrar sesión: `POST /api/logout` (JavaScript no puede borrar una cookie `
 
 ```
 public/            única carpeta expuesta: index.php (front controller) y .htaccess
-composer.json      dependencias (firebase/php-jwt) y autoload PSR-4: namespace AutoCar\ → src/ (AutoCar\Core\Router = src/Core/Router.php)
+composer.json      sin librerías de terceros: solo el autoload PSR-4: namespace AutoCar\ → src/ (AutoCar\Core\Router = src/Core/Router.php)
 src/bootstrap.php  autoload de Composer, errores, CORS y cabeceras
 src/routes.php     todas las rutas, con su guard (auth / admin)
 src/Core/          Config, Database (PDO), Router, Request, Response, Cors, Logger
-src/Auth/          Jwt (envoltorio de firebase/php-jwt), Auth (cookie de sesión y CSRF), Usuario, AuthController
+src/Auth/          Auth (sesión, cookie y CSRF), SesionDb (guarda $_SESSION en la base), Usuario, AuthController
 src/Catalogo/      Vehiculo (modelo + validación), CatalogoController (API pública)
 src/Admin/         AdminVehiculoController (ABM)
-database/          schema.sql, seed.sql (PostgreSQL)
+database/          schema.sql, seed.sql y las migraciones para bases que ya existían (PostgreSQL)
 storage/logs/      app.log (fuera de public/)
 vendor/            librerías de Composer (se genera, no se sube al repo)
 ```
@@ -112,6 +112,7 @@ El código sólo usa funciones de PHP 8.2 o anteriores, así que la diferencia e
 ## Base de datos (Neon)
 
 1. Crear el proyecto en Neon. En la consola, abrir el **SQL Editor** de la rama `production`, pegar el contenido de `database/schema.sql` y ejecutarlo. Después hacer lo mismo con `database/seed.sql` (datos de prueba).
+   Si la base ya existía de una entrega anterior, en vez de `schema.sql` correr las migraciones en orden: `migracion-e4.sql`, `migracion-nombres.sql`, `migracion-chat.sql` y `migracion-sesion.sql` (todas se pueden correr más de una vez).
 2. Botón **Connect** → desactivar **Connection pooling** → copiar host, base (`neondb`), usuario y contraseña. Esos valores van a `DB_HOST`, `DB_NAME`, `DB_USER` y `DB_PASS` (`DB_PORT` es 5432).
 3. Para desarrollar sin tocar producción: **Create child branch** (por ejemplo `dev`) y usar sus datos en el `.env` local.
 
@@ -124,7 +125,7 @@ En local se usa una base PostgreSQL propia en Docker (`docker-compose.yml`), sin
 
 1. Instalar las dependencias: `composer install` (crea la carpeta `vendor/`).
 2. Levantar la base: `docker compose up -d`. La primera vez carga `database/schema.sql` y `database/seed.sql`. Queda en el puerto **5433** (para no chocar con un Postgres instalado en 5432).
-3. Copiar `.env.example` como `.env` con estos datos y un **`JWT_SECRET`** propio (generar con `php -r "echo bin2hex(random_bytes(32));"`):
+3. Copiar `.env.example` como `.env` con estos datos:
    ```
    DB_HOST=127.0.0.1
    DB_PORT=5433
@@ -156,7 +157,7 @@ Volver a hacer login. (El rol se consulta en la base en cada pedido a `/api/admi
 
 1. Base creada e importada en Neon (ver arriba).
 2. **Render → New → Web Service**, elegir el repo (runtime Docker, plan Free). El `Dockerfile` ejecuta `composer install` solo; hay que subir `composer.json` (y `composer.lock` si existe) al repo, pero no `vendor/`.
-3. En *Environment* cargar: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS` (Neon), `JWT_SECRET` (distinto al local) y `FRONT_URL` (URL del front en Vercel, sin barra final; varias separadas por coma).
+3. En *Environment* cargar: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS` (Neon) y `FRONT_URL` (URL del front en Vercel, sin barra final; varias separadas por coma).
 4. Si cambia la URL de Render, actualizar `PRODUCCION` en `js/api/config.js` del front y volver a desplegarlo en Vercel. El front no usa variables de entorno: es estático y no tiene build.
 5. Cada `git push` a `main` redespliega solo. Errores: pestaña **Logs** de Render. `GET /health` responde sin tocar la base.
 
@@ -167,10 +168,11 @@ Plan Free de Render: el servicio se duerme tras ~15 min sin visitas y la primera
 - **Validación en el backend** de todo lo que entra: cuerpos JSON (`Vehiculo::validar`, `AuthController`), filtros de la URL y tipos de datos.
 - **Consultas parametrizadas** con PDO (`ATTR_EMULATE_PREPARES` desactivado); los comodines `%` y `_` de la búsqueda se escapan.
 - **Contraseñas** con `password_hash` / `password_verify` (bcrypt); nunca se guardan ni se devuelven en claro.
-- **JWT** HS256 con la librería `firebase/php-jwt`, firmado con `JWT_SECRET` y con vencimiento; la librería verifica la firma y el vencimiento, y solo se acepta HS256 (se rechaza `none` y cualquier otro algoritmo).
-- **Cookie de sesión segura** (`src/Auth/Auth.php`): el JWT va en la cookie `autocar_sesion` con `HttpOnly` (JavaScript no la puede leer, así un XSS no puede robar la sesión), `Secure` (solo viaja por HTTPS; en local con http no se pone) y `SameSite=Strict` (el navegador no la manda en pedidos que vienen de otro sitio). Vence junto con el JWT (`JWT_TTL`).
-- **Protección CSRF**: además de `SameSite`, toda ruta con sesión que cambia datos (`POST`, `PUT`, `DELETE`) exige el header `X-CSRF-Token` (`Router` → `Auth::requireCsrf`). El token es un HMAC-SHA256 del JWT con `JWT_SECRET`: queda ligado a la sesión, no hace falta guardarlo y se compara con `hash_equals`. Otro sitio puede hacer que el navegador mande la cookie, pero no puede conocer el token.
-- **Control de rol en el servidor**: cada ruta `/api/admin` lleva el guard `admin` en `src/routes.php`, que consulta el rol en la base (el rol no viaja en el token, así que un cambio de rol o un usuario borrado surten efecto al instante).
+- **Sesión de PHP en la base** (`src/Auth/Auth.php` y `SesionDb.php`): `$_SESSION` se guarda en la tabla `sesion` y no en archivos, porque el disco de Render se borra en cada deploy. `session.use_strict_mode` rechaza ids inventados por el cliente, y el login hace `session_regenerate_id(true)`: id nuevo y la sesión vieja se borra (evita fijación de sesión). Vence a las 2 horas (`SESION_TTL`).
+- **Logout real**: `$_SESSION = []`, cookie vencida y `session_destroy()`, que borra la fila. El id deja de servir en el servidor aunque alguien lo hubiera copiado.
+- **Cookie de sesión segura**: `autocar_sesion` lleva solo el id, con `HttpOnly` (JavaScript no la puede leer, así un XSS no puede robar la sesión), `Secure` (solo viaja por HTTPS; en local con http no se pone) y `SameSite=Strict` (el navegador no la manda en pedidos que vienen de otro sitio).
+- **Protección CSRF**: además de `SameSite`, toda ruta con sesión que cambia datos (`POST`, `PUT`, `DELETE`) exige el header `X-CSRF-Token` (`Router` → `Auth::requireCsrf`). El token se genera al azar en el login (`random_bytes(32)`), se guarda en `$_SESSION` y se compara con `hash_equals`. Otro sitio puede hacer que el navegador mande la cookie, pero no puede conocer el token.
+- **Control de rol en el servidor**: cada ruta `/api/admin` lleva el guard `admin` en `src/routes.php`, que consulta el rol en la base (el rol no se guarda en la sesión, así que un cambio de rol o un usuario borrado surten efecto al instante).
 - **CORS** restringido a los orígenes de `FRONT_URL` (en producción el front usa el proxy de Vercel y no hace falta; sirve para desarrollo local).
 - **Errores**: `display_errors=0`; se registran en `storage/logs/app.log` y el cliente recibe un 500 genérico.
 - Login sin pistas: mismo mensaje y mismo costo si el email no existe o la contraseña es incorrecta.

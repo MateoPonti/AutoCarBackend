@@ -69,7 +69,7 @@ final class AuthController
             Response::error(401, 'credenciales', 'El email o la contraseña no son correctos.');
         }
 
-        // El JWT va solo en la cookie HttpOnly; al front se le da el token CSRF para mandarlo en cada cambio
+        // El id de sesión va solo en la cookie HttpOnly; al front se le da el token CSRF para mandarlo en cada cambio
         Auth::iniciarSesion($usuario);
         Response::json([
             'csrf'       => Auth::csrf(),
@@ -78,7 +78,7 @@ final class AuthController
         ]);
     }
 
-    /** Borra la cookie. JavaScript no puede hacerlo porque es HttpOnly. */
+    /** Destruye la sesión en el servidor y borra la cookie (JavaScript no puede hacerlo porque es HttpOnly). */
     public function logout(): void
     {
         Auth::cerrarSesion();
@@ -88,7 +88,7 @@ final class AuthController
     public function me(): void
     {
         $u = Usuario::porId((int)Auth::id());
-        if ($u === null) { // el usuario fue borrado después de emitir el token
+        if ($u === null) { // el usuario fue borrado después de iniciar la sesión
             Response::error(401, 'no_autenticado', 'Necesitás iniciar sesión.');
         }
         Response::json(['usuario' => Usuario::publico($u), 'csrf' => Auth::csrf()]);
