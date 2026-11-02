@@ -7,8 +7,8 @@ use AutoCar\Auth\Auth;
 
 /**
  * Router mínimo. Cada ruta puede llevar un "guard" que se aplica en el servidor:
- *   'auth'  → hace falta la cookie de sesión válida
- *   'admin' → hace falta sesión válida y rol administrador (verificado en la base)
+ *   'auth'               → hace falta la cookie de sesión válida
+ *   'permiso:a.b|c.d'    → sesión válida y al menos uno de esos permisos (según el rol, consultado en la base)
  * En ambos casos, POST/PUT/PATCH/DELETE además exigen el header X-CSRF-Token.
  */
 final class Router
@@ -42,8 +42,8 @@ final class Router
             }
             if ($guard === 'auth') {
                 Auth::requireLogin();
-            } elseif ($guard === 'admin') {
-                Auth::requireAdmin();
+            } elseif ($guard !== null && str_starts_with($guard, 'permiso:')) {
+                Auth::requirePermiso(...explode('|', substr($guard, strlen('permiso:'))));
             }
             // Con sesión, todo lo que cambia datos exige el token CSRF (los GET no cambian nada)
             if ($guard !== null && $method !== 'GET') {

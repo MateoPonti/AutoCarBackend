@@ -1,11 +1,13 @@
 <?php
 /**
  * Todas las rutas de la API. El tercer argumento es el guard que se aplica en el servidor:
- *   'auth' = cookie de sesión válida, 'admin' = sesión válida + rol administrador (consultado en la base).
+ *   'auth' = cookie de sesión válida; 'permiso:x|y' = sesión válida + alguno de esos permisos.
+ *   Los permisos de cada rol están en la base (tablas rol, permiso, rol_permiso), no acá.
  * Con guard, POST/PUT/PATCH/DELETE exigen también el header X-CSRF-Token (ver Router).
  */
 declare(strict_types=1);
 
+use AutoCar\Admin\AdminUsuarioController;
 use AutoCar\Admin\AdminVehiculoController;
 use AutoCar\Auth\AuthController;
 use AutoCar\Catalogo\CatalogoController;
@@ -40,10 +42,18 @@ $router->post('/api/login', [AuthController::class, 'login']);
 $router->post('/api/logout', [AuthController::class, 'logout']);
 $router->get('/api/me', [AuthController::class, 'me'], 'auth');
 
-// Administración (solo rol admin)
-$router->get('/api/admin/vehiculos', [AdminVehiculoController::class, 'index'], 'admin');
-$router->get('/api/admin/vehiculos/{id}', [AdminVehiculoController::class, 'detalle'], 'admin');
-$router->post('/api/admin/vehiculos', [AdminVehiculoController::class, 'crear'], 'admin');
-$router->patch('/api/admin/vehiculos/{id}/estado', [AdminVehiculoController::class, 'moderar'], 'admin');
-$router->put('/api/admin/vehiculos/{id}', [AdminVehiculoController::class, 'actualizar'], 'admin');
-$router->delete('/api/admin/vehiculos/{id}', [AdminVehiculoController::class, 'eliminar'], 'admin');
+// Vehículos: el moderador revisa las publicaciones; el admin hace el ABM del catálogo. Los dos ven el listado.
+$verVehiculos = 'permiso:vehiculos.moderar|vehiculos.gestionar';
+$router->get('/api/admin/vehiculos', [AdminVehiculoController::class, 'index'], $verVehiculos);
+$router->get('/api/admin/vehiculos/{id}', [AdminVehiculoController::class, 'detalle'], $verVehiculos);
+$router->patch('/api/admin/vehiculos/{id}/estado', [AdminVehiculoController::class, 'moderar'], 'permiso:vehiculos.moderar');
+$router->post('/api/admin/vehiculos', [AdminVehiculoController::class, 'crear'], 'permiso:vehiculos.gestionar');
+$router->put('/api/admin/vehiculos/{id}', [AdminVehiculoController::class, 'actualizar'], 'permiso:vehiculos.gestionar');
+$router->delete('/api/admin/vehiculos/{id}', [AdminVehiculoController::class, 'eliminar'], 'permiso:vehiculos.gestionar');
+
+// Usuarios (admin): ver datos, editar nombre y rol, baja lógica
+$router->get('/api/admin/roles', [AdminUsuarioController::class, 'roles'], 'permiso:usuarios.ver');
+$router->get('/api/admin/usuarios', [AdminUsuarioController::class, 'index'], 'permiso:usuarios.ver');
+$router->get('/api/admin/usuarios/{id}', [AdminUsuarioController::class, 'detalle'], 'permiso:usuarios.ver');
+$router->patch('/api/admin/usuarios/{id}', [AdminUsuarioController::class, 'actualizar'], 'permiso:usuarios.editar');
+$router->delete('/api/admin/usuarios/{id}', [AdminUsuarioController::class, 'eliminar'], 'permiso:usuarios.editar');

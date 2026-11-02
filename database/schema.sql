@@ -1,14 +1,67 @@
 -- AutoCar · esquema de la base (PostgreSQL / Neon). Se ejecuta una vez en el SQL Editor de Neon
 -- (o con psql). Es idempotente: se puede volver a correr sin romper datos.
 
+-- Un usuario tiene UN rol; un rol tiene VARIOS permisos. Los endpoints piden permisos, no roles:
+-- para crear un rol nuevo alcanza con darle permisos acá, sin tocar el código.
+CREATE TABLE IF NOT EXISTS rol (
+  id          INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  nombre      VARCHAR(20)  NOT NULL UNIQUE,
+  descripcion VARCHAR(150) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS permiso (
+  id          INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  nombre      VARCHAR(50)  NOT NULL UNIQUE,   -- "recurso.accion", el que exige cada ruta en routes.php
+  descripcion VARCHAR(150) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS rol_permiso (
+  rol_id     INTEGER NOT NULL REFERENCES rol(id) ON DELETE CASCADE,
+  permiso_id INTEGER NOT NULL REFERENCES permiso(id) ON DELETE CASCADE,
+  PRIMARY KEY (rol_id, permiso_id)
+);
+
+INSERT INTO rol (nombre, descripcion) VALUES
+  ('usuario',   'Usuario registrado: publica vehículos y chatea con otros usuarios'),
+  ('moderador', 'Revisa las publicaciones: las aprueba o las rechaza'),
+  ('admin',     'Administra los usuarios y el catálogo'),
+  ('mecanico',  'Mecánico de un taller adherido: verifica vehículos')
+ON CONFLICT (nombre) DO NOTHING;
+
+INSERT INTO permiso (nombre, descripcion) VALUES
+  ('vehiculos.moderar',       'Ver la cola de publicaciones y aprobarlas o rechazarlas'),
+  ('vehiculos.gestionar',     'Alta, edición y baja de vehículos del catálogo'),
+  ('usuarios.ver',            'Ver la lista y los datos de los usuarios'),
+  ('usuarios.editar',         'Editar usuarios: nombre, rol y baja lógica'),
+  ('verificaciones.ver',      'Ver las verificaciones de vehículos asignadas al taller'),
+  ('verificaciones.realizar', 'Cargar el resultado de una verificación')
+ON CONFLICT (nombre) DO NOTHING;
+
+INSERT INTO rol_permiso (rol_id, permiso_id)
+SELECT r.id, p.id FROM (VALUES
+  ('moderador', 'vehiculos.moderar'),
+  ('admin',     'vehiculos.gestionar'),
+  ('admin',     'usuarios.ver'),
+  ('admin',     'usuarios.editar'),
+  ('mecanico',  'verificaciones.ver'),
+  ('mecanico',  'verificaciones.realizar')
+) AS rp(rol, permiso)
+JOIN rol r ON r.nombre = rp.rol
+JOIN permiso p ON p.nombre = rp.permiso
+ON CONFLICT DO NOTHING;
+
+-- activo = false es la baja lógica (lo hace el admin): no puede ingresar y su sesión deja de valer.
 CREATE TABLE IF NOT EXISTS usuario (
   id            INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   nombre        VARCHAR(80)  NOT NULL,
   email         VARCHAR(254) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
-  rol           VARCHAR(10)  NOT NULL DEFAULT 'usuario' CHECK (rol IN ('usuario', 'admin')),
+  rol_id        INTEGER      NOT NULL REFERENCES rol(id),
+  activo        BOOLEAN      NOT NULL DEFAULT true,
   created_at    TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
+
+CREATE INDEX IF NOT EXISTS idx_usuario_rol ON usuario (rol_id);
 
 -- usuario_id: dueño de la publicación (NULL en los que carga el admin). Una publicación de un usuario
 -- nace 'pendiente' y el catálogo público sólo muestra las 'disponible'.

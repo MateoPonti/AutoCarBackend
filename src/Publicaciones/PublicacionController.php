@@ -4,7 +4,6 @@ declare(strict_types=1);
 namespace AutoCar\Publicaciones;
 
 use AutoCar\Auth\Auth;
-use AutoCar\Auth\Usuario;
 use AutoCar\Catalogo\Vehiculo;
 use AutoCar\Core\Database;
 use AutoCar\Core\Request;
@@ -122,6 +121,6 @@ final class PublicacionController
     private static function puedeVerPrivada(int $duenioId): bool
     {
         $yo = Auth::id();
-        return $yo !== null && ($yo === $duenioId || Usuario::rolDe($yo) === 'admin');
+        return $yo !== null && ($yo === $duenioId || Auth::tiene('vehiculos.moderar') || Auth::tiene('vehiculos.gestionar'));
     }
 }

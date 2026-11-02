@@ -4,7 +4,7 @@ API en **PHP + PostgreSQL** (con Composer) de AutoCar (TP Integrador, Programaci
 Compra y venta de vehículos. Entidad principal: **vehículos**. El front (Vercel) consume esta API.
 
 - **URL desplegada:** https://autocarbackend-1.onrender.com *(HTTPS)*
-- **Roles:** `usuario` (registrado) y `admin` (gestiona vehículos).
+- **Roles y permisos** (en tablas: `rol`, `permiso`, `rol_permiso`): `usuario` (publica y chatea), `moderador` (aprueba o rechaza publicaciones), `admin` (gestiona usuarios y el ABM del catálogo) y `mecanico` (verificaciones; endpoints pendientes). Las rutas piden **permisos**, no roles: un rol nuevo solo necesita filas en `rol_permiso`.
 - **Autenticación:** sesión de PHP (`$_SESSION`) guardada en la tabla `sesion`; el navegador solo tiene la cookie `autocar_sesion` con el id (`HttpOnly`, `Secure`, `SameSite=Strict`) + token CSRF en el header `X-CSRF-Token`.
 - **Versión:** ver `VERSION` (versionado semántico). **Autores:** `autores.txt`.
 
@@ -21,15 +21,22 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `GET /api/vehiculos` | público | Listado. Filtros: `q`, `marca`, `combustible`, `precio_max`, `page` |
 | `GET /api/vehiculos/{id}` | público | Detalle |
 | `GET /api/marcas` | público | Marcas existentes (para armar el filtro) |
-| `GET /api/admin/vehiculos` | admin | Listado incluyendo vendidos |
-| `POST /api/admin/vehiculos` | admin | Alta → 201 |
-| `PUT /api/admin/vehiculos/{id}` | admin | Modificación (se envía el objeto completo) |
-| `DELETE /api/admin/vehiculos/{id}` | admin | Baja → 204 |
+| `GET /api/admin/vehiculos?estado=pendiente` | `vehiculos.moderar` o `vehiculos.gestionar` | Listado / cola de moderación |
+| `GET /api/admin/vehiculos/{id}` | `vehiculos.moderar` o `vehiculos.gestionar` | Detalle con fotos y quién lo publicó |
+| `PATCH /api/admin/vehiculos/{id}/estado` | `vehiculos.moderar` (moderador) | Aprobar (`{"estado":"disponible"}`) o rechazar con `motivo` |
+| `POST /api/admin/vehiculos` | `vehiculos.gestionar` (admin) | Alta → 201 |
+| `PUT /api/admin/vehiculos/{id}` | `vehiculos.gestionar` | Modificación |
+| `DELETE /api/admin/vehiculos/{id}` | `vehiculos.gestionar` | Baja lógica → 204 |
+| `GET /api/admin/usuarios?q=&rol=&activo=1\|0&page=` | `usuarios.ver` (admin) | Usuarios con rol, estado y cantidad de publicaciones |
+| `GET /api/admin/usuarios/{id}` | `usuarios.ver` | Detalle |
+| `PATCH /api/admin/usuarios/{id}` | `usuarios.editar` (admin) | `{nombre?, rol?, activo?}`. No se puede cambiar el propio rol ni darse de baja (409) |
+| `DELETE /api/admin/usuarios/{id}` | `usuarios.editar` | Baja lógica (`activo = false`): no puede ingresar y su sesión deja de valer → 204 |
+| `GET /api/admin/roles` | `usuarios.ver` | Roles con sus permisos |
 | `GET /health` | público | Chequeo de vida (no toca la base) |
 
-Las rutas con acceso **sesión** o **admin** que cambian datos (`POST`, `PUT`, `DELETE`) exigen además el header `X-CSRF-Token` con el valor `csrf` que devolvió el login.
+Las rutas con sesión o con permiso que cambian datos (`POST`, `PUT`, `PATCH`, `DELETE`) exigen además el header `X-CSRF-Token` con el valor `csrf` que devolvió el login.
 
-Códigos: `400` JSON inválido, `401` sin sesión o sesión vencida, `403` sin rol admin o token CSRF incorrecto, `404` no existe, `405` método no permitido, `422` validación, `500` error del servidor.
+Códigos: `400` JSON inválido, `401` sin sesión o sesión vencida, `403` sin el permiso o token CSRF incorrecto (o cuenta dada de baja, en el login), `404` no existe, `405` método no permitido, `422` validación, `500` error del servidor.
 
 Campos de un vehículo: `marca`, `modelo`, `anio`, `precio`, `kilometraje`, `combustible` (`nafta|diesel|gnc|hibrido|electrico`), `transmision` (`manual|automatica`), `estado` (`disponible|vendido`), `descripcion` (opcional), `imagen_url` (opcional, URL http/https).
 
@@ -77,11 +84,11 @@ Para cerrar sesión: `POST /api/logout` (JavaScript no puede borrar una cookie `
 public/            única carpeta expuesta: index.php (front controller) y .htaccess
 composer.json      sin librerías de terceros: solo el autoload PSR-4: namespace AutoCar\ → src/ (AutoCar\Core\Router = src/Core/Router.php)
 src/bootstrap.php  autoload de Composer, errores, CORS y cabeceras
-src/routes.php     todas las rutas, con su guard (auth / admin)
+src/routes.php     todas las rutas, con su guard (auth / permiso:...)
 src/Core/          Config, Database (PDO), Router, Request, Response, Cors, Logger
 src/Auth/          Auth (sesión, cookie y CSRF), SesionDb (guarda $_SESSION en la base), Usuario, AuthController
 src/Catalogo/      Vehiculo (modelo + validación), CatalogoController (API pública)
-src/Admin/         AdminVehiculoController (ABM)
+src/Admin/         AdminVehiculoController (ABM y moderación), AdminUsuarioController (gestión de usuarios)
 database/          schema.sql, seed.sql y las migraciones para bases que ya existían (PostgreSQL)
 storage/logs/      app.log (fuera de public/)
 vendor/            librerías de Composer (se genera, no se sube al repo)
@@ -112,7 +119,7 @@ El código sólo usa funciones de PHP 8.2 o anteriores, así que la diferencia e
 ## Base de datos (Neon)
 
 1. Crear el proyecto en Neon. En la consola, abrir el **SQL Editor** de la rama `production`, pegar el contenido de `database/schema.sql` y ejecutarlo. Después hacer lo mismo con `database/seed.sql` (datos de prueba).
-   Si la base ya existía de una entrega anterior, en vez de `schema.sql` correr las migraciones en orden: `migracion-e4.sql`, `migracion-nombres.sql`, `migracion-chat.sql` y `migracion-sesion.sql` (todas se pueden correr más de una vez).
+   Si la base ya existía de una entrega anterior, en vez de `schema.sql` correr las migraciones en orden: `migracion-e4.sql`, `migracion-nombres.sql`, `migracion-chat.sql`, `migracion-sesion.sql` y `migracion-roles.sql` (todas se pueden correr más de una vez).
 2. Botón **Connect** → desactivar **Connection pooling** → copiar host, base (`neondb`), usuario y contraseña. Esos valores van a `DB_HOST`, `DB_NAME`, `DB_USER` y `DB_PASS` (`DB_PORT` es 5432).
 3. Para desarrollar sin tocar producción: **Create child branch** (por ejemplo `dev`) y usar sus datos en el `.env` local.
 
@@ -148,10 +155,10 @@ Los errores quedan en `storage/logs/app.log` y en la terminal del servidor.
 El registro público siempre crea usuarios con rol `usuario`. Para tener un admin, registrarse con `POST /api/registro` y después ejecutar en la base (en local: `docker exec -it autocar-db psql -U autocar -d autocar`; en producción: SQL Editor de Neon):
 
 ```sql
-UPDATE usuario SET rol = 'admin' WHERE email = 'tu@email.com';
+UPDATE usuario SET rol_id = (SELECT id FROM rol WHERE nombre = 'admin') WHERE email = 'tu@email.com';
 ```
 
-Volver a hacer login. (El rol se consulta en la base en cada pedido a `/api/admin`.)
+No hace falta volver a hacer login: el rol y sus permisos se consultan en la base en cada pedido. Los demás roles (moderador, mecánico) los asigna ese admin con `PATCH /api/admin/usuarios/{id}`.
 
 ## Despliegue (Render + Neon)
 
@@ -172,7 +179,7 @@ Plan Free de Render: el servicio se duerme tras ~15 min sin visitas y la primera
 - **Logout real**: `$_SESSION = []`, cookie vencida y `session_destroy()`, que borra la fila. El id deja de servir en el servidor aunque alguien lo hubiera copiado.
 - **Cookie de sesión segura**: `autocar_sesion` lleva solo el id, con `HttpOnly` (JavaScript no la puede leer, así un XSS no puede robar la sesión), `Secure` (solo viaja por HTTPS; en local con http no se pone) y `SameSite=Strict` (el navegador no la manda en pedidos que vienen de otro sitio).
 - **Protección CSRF**: además de `SameSite`, toda ruta con sesión que cambia datos (`POST`, `PUT`, `DELETE`) exige el header `X-CSRF-Token` (`Router` → `Auth::requireCsrf`). El token se genera al azar en el login (`random_bytes(32)`), se guarda en `$_SESSION` y se compara con `hash_equals`. Otro sitio puede hacer que el navegador mande la cookie, pero no puede conocer el token.
-- **Control de rol en el servidor**: cada ruta `/api/admin` lleva el guard `admin` en `src/routes.php`, que consulta el rol en la base (el rol no se guarda en la sesión, así que un cambio de rol o un usuario borrado surten efecto al instante).
+- **Permisos en el servidor**: cada ruta de `/api/admin` pide un permiso en `src/routes.php` (`permiso:vehiculos.moderar`, `permiso:usuarios.editar`, ...). `Auth::requirePermiso()` lee de la base los permisos del rol del usuario en cada pedido (el rol no se guarda en la sesión), así un cambio de rol o una baja surten efecto al instante. Las reglas de "es tuyo" (tus publicaciones, tus conversaciones) se controlan aparte, comparando el id de la sesión con el dueño.
 - **CORS** restringido a los orígenes de `FRONT_URL` (en producción el front usa el proxy de Vercel y no hace falta; sirve para desarrollo local).
 - **Errores**: `display_errors=0`; se registran en `storage/logs/app.log` y el cliente recibe un 500 genérico.
 - Login sin pistas: mismo mensaje y mismo costo si el email no existe o la contraseña es incorrecta.

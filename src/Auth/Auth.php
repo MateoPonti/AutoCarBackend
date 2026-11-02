@@ -12,14 +12,17 @@ use AutoCar\Core\Response;
  * Como el navegador manda la cookie solo, los pedidos que cambian datos llevan además el header
  * X-CSRF-Token (ver requireCsrf).
  *
- * El rol NO se guarda en la sesión: se consulta en la base, así un cambio de rol o un usuario borrado
- * surten efecto de inmediato.
+ * El rol NO se guarda en la sesión: en cada pedido se consulta en la base el usuario (si sigue activo) y los
+ * permisos de su rol (tablas rol, permiso y rol_permiso). Así un cambio de rol o una baja surten efecto de inmediato.
+ * Las rutas piden PERMISOS, no roles (ver routes.php): un rol nuevo solo necesita permisos en la base.
  */
 final class Auth
 {
     public const COOKIE = 'autocar_sesion';
 
     private static ?int $usuarioId = null;
+    private static ?array $usuario = null;
+    private static ?array $permisos = null;
     private static bool $leido = false;
 
     public static function ttl(): int
@@ -75,6 +78,8 @@ final class Auth
             'vence'      => time() + self::ttl(),
         ];
         self::$usuarioId = (int)$usuario['id'];
+        self::$usuario = $usuario;
+        self::$permisos = null;
         self::$leido = true;
     }
 
@@ -97,6 +102,7 @@ final class Auth
             session_destroy(); // borra la fila de la tabla sesion: el id deja de servir aunque alguien lo haya copiado
         }
         self::$usuarioId = null;
+        self::$usuario = null;
         self::$leido = true;
     }
 
@@ -121,7 +127,34 @@ final class Auth
             $_SESSION = []; // vencida o vacía: al terminar el pedido SesionDb borra la fila
             return null;
         }
+        // Un usuario dado de baja (o borrado) pierde la sesión en el próximo pedido
+        $u = Usuario::porId($id);
+        if ($u === null || !$u['activo']) {
+            $_SESSION = [];
+            return null;
+        }
+        self::$usuario = $u;
         return $id;
+    }
+
+    /** El usuario autenticado (con el nombre de su rol), o null. */
+    public static function usuario(): ?array
+    {
+        return self::id() !== null ? self::$usuario : null;
+    }
+
+    /** Permisos del usuario autenticado (según su rol, leídos de la base una vez por pedido). */
+    public static function permisos(): array
+    {
+        if (self::id() === null) {
+            return [];
+        }
+        return self::$permisos ??= Usuario::permisosDe((int)self::id());
+    }
+
+    public static function tiene(string $permiso): bool
+    {
+        return in_array($permiso, self::permisos(), true);
     }
 
     /** Un id con otros caracteres (por ejemplo, una cookie vieja con un JWT) haría que PHP emita un warning. */
@@ -154,10 +187,11 @@ final class Auth
         }
     }
 
-    public static function requireAdmin(): void
+    /** Sesión válida y al menos uno de los permisos pedidos; si no, 401 o 403. */
+    public static function requirePermiso(string ...$permisos): void
     {
         self::requireLogin();
-        if (Usuario::rolDe((int)self::id()) !== 'admin') {
+        if (!array_intersect($permisos, self::permisos())) {
             Response::error(403, 'prohibido', 'No tenés permisos para esta acción.');
         }
     }

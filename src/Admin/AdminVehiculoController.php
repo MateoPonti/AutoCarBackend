@@ -10,10 +10,13 @@ use AutoCar\Core\Request;
 use AutoCar\Core\Response;
 use AutoCar\Publicaciones\Foto;
 
-/** ABM y moderación de vehículos. Todas las rutas llevan el guard 'admin' en routes.php (se verifica en el servidor). */
+/**
+ * ABM y moderación de vehículos. Cada ruta pide su permiso en routes.php (se verifica en el servidor):
+ * vehiculos.moderar (moderador) para revisar publicaciones y vehiculos.gestionar (admin) para el ABM.
+ */
 final class AdminVehiculoController
 {
-    /** Moderación: a qué estados puede pasar el admin una publicación según su estado actual. */
+    /** Moderación: a qué estados puede pasar el moderador una publicación según su estado actual. */
     private const TRANSICIONES = [
         'pendiente'  => ['disponible', 'rechazado'], // aprobar o rechazar
         'disponible' => ['rechazado'],               // dar de baja una publicación ya aprobada

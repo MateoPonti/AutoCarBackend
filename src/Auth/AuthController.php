@@ -68,13 +68,17 @@ final class AuthController
         if (!$ok) {
             Response::error(401, 'credenciales', 'El email o la contraseña no son correctos.');
         }
+        // Recién con la contraseña correcta se dice que la cuenta está dada de baja (no revela qué emails existen)
+        if (!$usuario['activo']) {
+            Response::error(403, 'cuenta_deshabilitada', 'Tu cuenta está dada de baja. Si creés que es un error, escribinos.');
+        }
 
         // El id de sesión va solo en la cookie HttpOnly; al front se le da el token CSRF para mandarlo en cada cambio
         Auth::iniciarSesion($usuario);
         Response::json([
             'csrf'       => Auth::csrf(),
             'expira_en'  => Auth::ttl(),
-            'usuario'    => Usuario::publico($usuario),
+            'usuario'    => Usuario::publico($usuario) + ['permisos' => Auth::permisos()],
         ]);
     }
 
@@ -87,10 +91,8 @@ final class AuthController
 
     public function me(): void
     {
-        $u = Usuario::porId((int)Auth::id());
-        if ($u === null) { // el usuario fue borrado después de iniciar la sesión
-            Response::error(401, 'no_autenticado', 'Necesitás iniciar sesión.');
-        }
-        Response::json(['usuario' => Usuario::publico($u), 'csrf' => Auth::csrf()]);
+        // Auth::id() ya verificó que el usuario exista y siga activo
+        $u = Auth::usuario();
+        Response::json(['usuario' => Usuario::publico($u) + ['permisos' => Auth::permisos()], 'csrf' => Auth::csrf()]);
     }
 }
