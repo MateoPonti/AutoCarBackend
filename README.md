@@ -93,6 +93,22 @@ vendor/            librerías de Composer (se genera, no se sube al repo)
 - [**Composer**](https://getcomposer.org) 2.x.
 - Una base **PostgreSQL**. Se usa [Neon](https://neon.com) (plan Free); en local puede ser la misma base de Neon (rama `dev`) o un Postgres propio.
 
+## Entorno de prueba
+
+Versiones con las que se desarrolló y probó (lo pide la guía de entrega). En local la base corre en Docker y en producción el back corre en la imagen Docker del `Dockerfile`, así que esas versiones son las mismas en cualquier máquina.
+
+| | Local (desarrollo) | Producción |
+|---|---|---|
+| Sistema operativo | Windows 11 Pro (build 26200) | Debian (imagen `php:8.3-apache`) en Render |
+| PHP | 8.4.10 CLI, con `pdo_pgsql`, `mbstring` y `fileinfo` | 8.3.36 + Apache |
+| Composer | 2.10.3 | 2.11.1 (imagen `composer:2`) |
+| PostgreSQL | 17.11 en Docker (imagen `postgres:17`) | Neon (PostgreSQL administrado) |
+| Docker | Docker Desktop 4.92.0 (Engine 29.8.0, Compose v5.5.1) | — |
+| Git | 2.55.0 | — |
+| Navegadores | Chrome 156 y Edge 156 | — |
+
+El código sólo usa funciones de PHP 8.2 o anteriores, así que la diferencia entre 8.4 (local) y 8.3 (producción) no afecta.
+
 ## Base de datos (Neon)
 
 1. Crear el proyecto en Neon. En la consola, abrir el **SQL Editor** de la rama `production`, pegar el contenido de `database/schema.sql` y ejecutarlo. Después hacer lo mismo con `database/seed.sql` (datos de prueba).
