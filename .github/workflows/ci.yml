@@ -1,0 +1,51 @@
+# Pruebas del back en cada PR a dev o main (infraestructura.md del front, secciones 4 y 5.1).
+# 1) unitarias (sin base)  2) integración: API real (php -S) contra un postgres:17 vacío que solo vive en esta corrida.
+# 3) la imagen de Docker que usa Render tiene que seguir construyendo.
+name: CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: autocar_test
+          POSTGRES_USER: autocar
+          POSTGRES_PASSWORD: autocar
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U autocar -d autocar_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DB_HOST: 127.0.0.1
+      TEST_DB_PORT: 5434
+      TEST_DB_NAME: autocar_test
+      TEST_DB_USER: autocar
+      TEST_DB_PASS: autocar
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3' # la misma que el Dockerfile
+          extensions: pdo_pgsql, curl, mbstring, fileinfo
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist
+      - name: Unitarias
+        run: vendor/bin/phpunit --testsuite unit
+      - name: Integración
+        run: vendor/bin/phpunit --testsuite integration
+
+  imagen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir la imagen de Render
+        run: docker build -t autocar-backend .

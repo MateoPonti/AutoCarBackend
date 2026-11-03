@@ -1,6 +1,11 @@
 .git
+.github
 .env
 storage/logs/*.log
 
 vendor
 docker-compose.yml
+tests
+phpunit.xml.dist
+.phpunit.cache
+.claude

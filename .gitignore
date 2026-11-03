@@ -4,3 +4,5 @@
 
 /vendor/
 cookies.txt
+.phpunit.cache/
+.claude/
