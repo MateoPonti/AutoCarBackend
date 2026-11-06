@@ -163,11 +163,32 @@ No hace falta volver a hacer login: el rol y sus permisos se consultan en la bas
 
 ## Despliegue (Render + Neon)
 
-1. Base creada e importada en Neon (ver arriba).
-2. **Render → New → Web Service**, elegir el repo (runtime Docker, plan Free). El `Dockerfile` ejecuta `composer install` solo; hay que subir `composer.json` (y `composer.lock` si existe) al repo, pero no `vendor/`.
-3. En *Environment* cargar: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS` (Neon) y `FRONT_URL` (URL del front en Vercel, sin barra final; varias separadas por coma).
-4. Si cambia la URL de Render, actualizar `PRODUCCION` en `js/api/config.js` del front y volver a desplegarlo en Vercel. El front no usa variables de entorno: es estático y no tiene build.
-5. Cada `git push` a `main` redespliega solo. Errores: pestaña **Logs** de Render. `GET /health` responde sin tocar la base.
+Hay dos servicios de Render, uno por entorno. Cada uno despliega desde su rama y usa su propia branch de Neon. El detalle completo está en `infraestructura.md` del repo del front.
+
+| | Dev | Producción |
+|---|---|---|
+| Servicio de Render | `autocar-backend-dev` | `autocarbackend-1` |
+| Rama del repo | `dev` | `main` |
+| Branch de Neon | `dev` | `main` / `production` |
+
+1. Base creada e importada en Neon (ver arriba). Para dev, crear la branch `dev` desde la de producción y correr ahí primero las migraciones nuevas.
+2. **Render → New → Web Service**, elegir el repo (runtime Docker, plan Free) y la **rama** del entorno. El `Dockerfile` ejecuta `composer install --no-dev` solo; hay que subir `composer.json` y `composer.lock` al repo, pero no `vendor/`.
+3. En *Environment* cargar `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS` y `DB_SSLMODE=require` con los datos de la branch de Neon de ese entorno. `SESION_TTL` y `FRONT_URL` son opcionales.
+4. El front no llama a Render directo: su `middleware.js` reenvía `/api/*` a la variable `BACKEND_URL` de Vercel. Si cambia la URL de un servicio de Render, hay que actualizar `BACKEND_URL` en Vercel (Preview para dev, Production para main) y volver a desplegar el front.
+5. Cada merge a la rama del entorno redespliega solo. Errores: pestaña **Logs** de Render. `GET /health` responde sin tocar la base.
+
+## Pruebas
+
+```
+composer install                                   # incluye PHPUnit (require-dev)
+vendor/bin/phpunit --testsuite unit                # unitarias: sin base ni red
+docker compose --profile test up -d db-test        # Postgres descartable en el puerto 5434
+vendor/bin/phpunit --testsuite integration         # API real (php -S) contra esa base
+```
+
+- **Unitarias** (`tests/Unit`): validaciones de vehículos y fotos, `Config`, `Request` y la duración de la sesión.
+- **Integración** (`tests/Integration`): cada corrida borra y recrea la base `autocar_test` con `schema.sql` + `seed.sql`, levanta la API en un puerto libre y le hace pedidos HTTP reales. Cubren registro, login y logout con la cookie y el CSRF, el ABM del admin, los permisos (401 y 403), las validaciones (422) y CORS. Se niegan a correr si la base apunta a Neon o si su nombre no termina en `_test`.
+- **CI** (`.github/workflows/ci.yml`): en cada PR a `dev` o `main` corre las dos suites contra un `postgres:17` propio y verifica que la imagen de Docker siga construyendo.
 
 Plan Free de Render: el servicio se duerme tras ~15 min sin visitas y la primera respuesta tarda cerca de un minuto.
 

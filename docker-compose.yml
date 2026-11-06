@@ -21,5 +21,21 @@ services:
       - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ./database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
 
+  # Base DESCARTABLE para las pruebas de integración (vendor/bin/phpunit --testsuite integration).
+  # Las pruebas la borran y la recrean en cada corrida; vive en memoria (tmpfs), sin volumen.
+  # Levantar: docker compose --profile test up -d db-test   (puerto 5434; no la levanta un "up" común)
+  db-test:
+    image: postgres:17
+    container_name: autocar-db-test
+    profiles: [test]
+    environment:
+      POSTGRES_DB: autocar_test
+      POSTGRES_USER: autocar
+      POSTGRES_PASSWORD: autocar
+    ports:
+      - "5434:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+
 volumes:
   autocar-db:

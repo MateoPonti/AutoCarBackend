@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Pruebas del back (ver infraestructura.md del repo del front, secciones 4 y 5.1).
+    unit:        vendor/bin/phpunit testsuite unit          (sin base ni red)
+    integration: vendor/bin/phpunit testsuite integration   (API real contra un Postgres DESCARTABLE)
+  La base de integración se borra y se vuelve a crear en cada corrida: nunca apuntar estas variables a Neon.
+  En local: docker compose profile test up -d db-test  (puerto 5434). En CI las define el workflow.
+  Las variables de entorno reales tienen prioridad sobre estos valores (force="false").
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         cacheDirectory=".phpunit.cache"
+         failOnWarning="true"
+         failOnRisky="true">
+    <testsuites>
+        <testsuite name="unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="integration">
+            <directory>tests/Integration</directory>
+        </testsuite>
+    </testsuites>
+    <php>
+        <env name="TEST_DB_HOST" value="127.0.0.1" force="false"/>
+        <env name="TEST_DB_PORT" value="5434" force="false"/>
+        <env name="TEST_DB_NAME" value="autocar_test" force="false"/>
+        <env name="TEST_DB_USER" value="autocar" force="false"/>
+        <env name="TEST_DB_PASS" value="autocar" force="false"/>
+    </php>
+    <source>
+        <include>
+            <directory>src</directory>
+        </include>
+    </source>
+</phpunit>
