@@ -13,6 +13,7 @@ use AutoCar\Admin\AdminVehiculoController;
 use AutoCar\Auth\AuthController;
 use AutoCar\Catalogo\CatalogoController;
 use AutoCar\Chat\ChatController;
+use AutoCar\MetaBusqueda\MetaBusquedaController;
 use AutoCar\Publicaciones\PublicacionController;
 use AutoCar\Core\Router;
 
@@ -36,6 +37,17 @@ $router->post('/api/vehiculos/{id}/conversacion', [ChatController::class, 'abrir
 $router->get('/api/conversaciones', [ChatController::class, 'index'], 'auth');
 $router->get('/api/conversaciones/{id}/mensajes', [ChatController::class, 'mensajes'], 'auth');
 $router->post('/api/conversaciones/{id}/mensajes', [ChatController::class, 'enviar'], 'auth');
+
+// Meta-búsqueda: cada usuario ve solo sus búsquedas (las rutas fijas no chocan con {id}, que acepta solo dígitos)
+$router->get('/api/meta-busquedas', [MetaBusquedaController::class, 'index'], 'auth');
+$router->post('/api/meta-busquedas', [MetaBusquedaController::class, 'crear'], 'auth');
+$router->get('/api/meta-busquedas/marcas', [MetaBusquedaController::class, 'marcasYModelos'], 'auth');
+$router->get('/api/meta-busquedas/avisos', [MetaBusquedaController::class, 'avisos'], 'auth');
+$router->get('/api/meta-busquedas/{id}', [MetaBusquedaController::class, 'reporte'], 'auth');
+$router->put('/api/meta-busquedas/{id}', [MetaBusquedaController::class, 'actualizar'], 'auth');
+$router->delete('/api/meta-busquedas/{id}', [MetaBusquedaController::class, 'eliminar'], 'auth');
+$router->post('/api/meta-busquedas/{id}/avisos/vistos', [MetaBusquedaController::class, 'marcarVistos'], 'auth');
+$router->get('/api/autos-externos/{id}', [MetaBusquedaController::class, 'autoExterno'], 'auth');
 
 // Autenticación
 $router->post('/api/registro', [AuthController::class, 'registro']);
