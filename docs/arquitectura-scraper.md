@@ -178,6 +178,17 @@ Con la API local levantada, `GET http://localhost:8000/api/vehiculos/1/comparaci
 
 En Windows el PHP suele venir sin certificados para curl: `Http` usa solo los de Git for Windows, o los de la variable `CURL_CAINFO`.
 
+### Prueba real (08/11/2026, PC del grupo)
+
+MercadoLibre solo Volkswagen con tope de 3 páginas por búsqueda (140 pedidos, 4 minutos, sin bloqueos), Kavak 3 páginas y Autocosmos 10: **6.082 autos → 204 modelos**. El documento más grande pesa 201 KiB (Firestore admite 1.024).
+
+| Auto de prueba | Resultado |
+|---|---|
+| Gol Trend 2018, 110.000 km, $ 15,5 M | `en_precio`: 2,5 % abajo de la mediana de 51 autos ($ 15,9 M) |
+| Amarok 2015, 150.000 km, $ 30 M | `en_precio`: 4,7 % arriba de 430 autos |
+| Polo 2020, 60.000 km, $ 28 M | `caro`: 15,1 % arriba de 21 autos |
+| Fiat Cronos 2022, 60.000 km, $ 21 M | `buen_precio`: 8,7 % abajo de 5 autos (Autocosmos y Kavak) |
+
 ## 7. Pendiente
 
 1. **Crear el proyecto de Firebase** (Firestore en modo producción, plan Spark) y dos cuentas de servicio: una de escritura (rol *Cloud Datastore User*, el `.json` queda en la PC) y una de solo lectura (*Cloud Datastore Viewer*, su contenido va en `FIRESTORE_CREDENCIALES_JSON` de Render). Después: `COMPARADOR_ALMACEN=firestore` y `php bin/armar-modelos.php --almacen=firestore`. El cliente de Firestore está escrito y probado sin red (firma del token y conversión de datos), falta probarlo contra el proyecto real.
