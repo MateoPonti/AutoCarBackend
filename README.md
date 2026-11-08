@@ -148,7 +148,7 @@ El código sólo usa funciones de PHP 8.2 o anteriores, así que la diferencia e
 ## Base de datos (Neon)
 
 1. Crear el proyecto en Neon. En la consola, abrir el **SQL Editor** de la rama `production`, pegar el contenido de `database/schema.sql` y ejecutarlo. Después hacer lo mismo con `database/seed.sql` (datos de prueba).
-   Si la base ya existía de una entrega anterior, en vez de `schema.sql` correr las migraciones en orden: `001-e4.sql`, `002-nombres.sql`, `003-chat.sql`, `004-sesion.sql`, `005-roles.sql` y `006-inspecciones.sql` (todas se pueden correr más de una vez). Solo en dev, para tener mecánicos de ejemplo: `007-demo-inspecciones-solo-dev.sql`.
+   Si la base ya existía de una entrega anterior, en vez de `schema.sql` correr las migraciones en orden: `001-e4.sql`, `002-nombres.sql`, `003-chat.sql`, `004-sesion.sql`, `005-roles.sql`, `006-inspecciones.sql` y `008-separar-version.sql` (todas se pueden correr más de una vez). Solo en dev, para tener mecánicos de ejemplo: `007-demo-inspecciones-solo-dev.sql`.
    **Migraciones nuevas:** formato obligatorio `NNN-nombre.sql` con el número que sigue (`008-algo.sql`), idempotentes y con el mismo cambio en `schema.sql`. Reglas completas en [`database/README.md`](database/README.md); una prueba hace fallar el CI si el nombre no cumple.
 2. Botón **Connect** → desactivar **Connection pooling** → copiar host, base (`neondb`), usuario y contraseña. Esos valores van a `DB_HOST`, `DB_NAME`, `DB_USER` y `DB_PASS` (`DB_PORT` es 5432).
 3. Para desarrollar sin tocar producción: **Create child branch** (por ejemplo `dev`) y usar sus datos en el `.env` local.

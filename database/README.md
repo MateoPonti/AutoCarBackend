@@ -17,6 +17,7 @@
 | 5 | `005-roles.sql` | Roles y permisos en tablas |
 | 6 | `006-inspecciones.sql` | Talleres, inspecciones, checklist y reclamos |
 | 7 | `007-demo-inspecciones-solo-dev.sql` | 5 mecánicos de ejemplo. **Solo en Neon dev, nunca en main** |
+| 8 | `008-separar-version.sql` | Pasa la versión a su campo en los autos de prueba ("Corolla XEi" → "Corolla" + "XEi"), para que el comparador los encuentre |
 
 Se copian y pegan enteras en el **SQL Editor de Neon**, primero en la branch `dev` y en `main` recién cuando se pasa `dev` → `main`.
 
@@ -24,7 +25,7 @@ Se copian y pegan enteras en el **SQL Editor de Neon**, primero en la branch `de
 
 1. **Nombre:** el número que sigue, con 3 dígitos, guion y un nombre corto en minúscula: `008-planes.sql`. Nada de `migracion-*.sql` ni números repetidos. Hay una prueba (`tests/Unit/MigracionesTest.php`) que hace fallar el CI si no se cumple.
 2. **Idempotente:** se tiene que poder correr más de una vez sin romper nada (`CREATE TABLE IF NOT EXISTS`, `ON CONFLICT DO NOTHING`, `ADD COLUMN IF NOT EXISTS`).
-3. **Mismo cambio en `schema.sql`**, para que una base nueva quede igual que una migrada.
+3. **Si cambia la estructura** (tablas, columnas, permisos), el mismo cambio en `schema.sql`, para que una base nueva quede igual que una migrada. Si solo arregla datos, corregir también `seed.sql`.
 4. **Encabezado:** qué hace, en qué base se corre y si tiene que ir antes de desplegar el back que la usa.
 5. Sumarla a la tabla de arriba.
 
