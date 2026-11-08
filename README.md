@@ -120,7 +120,7 @@ El código sólo usa funciones de PHP 8.2 o anteriores, así que la diferencia e
 ## Base de datos (Neon)
 
 1. Crear el proyecto en Neon. En la consola, abrir el **SQL Editor** de la rama `production`, pegar el contenido de `database/schema.sql` y ejecutarlo. Después hacer lo mismo con `database/seed.sql` (datos de prueba).
-   Si la base ya existía de una entrega anterior, en vez de `schema.sql` correr las migraciones en orden: `migracion-e4.sql`, `migracion-nombres.sql`, `migracion-chat.sql`, `migracion-sesion.sql` y `migracion-roles.sql` (todas se pueden correr más de una vez).
+   Si la base ya existía de una entrega anterior, en vez de `schema.sql` correr las migraciones en orden: `migracion-e4.sql`, `migracion-nombres.sql`, `migracion-chat.sql`, `migracion-sesion.sql`, `migracion-roles.sql` y `migracion-inspecciones.sql` (todas se pueden correr más de una vez). Solo en dev, para tener mecánicos de ejemplo: `demo-inspecciones.sql`.
 2. Botón **Connect** → desactivar **Connection pooling** → copiar host, base (`neondb`), usuario y contraseña. Esos valores van a `DB_HOST`, `DB_NAME`, `DB_USER` y `DB_PASS` (`DB_PORT` es 5432).
 3. Para desarrollar sin tocar producción: **Create child branch** (por ejemplo `dev`) y usar sus datos en el `.env` local.
 
