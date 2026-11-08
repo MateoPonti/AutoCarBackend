@@ -5,185 +5,172 @@ namespace AutoCar\MetaBusqueda;
 
 use PDO;
 
-/** Consultas sobre los autos de otras plataformas. Las estadísticas solo usan recolecciones completas. */
+/**
+ * Consultas sobre los autos de otras plataformas, en la base de documentos (ver Catalogo). Las estadísticas solo usan
+ * corridas completas. Una corrida se identifica como "fuente@fecha".
+ * Los autos publicados en AutoCar siguen en Neon (tabla vehiculo): para eso es el PDO.
+ */
 final class Mercado
 {
-    private const SELECT_FOTO =
-        'SELECT a.id, a.fuente_id, f.nombre AS fuente, a.marca, a.modelo, a.version, a.anio, a.transmision, a.ubicacion, a.url,
-                a.primera_vez, a.ultima_vez, a.estado, s.precio, s.precio_contado, s.moneda, s.km, s.reservado,
-                NOT EXISTS (SELECT 1 FROM auto_foto_semanal s2 JOIN recoleccion r2 ON r2.id = s2.recoleccion_id
-                             WHERE s2.auto_id = s.auto_id AND r2.completo AND r2.fecha < r.fecha) AS es_nuevo
-           FROM auto_foto_semanal s
-           JOIN auto_externo a ON a.id = s.auto_id
-           JOIN fuente f ON f.id = a.fuente_id
-           JOIN recoleccion r ON r.id = s.recoleccion_id';
+    private const OTROS_MODELOS_A_LEER = 12;
 
-    public function __construct(private PDO $pdo)
+    /** @var array<string, array|null> documentos ya leídos en este pedido */
+    private array $modelos = [];
+    private ?array $indice = null;
+
+    public function __construct(private Documentos $docs, private ?PDO $pdo = null)
     {
     }
 
+    public static function corrida(string $fuente, string $fecha): string
+    {
+        return "$fuente@$fecha";
+    }
+
     /**
-     * Las dos últimas recolecciones completas de cada plataforma.
+     * Las dos últimas corridas completas de cada plataforma.
      *
-     * @return list<array{fuente_id: int, fuente: string, actual: int, fecha: string, anterior: ?int, fecha_anterior: ?string}>
+     * @return list<array{fuente: string, actual: string, fecha: string, anterior: ?string, fecha_anterior: ?string}>
      */
     public function ultimasRecolecciones(): array
     {
-        $filas = $this->pdo->query(
-            'SELECT r.id, r.fuente_id, r.fecha, f.nombre AS fuente, r.n
-               FROM (SELECT id, fuente_id, fecha, row_number() OVER (PARTITION BY fuente_id ORDER BY fecha DESC) AS n
-                       FROM recoleccion WHERE completo) r
-               JOIN fuente f ON f.id = r.fuente_id
-              WHERE r.n <= 2
-              ORDER BY f.nombre, r.n'
-        )->fetchAll(PDO::FETCH_ASSOC);
-
-        $porFuente = [];
-        foreach ($filas as $f) {
-            $id = (int)$f['fuente_id'];
-            if ((int)$f['n'] === 1) {
-                $porFuente[$id] = [
-                    'fuente_id' => $id, 'fuente' => $f['fuente'], 'actual' => (int)$f['id'],
-                    'fecha' => $f['fecha'], 'anterior' => null, 'fecha_anterior' => null,
-                ];
-            } else {
-                $porFuente[$id]['anterior'] = (int)$f['id'];
-                $porFuente[$id]['fecha_anterior'] = $f['fecha'];
+        $salida = [];
+        foreach ($this->docs->listar('recolecciones') as $r) {
+            $completas = array_values(array_filter($r['corridas'] ?? [], static fn(array $c): bool => $c['completo']));
+            if ($completas === []) {
+                continue;
             }
+            $actual = $completas[count($completas) - 1];
+            $anterior = $completas[count($completas) - 2] ?? null;
+            $salida[] = [
+                'fuente'         => (string)$r['fuente'],
+                'actual'         => self::corrida((string)$r['fuente'], $actual['fecha']),
+                'fecha'          => $actual['fecha'],
+                'anterior'       => $anterior !== null ? self::corrida((string)$r['fuente'], $anterior['fecha']) : null,
+                'fecha_anterior' => $anterior['fecha'] ?? null,
+            ];
         }
-        return array_values($porFuente);
+        usort($salida, static fn(array $a, array $b): int => $a['fuente'] <=> $b['fuente']);
+        return $salida;
     }
 
     /**
-     * Autos de un modelo en esas recolecciones.
+     * Autos de un modelo en esas corridas.
      *
-     * @param list<int> $recolecciones
+     * @param list<string> $corridas
      * @return list<array<string, mixed>>
      */
-    public function fotosDelModelo(array $recolecciones, string $marca, string $modelo): array
+    public function fotosDelModelo(array $corridas, string $marca, string $modelo): array
     {
-        if ($recolecciones === []) {
-            return [];
-        }
-        [$lista, $params] = self::lista($recolecciones);
-        $st = $this->pdo->prepare(
-            self::SELECT_FOTO . " WHERE s.recoleccion_id IN ($lista) AND lower(a.marca) = lower(:marca) AND lower(a.modelo) = lower(:modelo)"
-        );
-        $st->execute($params + ['marca' => $marca, 'modelo' => $modelo]);
-        return array_map([self::class, 'fila'], $st->fetchAll(PDO::FETCH_ASSOC));
-    }
-
-    /** @return list<array<string, mixed>> todos los autos de una recolección */
-    public function fotosDe(int $recoleccion): array
-    {
-        $st = $this->pdo->prepare(self::SELECT_FOTO . ' WHERE s.recoleccion_id = :r');
-        $st->execute(['r' => $recoleccion]);
-        return array_map([self::class, 'fila'], $st->fetchAll(PDO::FETCH_ASSOC));
+        $doc = $this->modelo(Catalogo::claveDe($marca, $modelo));
+        return $doc === null ? [] : self::fotosDe($doc, $corridas);
     }
 
     /**
-     * Candidatos de otros modelos, con el precio más cercano primero.
+     * Candidatos de otros modelos, con el precio más cercano primero. El índice dice qué modelos pueden tener autos en
+     * esos rangos; solo se leen los más cercanos.
      *
-     * @param list<int> $recolecciones
+     * @param list<string> $corridas
      * @param array{precio_min: float, precio_max: float, anio_min: int, anio_max: int, km_min: float, km_max: float, precio_tipico: float, marca: string, modelo: string} $c
      * @return list<array<string, mixed>>
      */
-    public function otrosModelos(array $recolecciones, array $c): array
+    public function otrosModelos(array $corridas, array $c): array
     {
-        if ($recolecciones === []) {
-            return [];
+        $propia = Catalogo::claveDe($c['marca'], $c['modelo']);
+        $cruza = static fn(array $r, float $min, float $max): bool => $r[0] !== null && $r[0] <= $max && $r[1] >= $min;
+        $elegidos = [];
+        foreach ($this->indice() as $clave => $m) {
+            if ($clave !== $propia && $cruza($m['precio'], $c['precio_min'], $c['precio_max'])
+                && $cruza($m['anio'], $c['anio_min'], $c['anio_max']) && $cruza($m['km'], $c['km_min'], $c['km_max'])) {
+                $elegidos[$clave] = abs((float)$m['mediana'] - $c['precio_tipico']);
+            }
         }
-        [$lista, $params] = self::lista($recolecciones);
-        $st = $this->pdo->prepare(
-            self::SELECT_FOTO . " WHERE s.recoleccion_id IN ($lista)
-               AND NOT s.reservado AND s.moneda = 'ARS'
-               AND s.precio BETWEEN :precio_min AND :precio_max
-               AND a.anio BETWEEN :anio_min AND :anio_max
-               AND s.km BETWEEN :km_min AND :km_max
-               AND NOT (lower(a.marca) = lower(:marca) AND lower(a.modelo) = lower(:modelo))
-             ORDER BY abs(s.precio - :precio_tipico), a.id
-             LIMIT 200"
-        );
-        $st->execute($params + $c);
-        return array_map([self::class, 'fila'], $st->fetchAll(PDO::FETCH_ASSOC));
+        asort($elegidos);
+
+        $candidatos = [];
+        foreach (array_slice(array_keys($elegidos), 0, self::OTROS_MODELOS_A_LEER) as $clave) {
+            $doc = $this->modelo((string)$clave);
+            foreach ($doc === null ? [] : self::fotosDe($doc, $corridas) as $a) {
+                if (!$a['reservado'] && $a['moneda'] === 'ARS' && $a['precio'] !== null
+                    && $a['precio'] >= $c['precio_min'] && $a['precio'] <= $c['precio_max']
+                    && $a['anio'] >= $c['anio_min'] && $a['anio'] <= $c['anio_max']
+                    && $a['km'] >= $c['km_min'] && $a['km'] <= $c['km_max']) {
+                    $candidatos[] = $a;
+                }
+            }
+        }
+        usort($candidatos, static fn(array $a, array $b): int =>
+            [abs($a['precio'] - $c['precio_tipico']), $a['id']] <=> [abs($b['precio'] - $c['precio_tipico']), $b['id']]);
+        return $candidatos;
     }
 
-    /** @return array<string, mixed>|null datos fijos de un auto y su foto más reciente en una recolección completa */
-    public function auto(int $id): ?array
+    /** @return array{0: array<string, mixed>, 1: array}|null el auto con su estado actual y el documento de su modelo */
+    public function auto(string $id): ?array
     {
-        $st = $this->pdo->prepare(
-            self::SELECT_FOTO . ' WHERE a.id = :id AND r.completo ORDER BY r.fecha DESC LIMIT 1'
-        );
-        $st->execute(['id' => $id]);
-        $f = $st->fetch(PDO::FETCH_ASSOC);
-        return $f ? self::fila($f) : null;
+        $partes = Catalogo::partirIdPublico($id);
+        if ($partes === null) {
+            return null;
+        }
+        [$fuente, $clave, $idExterno] = $partes;
+        $doc = $this->modelo($clave);
+        $a = $doc['autos'][Catalogo::idAuto($fuente, $idExterno)] ?? null;
+        return $a === null ? null : [Catalogo::fila($doc, $a), $doc];
     }
 
-    /** @return list<array{fecha: string, precio: ?float, precio_contado: ?float, moneda: string, km: int, reservado: bool}> */
-    public function historial(int $id): array
+    /** @return list<array{fecha: string, precio: ?float, precio_contado: ?float, moneda: string, km: int, reservado: bool}> cada cambio */
+    public function historial(string $id): array
     {
-        $st = $this->pdo->prepare(
-            'SELECT r.fecha, s.precio, s.precio_contado, s.moneda, s.km, s.reservado
-               FROM auto_foto_semanal s JOIN recoleccion r ON r.id = s.recoleccion_id
-              WHERE s.auto_id = :id AND r.completo
-              ORDER BY r.fecha'
-        );
-        $st->execute(['id' => $id]);
-        return array_map(static fn(array $f): array => [
-            'fecha'          => $f['fecha'],
-            'precio'         => $f['precio'] !== null ? (float)$f['precio'] : null,
-            'precio_contado' => $f['precio_contado'] !== null ? (float)$f['precio_contado'] : null,
-            'moneda'         => $f['moneda'],
-            'km'             => (int)$f['km'],
-            'reservado'      => (bool)$f['reservado'],
-        ], $st->fetchAll(PDO::FETCH_ASSOC));
+        $partes = Catalogo::partirIdPublico($id);
+        $doc = $partes === null ? null : $this->modelo($partes[1]);
+        $a = $doc['autos'][Catalogo::idAuto($partes[0] ?? '', $partes[2] ?? '')] ?? null;
+        return array_map(static fn(array $h): array => [
+            'fecha'          => $h[0],
+            'precio'         => $h[1] !== null ? (float)$h[1] : null,
+            'precio_contado' => $h[2] !== null ? (float)$h[2] : null,
+            'moneda'         => $h[3],
+            'km'             => (int)$h[4],
+            'reservado'      => (bool)$h[5],
+        ], $a['historial'] ?? []);
     }
 
     /**
-     * Marcas y sus modelos en las últimas recolecciones: el formulario necesita los nombres exactos.
+     * Marcas y sus modelos con autos activos: el formulario necesita los nombres exactos.
      *
-     * @param list<int> $recolecciones
      * @return list<array{marca: string, modelos: list<string>}>
      */
-    public function marcasYModelos(array $recolecciones): array
+    public function marcasYModelos(): array
     {
-        if ($recolecciones === []) {
-            return [];
-        }
-        [$lista, $params] = self::lista($recolecciones);
-        $st = $this->pdo->prepare(
-            "SELECT DISTINCT a.marca, a.modelo FROM auto_foto_semanal s JOIN auto_externo a ON a.id = s.auto_id
-              WHERE s.recoleccion_id IN ($lista) ORDER BY a.marca, a.modelo"
-        );
-        $st->execute($params);
         $marcas = [];
-        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $f) {
-            $marcas[$f['marca']][] = $f['modelo'];
+        foreach ($this->indice() as $m) {
+            $marcas[$m['marca']][] = $m['modelo'];
         }
+        ksort($marcas, SORT_STRING | SORT_FLAG_CASE);
         $salida = [];
         foreach ($marcas as $marca => $modelos) {
-            $salida[] = ['marca' => (string)$marca, 'modelos' => $modelos];
+            sort($modelos, SORT_STRING | SORT_FLAG_CASE);
+            $salida[] = ['marca' => (string)$marca, 'modelos' => array_values(array_unique($modelos))];
         }
         return $salida;
     }
 
     /**
      * Vehículos disponibles publicados en AutoCar, con las mismas claves que un auto externo.
+     * Se traen todos los disponibles y se filtran acá con la misma clave de modelo que los externos ("VW" = "Volkswagen").
      *
      * @param array<string, mixed> $b búsqueda
      * @return list<array<string, mixed>>
      */
     public function delPortal(array $b): array
     {
-        $st = $this->pdo->prepare(
+        if ($this->pdo === null) {
+            return [];
+        }
+        $st = $this->pdo->query(
             "SELECT id, marca, modelo, version, anio, transmision, localidad, kilometraje, precio, created_at
-               FROM vehiculo
-              WHERE estado = 'disponible' AND lower(marca) = lower(:marca) AND lower(modelo) = lower(:modelo)"
+               FROM vehiculo WHERE estado = 'disponible'"
         );
-        $st->execute(['marca' => $b['marca'], 'modelo' => $b['modelo']]);
         $autos = array_map(static fn(array $f): array => [
             'id'             => (int)$f['id'],
-            'fuente_id'      => null,
             'fuente'         => 'autocar',
             'marca'          => $f['marca'],
             'modelo'         => $f['modelo'],
@@ -205,39 +192,28 @@ final class Mercado
         return array_values(array_filter($autos, static fn(array $a): bool => Busqueda::coincide($b, $a)));
     }
 
-    /** @param list<int> $ids */
-    private static function lista(array $ids): array
+    /** @param list<string> $corridas "fuente@fecha" */
+    private static function fotosDe(array $doc, array $corridas): array
     {
-        $params = [];
-        foreach (array_values($ids) as $i => $id) {
-            $params["r$i"] = $id;
+        $salida = [];
+        foreach ($corridas as $corrida) {
+            [$fuente, $fecha] = explode('@', $corrida, 2);
+            array_push($salida, ...Catalogo::fotos($doc, $fuente, $fecha));
         }
-        return [implode(', ', array_map(static fn(string $k): string => ":$k", array_keys($params))), $params];
+        return $salida;
     }
 
-    /** @param array<string, mixed> $f */
-    private static function fila(array $f): array
+    private function modelo(string $clave): ?array
     {
-        return [
-            'id'             => (int)$f['id'],
-            'fuente_id'      => (int)$f['fuente_id'],
-            'fuente'         => $f['fuente'],
-            'marca'          => $f['marca'],
-            'modelo'         => $f['modelo'],
-            'version'        => $f['version'],
-            'anio'           => (int)$f['anio'],
-            'transmision'    => $f['transmision'],
-            'ubicacion'      => $f['ubicacion'],
-            'url'            => $f['url'],
-            'primera_vez'    => $f['primera_vez'],
-            'ultima_vez'     => $f['ultima_vez'],
-            'estado'         => $f['estado'],
-            'precio'         => $f['precio'] !== null ? (float)$f['precio'] : null,
-            'precio_contado' => $f['precio_contado'] !== null ? (float)$f['precio_contado'] : null,
-            'moneda'         => $f['moneda'],
-            'km'             => (int)$f['km'],
-            'reservado'      => (bool)$f['reservado'],
-            'es_nuevo'       => (bool)$f['es_nuevo'],
-        ];
+        if (!array_key_exists($clave, $this->modelos)) {
+            $this->modelos[$clave] = Catalogo::leer($this->docs, $clave);
+        }
+        return $this->modelos[$clave];
+    }
+
+    /** @return array<string, array<string, mixed>> clave → resumen del modelo (ver Catalogo::resumen) */
+    private function indice(): array
+    {
+        return $this->indice ??= Indice::leer($this->docs);
     }
 }

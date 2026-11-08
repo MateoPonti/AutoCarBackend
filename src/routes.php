@@ -53,7 +53,7 @@ $router->get('/api/meta-busquedas/{id}', [MetaBusquedaController::class, 'report
 $router->put('/api/meta-busquedas/{id}', [MetaBusquedaController::class, 'actualizar'], 'auth');
 $router->delete('/api/meta-busquedas/{id}', [MetaBusquedaController::class, 'eliminar'], 'auth');
 $router->post('/api/meta-busquedas/{id}/avisos/vistos', [MetaBusquedaController::class, 'marcarVistos'], 'auth');
-$router->get('/api/autos-externos/{id}', [MetaBusquedaController::class, 'autoExterno'], 'auth');
+$router->get('/api/autos-externos', [MetaBusquedaController::class, 'autoExterno'], 'auth'); // ?id=fuente~modelo~id
 
 // Inspecciones: el mecánico que firma. El ranking de mecánicos es público.
 $router->get('/api/mecanicos', [InspeccionController::class, 'mecanicos']);

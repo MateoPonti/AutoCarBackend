@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace AutoCar\Comparador;
 
 use AutoCar\Core\Config;
+use AutoCar\MetaBusqueda\Documentos;
 use RuntimeException;
 
 /**
@@ -16,7 +17,7 @@ use RuntimeException;
  * El token se pide firmando un JWT con la clave privada (RS256) y se reutiliza 50 minutos.
  * NOTA: escrito sin un proyecto creado todavía; probar con bin/firestore-prueba.php cuando exista.
  */
-final class Firestore
+final class Firestore implements Documentos
 {
     private const ALCANCE = 'https://www.googleapis.com/auth/datastore';
     private const TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -72,6 +73,26 @@ final class Firestore
                 throw new RuntimeException("Firestore commit respondió $codigo");
             }
         }
+    }
+
+    /** Todos los documentos de una colección, de a 300 por pedido. */
+    public function listar(string $coleccion): array
+    {
+        $salida = [];
+        $pagina = '';
+        do {
+            $url = $this->base() . '/' . $coleccion . '?pageSize=300' . ($pagina !== '' ? '&pageToken=' . rawurlencode($pagina) : '');
+            [$codigo, $r] = $this->pedir('GET', $url);
+            if ($codigo !== 200) {
+                throw new RuntimeException("Firestore GET $coleccion respondió $codigo");
+            }
+            foreach ($r['documents'] ?? [] as $doc) {
+                $salida[basename((string)$doc['name'])] = self::desdeCampos($doc['fields'] ?? []);
+            }
+            $pagina = (string)($r['nextPageToken'] ?? '');
+        } while ($pagina !== '');
+        ksort($salida);
+        return $salida;
     }
 
     // ---------- Conversión entre PHP y los valores tipados de Firestore ----------

@@ -27,7 +27,7 @@ final class MetaBusquedaTest extends ApiTestCase
     private static function importar(string $fuente, string $fecha, array $autos, bool $completo = true): array
     {
         Entorno::url(); // recrea la base la primera vez
-        return (new Importador(Entorno::pdo()))->importar(['fuente' => $fuente, 'fecha' => $fecha, 'completo' => $completo, 'autos' => $autos]);
+        return (new Importador(Entorno::documentos()))->importar(['fuente' => $fuente, 'fecha' => $fecha, 'completo' => $completo, 'autos' => $autos]);
     }
 
     /** Siete autos del modelo con precios escalonados y uno de otro modelo parecido. */
@@ -53,7 +53,7 @@ final class MetaBusquedaTest extends ApiTestCase
         Entorno::url();
         self::assertSame(401, $this->pedir('GET', '/api/meta-busquedas')['status']);
         self::assertSame(401, $this->pedir('GET', '/api/meta-busquedas/1')['status']);
-        self::assertSame(401, $this->pedir('GET', '/api/autos-externos/1')['status']);
+        self::assertSame(401, $this->pedir('GET', '/api/autos-externos?id=kavak~renault_sandero~1')['status']);
         self::assertSame(401, $this->pedir('GET', '/api/meta-busquedas/avisos')['status']);
 
         $this->ingresarComoUsuario();
@@ -190,7 +190,7 @@ final class MetaBusquedaTest extends ApiTestCase
         $baja = array_values(array_filter($j['novedades']['items'], fn($i) => $i['tipo'] === 'bajo'))[0];
         self::assertEquals(13000000, $baja['precio_anterior']);
         self::assertEquals(12000000, $baja['precio_actual']);
-        $detalle = $this->pedir('GET', '/api/autos-externos/' . $baja['auto']['id']);
+        $detalle = $this->pedir('GET', '/api/autos-externos?id=' . rawurlencode($baja['auto']['id']));
         self::assertSame(200, $detalle['status'], json_encode($detalle['json']));
         self::assertCount(2, $detalle['json']['historial']);
         self::assertEquals(13000000, $detalle['json']['historial'][0]['precio']);
@@ -205,11 +205,11 @@ final class MetaBusquedaTest extends ApiTestCase
 
         // El retirado conserva su historial, pero no tiene etiqueta
         $retirado = array_values(array_filter($j['novedades']['items'], fn($i) => $i['tipo'] === 'retirado'))[0];
-        $d = $this->pedir('GET', '/api/autos-externos/' . $retirado['auto']['id'])['json'];
+        $d = $this->pedir('GET', '/api/autos-externos?id=' . rawurlencode($retirado['auto']['id']))['json'];
         self::assertSame('retirado', $d['auto']['estado']);
         self::assertNull($d['auto']['etiqueta']);
         self::assertNull($d['comparables']);
-        self::assertCount(1, $d['historial']);
+        self::assertCount(1, $d['historial'], 'el historial guarda cada cambio de precio');
     }
 
     public function testUnAutoQueVuelveNoEsNuevoYSeReactiva(): void
@@ -288,9 +288,7 @@ final class MetaBusquedaTest extends ApiTestCase
             self::assertStringContainsString('Ya hay una recolección', $e->getMessage());
         }
 
-        $st = Entorno::pdo()->prepare('SELECT COUNT(*) FROM recoleccion r JOIN fuente f ON f.id = r.fuente_id WHERE f.nombre = :f');
-        $st->execute(['f' => $fuente]);
-        self::assertSame(1, (int)$st->fetchColumn());
+        self::assertCount(1, Entorno::documentos()->leer("recolecciones/$fuente")['corridas']);
 
         $conMalo = array_merge($base, [['id_externo' => 'x', 'marca' => $marca]]);
         $r = self::importar($fuente, '2026-11-09T06:00:00-03:00', $conMalo);
@@ -371,7 +369,9 @@ final class MetaBusquedaTest extends ApiTestCase
         $marcas = $this->pedir('GET', '/api/meta-busquedas/marcas')['json']['marcas'];
         $mia = array_values(array_filter($marcas, fn($m) => $m['marca'] === $marca))[0];
         self::assertSame(['Logan', 'Sandero'], $mia['modelos']);
-        self::assertSame(404, $this->pedir('GET', '/api/autos-externos/99999999')['status']);
+        self::assertSame(404, $this->pedir('GET', '/api/autos-externos?id=kavak~no_existe~1')['status']);
+        self::assertSame(404, $this->pedir('GET', '/api/autos-externos?id=../../x')['status']);
+        self::assertSame(404, $this->pedir('GET', '/api/autos-externos')['status']);
     }
 
     private static function deFuente(array $referencia, string $fuente): array

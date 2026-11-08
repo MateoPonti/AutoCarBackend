@@ -3,14 +3,17 @@ declare(strict_types=1);
 
 namespace AutoCar\MetaBusqueda;
 
-use AutoCar\Core\Database;
 use AutoCar\Core\Request;
 
-/** Búsqueda guardada de un usuario: validación, criterio de coincidencia y acceso a la tabla. */
+/**
+ * Búsqueda guardada de un usuario: validación, criterio de coincidencia y guardado.
+ * Las búsquedas de un usuario van juntas en el documento "busquedas/{usuario_id}" (son 20 como mucho), con el
+ * próximo id y hasta cuándo vio los avisos de cada una. Solo lo escribe la API; los avisos los escribe el
+ * importador en otro documento (ver Avisos), así nunca pisan lo mismo.
+ */
 final class Busqueda
 {
     public const MAXIMO_POR_USUARIO = 20;
-    private const COLUMNAS = 'id, usuario_id, marca, modelo, anio_desde, anio_hasta, precio_max, km_max, transmision, created_at, updated_at';
 
     /**
      * @param array<string, mixed> $d cuerpo del pedido
@@ -68,7 +71,8 @@ final class Busqueda
     }
 
     /**
-     * ¿Este auto entra en la búsqueda? Marca y modelo son exactos ("Sandero" no incluye "Sandero Stepway").
+     * ¿Este auto entra en la búsqueda? Marca y modelo se comparan con la clave del modelo, que no distingue mayúsculas,
+     * acentos ni guiones y entiende "VW" como "Volkswagen"; pero "Sandero" no incluye "Sandero Stepway".
      * Un auto sin precio (reservado) no queda afuera por el precio máximo, que está en pesos.
      *
      * @param array<string, mixed> $b
@@ -76,8 +80,7 @@ final class Busqueda
      */
     public static function coincide(array $b, array $auto): bool
     {
-        if (mb_strtolower($b['marca']) !== mb_strtolower($auto['marca'])
-            || mb_strtolower($b['modelo']) !== mb_strtolower($auto['modelo'])) {
+        if (Catalogo::claveDe($b['marca'], $b['modelo']) !== Catalogo::claveDe($auto['marca'], $auto['modelo'])) {
             return false;
         }
         if (($b['anio_desde'] !== null && $auto['anio'] < $b['anio_desde'])
@@ -92,82 +95,127 @@ final class Busqueda
         return true;
     }
 
-    /** @return list<array<string, mixed>> */
-    public static function delUsuario(int $usuarioId): array
+    /** @return list<array<string, mixed>> la más nueva primero */
+    public static function delUsuario(Documentos $docs, int $usuarioId): array
     {
-        $st = Database::pdo()->prepare('SELECT ' . self::COLUMNAS . ' FROM busqueda_guardada WHERE usuario_id = :u ORDER BY id DESC');
-        $st->execute(['u' => $usuarioId]);
-        return array_map([self::class, 'fila'], $st->fetchAll());
+        return array_reverse(self::documento($docs, $usuarioId)['busquedas']);
     }
 
     /** Solo la devuelve a su dueño: la búsqueda de otro usuario se trata como inexistente. */
-    public static function delUsuarioPorId(int $usuarioId, int $id): ?array
+    public static function delUsuarioPorId(Documentos $docs, int $usuarioId, int $id): ?array
     {
-        $st = Database::pdo()->prepare('SELECT ' . self::COLUMNAS . ' FROM busqueda_guardada WHERE id = :id AND usuario_id = :u');
-        $st->execute(['id' => $id, 'u' => $usuarioId]);
-        $f = $st->fetch();
-        return $f ? self::fila($f) : null;
+        foreach (self::documento($docs, $usuarioId)['busquedas'] as $b) {
+            if ($b['id'] === $id) {
+                return $b;
+            }
+        }
+        return null;
     }
 
-    /** @return list<array<string, mixed>> todas las búsquedas: el importador genera los avisos de cada una */
-    public static function todas(\PDO $pdo): array
+    /** @return list<array<string, mixed>> las de todos los usuarios: el importador genera los avisos de cada una */
+    public static function todas(Documentos $docs): array
     {
-        return array_map([self::class, 'fila'], $pdo->query('SELECT ' . self::COLUMNAS . ' FROM busqueda_guardada')->fetchAll(\PDO::FETCH_ASSOC));
+        $salida = [];
+        foreach ($docs->listar('busquedas') as $doc) {
+            foreach ($doc['busquedas'] ?? [] as $b) {
+                $salida[] = $b + ['usuario_id' => (int)$doc['usuario_id']];
+            }
+        }
+        return $salida;
     }
 
-    public static function cantidad(int $usuarioId): int
+    public static function cantidad(Documentos $docs, int $usuarioId): int
     {
-        $st = Database::pdo()->prepare('SELECT COUNT(*) FROM busqueda_guardada WHERE usuario_id = :u');
-        $st->execute(['u' => $usuarioId]);
-        return (int)$st->fetchColumn();
-    }
-
-    /** @param array<string, mixed> $d datos ya validados */
-    public static function crear(int $usuarioId, array $d): array
-    {
-        $st = Database::pdo()->prepare(
-            'INSERT INTO busqueda_guardada (usuario_id, marca, modelo, anio_desde, anio_hasta, precio_max, km_max, transmision)
-             VALUES (:u, :marca, :modelo, :anio_desde, :anio_hasta, :precio_max, :km_max, :transmision)
-             RETURNING ' . self::COLUMNAS
-        );
-        $st->execute(['u' => $usuarioId] + $d);
-        return self::fila($st->fetch());
+        return count(self::documento($docs, $usuarioId)['busquedas']);
     }
 
     /** @param array<string, mixed> $d datos ya validados */
-    public static function actualizar(int $usuarioId, int $id, array $d): ?array
+    public static function crear(Documentos $docs, int $usuarioId, array $d): array
     {
-        $st = Database::pdo()->prepare(
-            'UPDATE busqueda_guardada SET marca = :marca, modelo = :modelo, anio_desde = :anio_desde, anio_hasta = :anio_hasta,
-                    precio_max = :precio_max, km_max = :km_max, transmision = :transmision, updated_at = now()
-              WHERE id = :id AND usuario_id = :u
-              RETURNING ' . self::COLUMNAS
-        );
-        $st->execute(['id' => $id, 'u' => $usuarioId] + $d);
-        $f = $st->fetch();
-        return $f ? self::fila($f) : null;
+        $doc = self::documento($docs, $usuarioId);
+        $ahora = date(DATE_ATOM);
+        $b = ['id' => $doc['siguiente']] + $d + ['created_at' => $ahora, 'updated_at' => $ahora];
+        $doc['busquedas'][] = $b;
+        $doc['siguiente']++;
+        self::guardar($docs, $doc);
+        return $b;
     }
 
-    public static function eliminar(int $usuarioId, int $id): bool
+    /** @param array<string, mixed> $d datos ya validados */
+    public static function actualizar(Documentos $docs, int $usuarioId, int $id, array $d): ?array
     {
-        $st = Database::pdo()->prepare('DELETE FROM busqueda_guardada WHERE id = :id AND usuario_id = :u');
-        $st->execute(['id' => $id, 'u' => $usuarioId]);
-        return $st->rowCount() > 0;
+        $doc = self::documento($docs, $usuarioId);
+        foreach ($doc['busquedas'] as $i => $b) {
+            if ($b['id'] === $id) {
+                $doc['busquedas'][$i] = array_merge($b, $d, ['updated_at' => date(DATE_ATOM)]);
+                self::guardar($docs, $doc);
+                return $doc['busquedas'][$i];
+            }
+        }
+        return null;
     }
 
-    /** @param array<string, mixed> $f */
+    /** Borra la búsqueda; sus avisos dejan de mostrarse porque la búsqueda ya no existe. */
+    public static function eliminar(Documentos $docs, int $usuarioId, int $id): bool
+    {
+        $doc = self::documento($docs, $usuarioId);
+        $quedan = array_values(array_filter($doc['busquedas'], static fn(array $b): bool => $b['id'] !== $id));
+        if (count($quedan) === count($doc['busquedas'])) {
+            return false;
+        }
+        $doc['busquedas'] = $quedan;
+        unset($doc['vistos']["b$id"]);
+        self::guardar($docs, $doc);
+        return true;
+    }
+
+    /** @return array<int, float> id de búsqueda → momento hasta el que vio sus avisos */
+    public static function vistos(Documentos $docs, int $usuarioId): array
+    {
+        $salida = [];
+        foreach (self::documento($docs, $usuarioId)['vistos'] as $k => $momento) {
+            $salida[(int)substr((string)$k, 1)] = (float)$momento;
+        }
+        return $salida;
+    }
+
+    public static function marcarVistos(Documentos $docs, int $usuarioId, int $id): void
+    {
+        $doc = self::documento($docs, $usuarioId);
+        $doc['vistos']["b$id"] = microtime(true); // las claves llevan letra: Firestore no acepta mapas con claves 0, 1, 2...
+        self::guardar($docs, $doc);
+    }
+
+    /** @return array{usuario_id: int, siguiente: int, busquedas: list<array<string, mixed>>, vistos: array<string, float>} */
+    private static function documento(Documentos $docs, int $usuarioId): array
+    {
+        $doc = $docs->leer("busquedas/$usuarioId") ?? [];
+        return [
+            'usuario_id' => $usuarioId,
+            'siguiente'  => (int)($doc['siguiente'] ?? 1),
+            'busquedas'  => array_map([self::class, 'fila'], $doc['busquedas'] ?? []),
+            'vistos'     => is_array($doc['vistos'] ?? null) ? $doc['vistos'] : [],
+        ];
+    }
+
+    private static function guardar(Documentos $docs, array $doc): void
+    {
+        $docs->escribir(["busquedas/{$doc['usuario_id']}" => $doc]);
+    }
+
+    /** Tipos fijos: Firestore y JSON devuelven números que pueden venir como float o int. */
     private static function fila(array $f): array
     {
+        $entero = static fn(mixed $v): ?int => $v !== null ? (int)$v : null;
         return [
             'id'          => (int)$f['id'],
-            'usuario_id'  => (int)$f['usuario_id'],
-            'marca'       => $f['marca'],
-            'modelo'      => $f['modelo'],
-            'anio_desde'  => $f['anio_desde'] !== null ? (int)$f['anio_desde'] : null,
-            'anio_hasta'  => $f['anio_hasta'] !== null ? (int)$f['anio_hasta'] : null,
-            'precio_max'  => $f['precio_max'] !== null ? (float)$f['precio_max'] : null,
-            'km_max'      => $f['km_max'] !== null ? (int)$f['km_max'] : null,
-            'transmision' => $f['transmision'],
+            'marca'       => (string)$f['marca'],
+            'modelo'      => (string)$f['modelo'],
+            'anio_desde'  => $entero($f['anio_desde'] ?? null),
+            'anio_hasta'  => $entero($f['anio_hasta'] ?? null),
+            'precio_max'  => isset($f['precio_max']) ? (float)$f['precio_max'] : null,
+            'km_max'      => $entero($f['km_max'] ?? null),
+            'transmision' => $f['transmision'] ?? null,
             'created_at'  => $f['created_at'],
             'updated_at'  => $f['updated_at'],
         ];
