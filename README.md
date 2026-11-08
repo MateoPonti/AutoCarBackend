@@ -20,6 +20,7 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `GET /api/me` | sesión | `{usuario, csrf}` del usuario autenticado |
 | `GET /api/vehiculos` | público | Listado. Filtros: `q`, `marca`, `combustible`, `precio_max`, `page` |
 | `GET /api/vehiculos/{id}` | público | Detalle |
+| `GET /api/vehiculos/{id}/comparacion` | público | Precio frente a autos iguales de MercadoLibre, Kavak y Autocosmos: `buen_precio`, `en_precio`, `caro` o `sin_datos`, con mediana, ahorro y autos parecidos. Detalle en [docs/arquitectura-scraper.md](docs/arquitectura-scraper.md#5-cómo-decide-el-comparador). 503 si el almacén no responde |
 | `GET /api/marcas` | público | Marcas existentes (para armar el filtro) |
 | `GET /api/admin/vehiculos?estado=pendiente` | `vehiculos.moderar` o `vehiculos.gestionar` | Listado / cola de moderación |
 | `GET /api/admin/vehiculos/{id}` | `vehiculos.moderar` o `vehiculos.gestionar` | Detalle con fotos y quién lo publicó |
@@ -33,6 +34,15 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `DELETE /api/admin/usuarios/{id}` | `usuarios.editar` | Baja lógica (`activo = false`): no puede ingresar y su sesión deja de valer → 204 |
 | `GET /api/admin/roles` | `usuarios.ver` | Roles con sus permisos |
 | `GET /api/admin/metricas` | `metricas.ver` (admin) | Usuarios (activos, con actividad en 30 días, por rol), publicaciones (por estado, nuevas, precio promedio, valor en venta y vendido, marcas top), moderación y chat. Ganancias: no hay cobros todavía |
+| `GET /api/meta-busquedas` | sesión | Búsquedas guardadas del usuario, con autos que coinciden y avisos sin ver |
+| `POST /api/meta-busquedas` | sesión | Crea una búsqueda: `marca` y `modelo` obligatorios; `anio_desde`, `anio_hasta`, `precio_max`, `km_max` y `transmision` opcionales. Máximo 20 por usuario (409) → 201 |
+| `GET /api/meta-busquedas/{id}` | sesión (dueño) | Reporte: referencia de precio, novedades, destacados, resultados y otros modelos. Listado: `fuente`, `etiqueta`, `precio_max`, `km_max`, `orden` (`precio`, `km`, `nuevos`), `page` |
+| `PUT /api/meta-busquedas/{id}` | sesión (dueño) | Modifica los criterios |
+| `DELETE /api/meta-busquedas/{id}` | sesión (dueño) | Borra la búsqueda y sus avisos → 204 |
+| `GET /api/meta-busquedas/marcas` | sesión | Marcas y modelos con sus nombres exactos, para armar el formulario |
+| `GET /api/meta-busquedas/avisos?sin_ver=1` | sesión | Últimos 100 avisos del usuario: auto nuevo, baja de precio, reservado o retirado |
+| `POST /api/meta-busquedas/{id}/avisos/vistos` | sesión (dueño) | Marca como vistos los avisos de esa búsqueda → 204 |
+| `GET /api/autos-externos/{id}` | sesión | Detalle de un auto de otra plataforma: ficha, etiqueta de precio, comparables, historial y link al original |
 | `GET /health` | público | Chequeo de vida (no toca la base) |
 
 Las rutas con sesión o con permiso que cambian datos (`POST`, `PUT`, `PATCH`, `DELETE`) exigen además el header `X-CSRF-Token` con el valor `csrf` que devolvió el login.
@@ -90,7 +100,11 @@ src/Core/          Config, Database (PDO), Router, Request, Response, Cors, Logg
 src/Auth/          Auth (sesión, cookie y CSRF), SesionDb (guarda $_SESSION en la base), Usuario, AuthController
 src/Catalogo/      Vehiculo (modelo + validación), CatalogoController (API pública)
 src/Admin/         AdminVehiculoController (ABM y moderación), AdminUsuarioController (usuarios), AdminMetricasController (métricas)
+src/MetaBusqueda/  búsquedas guardadas, importador, comparables, novedades y reporte
+src/Comparador/    comparador de precios: documento por modelo, comparación y almacén (archivos o Firestore)
+bin/               importar-autos.php (metabuscador), armar-modelos.php, comparar.php y medir-cambios.php (comparador)
 database/          schema.sql, seed.sql y las migraciones para bases que ya existían (PostgreSQL)
+recolectores/      MercadoLibre, Kavak y Autocosmos con curl, cada una en su carpeta (no se despliegan): recolectores/README.md
 storage/logs/      app.log (fuera de public/)
 vendor/            librerías de Composer (se genera, no se sube al repo)
 ```
@@ -120,7 +134,7 @@ El código sólo usa funciones de PHP 8.2 o anteriores, así que la diferencia e
 ## Base de datos (Neon)
 
 1. Crear el proyecto en Neon. En la consola, abrir el **SQL Editor** de la rama `production`, pegar el contenido de `database/schema.sql` y ejecutarlo. Después hacer lo mismo con `database/seed.sql` (datos de prueba).
-   Si la base ya existía de una entrega anterior, en vez de `schema.sql` correr las migraciones en orden: `migracion-e4.sql`, `migracion-nombres.sql`, `migracion-chat.sql`, `migracion-sesion.sql`, `migracion-roles.sql` y `migracion-inspecciones.sql` (todas se pueden correr más de una vez). Solo en dev, para tener mecánicos de ejemplo: `demo-inspecciones.sql`.
+   Si la base ya existía de una entrega anterior, en vez de `schema.sql` correr las migraciones en orden: `migracion-e4.sql`, `migracion-nombres.sql`, `migracion-chat.sql`, `migracion-sesion.sql`, `migracion-roles.sql`, `migracion-meta-busqueda.sql` y `migracion-inspecciones.sql` (todas se pueden correr más de una vez). Solo en dev, para tener mecánicos de ejemplo: `demo-inspecciones.sql`.
 2. Botón **Connect** → desactivar **Connection pooling** → copiar host, base (`neondb`), usuario y contraseña. Esos valores van a `DB_HOST`, `DB_NAME`, `DB_USER` y `DB_PASS` (`DB_PORT` es 5432).
 3. Para desarrollar sin tocar producción: **Create child branch** (por ejemplo `dev`) y usar sus datos en el `.env` local.
 
@@ -186,11 +200,44 @@ docker compose --profile test up -d db-test        # Postgres descartable en el 
 vendor/bin/phpunit --testsuite integration         # API real (php -S) contra esa base
 ```
 
-- **Unitarias** (`tests/Unit`): validaciones de vehículos y fotos, `Config`, `Request` y la duración de la sesión.
-- **Integración** (`tests/Integration`): cada corrida borra y recrea la base `autocar_test` con `schema.sql` + `seed.sql`, levanta la API en un puerto libre y le hace pedidos HTTP reales. Cubren registro, login y logout con la cookie y el CSRF, el ABM del admin, los permisos (401 y 403), las validaciones (422) y CORS. Se niegan a correr si la base apunta a Neon o si su nombre no termina en `_test`.
+- **Unitarias** (`tests/Unit`): validaciones de vehículos y fotos, `Config`, `Request`, la duración de la sesión y los cálculos de la Meta-búsqueda.
+- **Integración** (`tests/Integration`): cada corrida borra y recrea la base `autocar_test` con `schema.sql` + `seed.sql`, levanta la API en un puerto libre y le hace pedidos HTTP reales. Cubren registro, login y logout con la cookie y el CSRF, el ABM del admin, los permisos (401 y 403), las validaciones (422), CORS y la Meta-búsqueda con corridas simuladas. Se niegan a correr si la base apunta a Neon o si su nombre no termina en `_test`.
 - **CI** (`.github/workflows/ci.yml`): en cada PR a `dev` o `main` corre las dos suites contra un `postgres:17` propio y verifica que la imagen de Docker siga construyendo.
 
 Plan Free de Render: el servicio se duerme tras ~15 min sin visitas y la primera respuesta tarda cerca de un minuto.
+
+## Meta-búsqueda
+
+El usuario guarda qué auto busca y AutoCar sigue las publicaciones, las compara y le avisa cuando hay novedades. Hoy la fuente externa es Kavak. Los endpoints piden sesión iniciada; la restricción por plan todavía no está aplicada, porque los planes no existen en la base.
+
+```
+Recolector (recolectores/kavak) → autos.json → bin/importar-autos.php → tablas → API
+```
+
+**Preparación.** Una vez, antes de desplegar: correr `database/migracion-meta-busqueda.sql`. Solo agrega tablas, sin modificar las existentes. Después, cargar los secretos `DB_*` en GitHub para que el workflow `.github/workflows/scraper.yml` importe cada semana. Ver [`recolectores/kavak/README.md`](recolectores/kavak/README.md).
+
+**Importar a mano.** El `.env` define a qué base se importa:
+
+```
+php bin/importar-autos.php recolectores/kavak/autos.json
+```
+
+Una corrida se marca como incompleta si el recolector lo indica, si tiene algún auto inválido o si trae menos del 80% de los autos de la anterior. Esas corridas se guardan, pero no se usan para calcular ni retiran autos ni generan avisos. Una fecha igual o anterior a la última se rechaza.
+
+**Cómo se calcula.** Los valores son un punto de partida para ajustar con datos reales, y están como constantes en `src/MetaBusqueda`.
+
+| Dato | Regla |
+|---|---|
+| Precio típico y rango | Mediana y percentiles 25 y 75 de los autos que coinciden, por plataforma. Con menos de 5, no se informan |
+| Comparables | Misma plataforma y moneda, mismo modelo, año ±2 y km ±30%. Si no llegan a 5: año ±3 con el mismo filtro de km. Si tampoco, "datos insuficientes" |
+| Etiqueta | `barato` a 7% o más bajo la mediana de comparables, `caro` a 7% o más sobre ella; `normal` en el medio y `datos_insuficientes` sin comparables |
+| Mejor relación | Menor puntaje: diferencia % de precio + 0,2 × diferencia % de km, frente a sus comparables |
+| Más barato / menos usado | Menor precio / menos km entre los resultados con precio |
+| Novedades | Comparan las dos últimas corridas completas de cada plataforma: nuevo, bajó, subió, reservado, retirado |
+| Avisos | Se generan al importar, salvo las subas, que solo se informan en el reporte |
+| Otros modelos | Modelo distinto, precio entre 90% del P25 y el máximo de la búsqueda (o 110% del P75), km ±20% del típico y año ±2. No afectan estadísticas, etiquetas, destacados ni avisos |
+
+Marca y modelo coinciden de forma exacta, sin distinguir mayúsculas: "Sandero" no incluye "Sandero Stepway". El precio máximo está en pesos. Los autos de AutoCar aparecen en los resultados con `fuente: "autocar"` y su `id` es el del vehículo, pero no llevan etiqueta ni compiten en los destacados. Todos los precios son publicados, no de venta.
 
 ## Seguridad aplicada
 

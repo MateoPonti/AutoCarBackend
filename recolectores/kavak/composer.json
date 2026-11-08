@@ -1,0 +1,16 @@
+{
+    "name": "autocar/kavak-scraper",
+    "description": "Scraper de autos usados de Kavak Argentina (herramienta aparte de la API; no se despliega en Render)",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.3",
+        "playwright-php/playwright": "^1.5"
+    },
+    "config": {
+        "platform": {
+            "php": "8.3.0"
+        },
+        "sort-packages": true
+    }
+}
