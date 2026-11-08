@@ -102,19 +102,27 @@ Orden: primero el puntaje, después la cantidad de firmadas, y los nuevos al fin
 
 `database/demo-inspecciones.sql`, **solo para la base de dev**: 5 mecánicos de Mercedes y Luján con su taller, marcados como demo. La contraseña de todos es `mecanico-demo`. Las inspecciones firmadas de ejemplo se van a cargar con la API cuando esté la firma, para que la huella de cada informe sea la real.
 
-## 7. Qué falta
+## 7. Endpoints: hechos y pendientes
 
-Los endpoints, que van a usar todo lo de arriba (los números son los del `PLAN.md`):
+Los números son los del `PLAN.md`. Los controladores son `InspeccionController` (comprador y ranking público), `MecanicoController` y `AdminReclamoController`. El acceso a la base está en `Inspeccion`, `Taller` y `Reclamos`, y las reglas nuevas, también puras, en `Pedido` y `Reclamo`. Pruebas: `tests/Unit/Inspecciones*Test.php` y `tests/Integration/Inspecciones*Test.php`; `InspeccionesCompradorTest::testRecorridoDeLaDemo` recorre la demo del 30/11 entera por la API.
 
-| Tarea | Endpoint | Componentes que usa |
-|---|---|---|
-| B2 | `GET/PUT /api/mecanico/perfil` | — |
-| B3 | `GET /api/mecanicos?localidad=` | `Ranking` |
-| B4 | `POST /api/inspecciones` | `Fuente`, `Precio` |
-| B5 | `GET /api/mis-inspecciones`, `GET /api/inspecciones/{id}`, `POST .../cancelar` | `Estados` |
-| B6 | `GET/PATCH /api/mecanico/inspecciones...` | `Estados` |
-| B7 | `PUT .../informe`, `POST .../firma` | `Checklist`, `Huella`, `Estados` |
-| B8 | `POST /api/inspecciones/{id}/reclamo`, `GET/PATCH /api/admin/reclamos...` | `Estados`, `Precio`, `Ranking` |
+| Tarea | Endpoint | Componentes que usa | Estado |
+|---|---|---|---|
+| B2 | `GET/PUT /api/mecanico/perfil` | `Taller` | ✅ |
+| B3 | `GET /api/mecanicos?localidad=` | `Ranking`, `Taller::red` | ✅ |
+| B4 | `POST /api/inspecciones` | `Pedido`, `Fuente`, `Precio` | ✅ |
+| B5 | `GET /api/mis-inspecciones`, `GET /api/inspecciones/{id}`, `POST .../cancelar` | `Estados` | ✅ |
+| B6 | `GET/PATCH /api/mecanico/inspecciones...` | `Estados` (+ `validarTurno`, `validarMotivo`) | ✅ |
+| B7 | `PUT .../informe`, `POST .../firma` | `Checklist`, `Huella`, `Estados` | ✅ |
+| B8 | `POST /api/inspecciones/{id}/reclamo`, `GET/PATCH /api/admin/reclamos...` | `Reclamo`, `Estados`, `Precio` | ✅ |
+
+**Quién no puede intervenir (409):** el mecánico no se pide una inspección a sí mismo (`mecanico_propio`), el vendedor no pide la de su propio auto de AutoCar (`vehiculo_propio`), no se elige al mecánico que publicó el auto (`mecanico_vendedor`) y nadie resuelve un reclamo sobre una inspección propia (`interes_propio`). Tampoco se pide dos veces el mismo link mientras hay una en curso (`duplicada`).
+
+**Solo se eligen mecánicos de la red:** taller activo, cuenta activa y un rol con `verificaciones.realizar`. El ranking público no muestra el teléfono: el contacto pasa por AutoCar.
+
+**Cómo se evitan los problemas de concurrencia.** Aceptar y rechazar hacen `UPDATE ... WHERE estado = 'pedida'`: si el comprador cancela al mismo tiempo, solo uno de los dos cambia la fila y el otro recibe 409. Guardar el informe y firmar bloquean la fila (`SELECT ... FOR UPDATE`) dentro de una transacción.
+
+**La huella se puede volver a calcular.** El momento de la firma entra en la huella en UTC y al segundo (`Inspeccion::momentoHuella`), así da lo mismo con lo que se guardó que con lo que se lee de la base. La prueba de integración lo verifica.
 
 Todavía no está decidido y no afecta a esta base:
 - Qué datos del auto externo se completan solos con lo que juntó el scraper y cuáles carga el comprador.

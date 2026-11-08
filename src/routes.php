@@ -14,6 +14,9 @@ use AutoCar\Auth\AuthController;
 use AutoCar\Catalogo\CatalogoController;
 use AutoCar\Chat\ChatController;
 use AutoCar\Comparador\ComparadorController;
+use AutoCar\Inspecciones\AdminReclamoController;
+use AutoCar\Inspecciones\InspeccionController;
+use AutoCar\Inspecciones\MecanicoController;
 use AutoCar\MetaBusqueda\MetaBusquedaController;
 use AutoCar\Publicaciones\PublicacionController;
 use AutoCar\Core\Router;
@@ -51,6 +54,27 @@ $router->put('/api/meta-busquedas/{id}', [MetaBusquedaController::class, 'actual
 $router->delete('/api/meta-busquedas/{id}', [MetaBusquedaController::class, 'eliminar'], 'auth');
 $router->post('/api/meta-busquedas/{id}/avisos/vistos', [MetaBusquedaController::class, 'marcarVistos'], 'auth');
 $router->get('/api/autos-externos/{id}', [MetaBusquedaController::class, 'autoExterno'], 'auth');
+
+// Inspecciones: el mecánico que firma. El ranking de mecánicos es público.
+$router->get('/api/mecanicos', [InspeccionController::class, 'mecanicos']);
+// Comprador: pide, ve las suyas, cancela antes de que la acepten y reclama hasta 15 días después de la firma.
+// El detalle lo ven el comprador, el mecánico asignado y quien resuelve reclamos.
+$router->post('/api/inspecciones', [InspeccionController::class, 'crear'], 'auth');
+$router->get('/api/mis-inspecciones', [InspeccionController::class, 'mias'], 'auth');
+$router->get('/api/inspecciones/{id}', [InspeccionController::class, 'detalle'], 'auth');
+$router->post('/api/inspecciones/{id}/cancelar', [InspeccionController::class, 'cancelar'], 'auth');
+$router->post('/api/inspecciones/{id}/reclamo', [InspeccionController::class, 'reclamar'], 'auth');
+// Reclamos: los resuelven el moderador y el admin
+$router->get('/api/admin/reclamos', [AdminReclamoController::class, 'index'], 'permiso:reclamos.resolver');
+$router->patch('/api/admin/reclamos/{id}', [AdminReclamoController::class, 'resolver'], 'permiso:reclamos.resolver');
+// Lado del mecánico: cada uno ve y toca solo sus inspecciones (las de otro dan 404)
+$mecanico = 'permiso:verificaciones.realizar';
+$router->get('/api/mecanico/perfil', [MecanicoController::class, 'perfil'], $mecanico);
+$router->put('/api/mecanico/perfil', [MecanicoController::class, 'guardarPerfil'], $mecanico);
+$router->get('/api/mecanico/inspecciones', [MecanicoController::class, 'bandeja'], $mecanico);
+$router->patch('/api/mecanico/inspecciones/{id}', [MecanicoController::class, 'cambiarEstado'], $mecanico);
+$router->put('/api/mecanico/inspecciones/{id}/informe', [MecanicoController::class, 'guardarInforme'], $mecanico);
+$router->post('/api/mecanico/inspecciones/{id}/firma', [MecanicoController::class, 'firmar'], $mecanico);
 
 // Autenticación
 $router->post('/api/registro', [AuthController::class, 'registro']);
