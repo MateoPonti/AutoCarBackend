@@ -43,6 +43,20 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `GET /api/meta-busquedas/avisos?sin_ver=1` | sesión | Últimos 100 avisos del usuario: auto nuevo, baja de precio, reservado o retirado |
 | `POST /api/meta-busquedas/{id}/avisos/vistos` | sesión (dueño) | Marca como vistos los avisos de esa búsqueda → 204 |
 | `GET /api/autos-externos/{id}` | sesión | Detalle de un auto de otra plataforma: ficha, etiqueta de precio, comparables, historial y link al original |
+| `GET /api/mecanicos?localidad=` | público | Ranking de la red: taller, dirección, precio con su desglose, inspecciones firmadas, reclamos que procedieron, `puntaje` (o `nuevo: true` con menos de 3 firmadas) y `localidades` para el filtro. Sin teléfono |
+| `POST /api/inspecciones` | sesión | Pedir una inspección: `url` del aviso (MercadoLibre, Kavak, Autocosmos, AutoCar u otro) y `mecanico_id`; `titulo`, `anio`, `kilometraje`, `precio_publicado` y `localidad` opcionales (si el link es de AutoCar salen de la publicación). Pago simulado `retenido` → 201. 409: `mecanico_propio`, `vehiculo_propio`, `mecanico_vendedor`, `duplicada` |
+| `GET /api/mis-inspecciones` | sesión | Las inspecciones que pidió el usuario, con el mecánico, el reclamo y `puede_reclamar` |
+| `GET /api/inspecciones/{id}` | sesión | Detalle de una inspección con el checklist. La ven el comprador, el mecánico asignado y quien tiene `reclamos.resolver`; para el resto, 404 |
+| `POST /api/inspecciones/{id}/cancelar` | sesión (comprador) | Solo antes de que el mecánico la acepte; pago `reembolsado`. Si no, 409 |
+| `POST /api/inspecciones/{id}/reclamo` | sesión (comprador) | `{descripcion, item_codigo?}`, una vez, hasta 15 días después de la firma → 201. 409: `estado_invalido`, `reclamo_existente`, `fuera_de_plazo` |
+| `GET /api/admin/reclamos?estado=abierto` | `reclamos.resolver` (moderador y admin) | Cola de reclamos con la inspección, el mecánico, el comprador y el `tope` de la compensación |
+| `PATCH /api/admin/reclamos/{id}` | `reclamos.resolver` | `{procede: true, compensacion, respuesta}` (compensación hasta 3 veces el precio; el pago queda `reembolsado` y el mecánico baja en el ranking) o `{procede: false, respuesta}`. Ya resuelto → 409; sobre una inspección propia → 409 `interes_propio` |
+| `GET /api/mecanico/perfil` | `verificaciones.realizar` (mecánico) | `{taller}` o `{taller: null}` si todavía no completó el perfil |
+| `PUT /api/mecanico/perfil` | `verificaciones.realizar` | Alta o modificación del taller: `nombre`, `direccion`, `localidad`, `telefono`, `precio_inspeccion` (entre $ 1.000 y $ 10.000.000, sin centavos) |
+| `GET /api/mecanico/inspecciones?estado=` | `verificaciones.realizar` | Sus inspecciones (de un estado o todas) y `conteos` por estado |
+| `PATCH /api/mecanico/inspecciones/{id}` | `verificaciones.realizar` | Solo desde `pedida`: `{"accion":"aceptar","fecha_turno":"ISO 8601"}` (desde ahora y hasta 60 días; hace falta el perfil, si no 409 `sin_taller`) o `{"accion":"rechazar","motivo":"..."}` (pago `reembolsado`). Otro estado → 409 |
+| `PUT /api/mecanico/inspecciones/{id}/informe` | `verificaciones.realizar` | Borrador del checklist `{items: [{codigo, resultado, nota}], conclusion?, resumen?}`, se puede a medias. Solo con la inspección `aceptada`; firmada → 409 `firmada` |
+| `POST /api/mecanico/inspecciones/{id}/firma` | `verificaciones.realizar` | Firma lo guardado: exige los 10 ítems y la conclusión (si no, 422 `informe_incompleto`). Guarda el nombre del mecánico y del taller, el momento y la huella SHA-256; pago `liberado` |
 | `GET /health` | público | Chequeo de vida (no toca la base) |
 
 Las rutas con sesión o con permiso que cambian datos (`POST`, `PUT`, `PATCH`, `DELETE`) exigen además el header `X-CSRF-Token` con el valor `csrf` que devolvió el login.
