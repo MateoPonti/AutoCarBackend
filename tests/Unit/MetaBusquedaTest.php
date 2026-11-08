@@ -19,7 +19,7 @@ final class MetaBusquedaTest extends TestCase
     private static function auto(int $id, array $cambios = []): array
     {
         return $cambios + [
-            'id' => $id, 'fuente_id' => 1, 'fuente' => 'kavak', 'marca' => 'Renault', 'modelo' => 'Sandero',
+            'id' => $id, 'fuente' => 'kavak', 'marca' => 'Renault', 'modelo' => 'Sandero',
             'version' => '1.6', 'anio' => 2017, 'transmision' => 'manual', 'ubicacion' => 'Buenos Aires', 'url' => null,
             'primera_vez' => '2026-11-01', 'ultima_vez' => '2026-11-01', 'estado' => 'activo',
             'precio' => 15000000.0, 'precio_contado' => null, 'moneda' => 'ARS', 'km' => 100000,
@@ -56,7 +56,7 @@ final class MetaBusquedaTest extends TestCase
             $auto,
             self::auto(2, ['modelo' => 'Sandero Stepway']),
             self::auto(3, ['reservado' => true, 'precio' => null]),
-            self::auto(4, ['fuente_id' => 2]),
+            self::auto(4, ['fuente' => 'otra']),
             self::auto(5, ['moneda' => 'USD']),
             self::auto(6),
         ];
@@ -129,6 +129,7 @@ final class MetaBusquedaTest extends TestCase
         $a = self::auto(1);
         self::assertTrue(Busqueda::coincide(self::busqueda(), $a));
         self::assertTrue(Busqueda::coincide(self::busqueda(['marca' => 'renault', 'modelo' => 'SANDERO']), $a));
+        self::assertTrue(Busqueda::coincide(self::busqueda(['marca' => 'VW', 'modelo' => 'Gol-Trend']), self::auto(2, ['marca' => 'Volkswagen', 'modelo' => 'Gol Trend'])));
         self::assertFalse(Busqueda::coincide(self::busqueda(['modelo' => 'Sandero Stepway']), $a));
         self::assertFalse(Busqueda::coincide(self::busqueda(['anio_desde' => 2018]), $a));
         self::assertFalse(Busqueda::coincide(self::busqueda(['anio_hasta' => 2016]), $a));

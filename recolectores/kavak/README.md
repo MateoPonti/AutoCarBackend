@@ -1,6 +1,6 @@
 # Recolector de Kavak
 
-Recorre el listado de autos usados de [Kavak Argentina](https://www.kavak.com/ar/usados) con un navegador Chromium sin ventana (Playwright) y guarda los autos en `autos.json`, en el formato común de los recolectores. Después, `bin/importar-autos.php` los carga en la base para la Meta-búsqueda (ver el [README principal](../../README.md#meta-búsqueda)).
+Recorre el listado de autos usados de [Kavak Argentina](https://www.kavak.com/ar/usados) con un navegador Chromium sin ventana (Playwright) y guarda los autos en `autos.json`, en el formato común de los recolectores. Después, `bin/importar-autos.php` los carga en Firestore para la Meta-búsqueda (ver el [README principal](../../README.md#meta-búsqueda)).
 
 - **No se despliega en Render.** La carpeta está excluida de la imagen en `.dockerignore`.
 - **Tiene sus propias dependencias.** Usa su `composer.json` y su `vendor/`, así la API sigue sin librerías de terceros.
@@ -19,7 +19,7 @@ Recorre el listado de autos usados de [Kavak Argentina](https://www.kavak.com/ar
 
 El workflow **Scraper** de GitHub Actions corre **una vez por semana, los lunes a las 06:00 de Argentina** (09:00 UTC), y recorre **todas las páginas** del listado. En noviembre de 2026 eran 42 páginas y 1.247 autos, unos 16 minutos por la pausa entre páginas.
 
-Después sube `autos.json` como artefacto (se guarda 30 días) y lo importa en la base, si el repo tiene estos secretos en **Settings → Secrets and variables → Actions**: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` y `DB_PASS`. Sin `DB_HOST`, la importación se saltea.
+Después sube `autos.json` como artefacto (se guarda 30 días) y lo importa en Firestore, si el repo tiene el secreto `FIRESTORE_CREDENCIALES_JSON` (el contenido del .json de una cuenta de servicio de escritura) en **Settings → Secrets and variables → Actions**. Sin ese secreto, la importación se saltea.
 
 Para correrlo a mano: **Actions** → **Scraper** → **Run workflow**. Se puede indicar la cantidad de páginas; si queda vacío, recorre todas.
 

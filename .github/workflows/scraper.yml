@@ -1,4 +1,4 @@
-# Corre el recolector de Kavak una vez por semana, guarda el resultado como artefacto y lo importa en la base.
+# Corre el recolector de Kavak una vez por semana, guarda el resultado como artefacto y lo importa en Firestore (metabuscador).
 # Detalle en recolectores/kavak/README.md.
 # GitHub solo ejecuta "schedule" desde la rama por defecto (main): hasta que este archivo llegue a main no corre solo.
 name: Scraper
@@ -48,20 +48,16 @@ jobs:
           path: recolectores/kavak/autos.json
           if-no-files-found: error
           retention-days: 30
-      # Sin los secretos DB_*, se saltea. Una corrida incompleta se guarda, pero no retira autos ni genera avisos.
-      - name: Importar a la base
+      # Sin el secreto FIRESTORE_CREDENCIALES_JSON, se saltea. Una corrida incompleta se guarda, pero no retira autos ni genera avisos.
+      - name: Importar a Firestore
         if: ${{ !cancelled() && hashFiles('recolectores/kavak/autos.json') != '' }}
         working-directory: .
         env:
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_PORT: ${{ secrets.DB_PORT }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-          DB_USER: ${{ secrets.DB_USER }}
-          DB_PASS: ${{ secrets.DB_PASS }}
-          DB_SSLMODE: require
+          MERCADO_ALMACEN: firestore
+          FIRESTORE_CREDENCIALES_JSON: ${{ secrets.FIRESTORE_CREDENCIALES_JSON }}
         run: |
-          if [ -z "$DB_HOST" ]; then
-            echo "Sin el secreto DB_HOST: no se importa."
+          if [ -z "$FIRESTORE_CREDENCIALES_JSON" ]; then
+            echo "Sin el secreto FIRESTORE_CREDENCIALES_JSON: no se importa."
             exit 0
           fi
           composer install --no-dev --no-interaction --prefer-dist

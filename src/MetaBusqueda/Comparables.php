@@ -26,7 +26,7 @@ final class Comparables
             $c['id'] !== $auto['id']
             && $c['precio'] !== null
             && !$c['reservado']
-            && $c['fuente_id'] === $auto['fuente_id']
+            && $c['fuente'] === $auto['fuente']
             && $c['moneda'] === $auto['moneda']
             && mb_strtolower($c['marca']) === mb_strtolower($auto['marca'])
             && mb_strtolower($c['modelo']) === mb_strtolower($auto['modelo'])));

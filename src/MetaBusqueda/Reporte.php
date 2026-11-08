@@ -287,17 +287,18 @@ final class Reporte
     }
 
     /** Detalle de un auto externo; null si no existe. */
-    public function detalle(int $id): ?array
+    public function detalle(string $id): ?array
     {
-        $auto = $this->mercado->auto($id);
-        if ($auto === null) {
+        $encontrado = $this->mercado->auto($id);
+        if ($encontrado === null) {
             return null;
         }
+        $auto = $encontrado[0];
 
         $etiqueta = null;
         $comparables = [];
         foreach ($this->mercado->ultimasRecolecciones() as $r) {
-            if ($r['fuente_id'] !== $auto['fuente_id'] || $auto['estado'] === 'retirado' || $auto['precio'] === null || $auto['reservado']) {
+            if ($r['fuente'] !== $auto['fuente'] || $auto['estado'] === 'retirado' || $auto['precio'] === null || $auto['reservado']) {
                 continue;
             }
             $c = Comparables::elegir($auto, $this->mercado->fotosDelModelo([$r['actual']], $auto['marca'], $auto['modelo']));

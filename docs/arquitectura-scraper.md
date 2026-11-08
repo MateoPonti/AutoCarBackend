@@ -1,6 +1,6 @@
 # Scraper y comparador de precios
 
-Estado al 08/11/2026, en `dev` (vino de la rama `feat/comparador`). El recolector de cada sitio, el comparador y el endpoint de la ficha **ya están hechos y probados en local** con datos reales. Falta crear el proyecto de Firebase para que Render lea los datos (ver [Pendiente](#7-pendiente)).
+Estado al 08/11/2026, en `dev` (vino de la rama `feat/comparador`). El recolector de cada sitio, el comparador y el endpoint de la ficha **ya están hechos y probados en local** con datos reales. Falta crear el proyecto de Firebase para que Render lea los datos (ver [Pendiente](#8-pendiente)).
 
 ## 1. La idea
 
@@ -146,7 +146,41 @@ Público, sin sesión. 404 si la publicación no existe o no es visible. 503 si 
 
 Con `"etiqueta": "sin_datos"` solo vienen `clave`, `fecha_datos`, `precio`, `precio_usd`, `dolar`, `criterio`, `texto` y `comparables`.
 
-## 6. Archivos
+## 6. Metabuscador (NoSQL)
+
+Desde el 08/11/2026 el metabuscador de Taro **ya no usa Neon**: todo lo que viene de otros sitios está en la base de documentos (Firestore en Render, archivos JSON en local). Las seis tablas que había (`fuente`, `recoleccion`, `auto_externo`, `auto_foto_semanal`, `busqueda_guardada`, `coincidencia`) y `migracion-meta-busqueda.sql` se borraron. La lógica de Taro (comparables, novedades, reporte, destacados, otros modelos) quedó igual: cambió solo dónde se guardan los datos.
+
+| Colección | Qué guarda | Quién escribe |
+|---|---|---|
+| `mercado/{marca_modelo}` | Todos los autos del modelo, de todas las fuentes, con su historial (un renglón por cambio de precio, km o reserva), primera y última vez que se vio y estado (activo, reservado, retirado). Si no entra en 1 MiB se parte en `{clave}~1`, `{clave}~2`... | El importador (PC o Actions) |
+| `indices/mercado` | Resumen de cada modelo: nombre, autos activos por fuente y rangos de precio, año y km. Con una lectura salen las marcas del formulario y los "otros modelos" | El importador |
+| `recolecciones/{fuente}` | Las últimas 30 corridas: fecha, si fue completa y cuántos autos trajo | El importador |
+| `busquedas/{usuario_id}` | Las búsquedas guardadas del usuario (hasta 20) y hasta cuándo vio los avisos de cada una | La API |
+| `avisos/{usuario_id}` | Los últimos 300 avisos del usuario: nuevo, bajó, reservado, retirado | El importador |
+
+```mermaid
+flowchart LR
+  J[("storage/mercado<br/>JSON del día")] --> IMP["bin/importar-autos.php"]
+  IMP -->|"modelos que cambiaron"| M[("mercado/{modelo}")]
+  IMP --> I[("indices/mercado")]
+  IMP -->|"si coincide con una búsqueda"| A[("avisos/{usuario}")]
+  IMP --> R[("recolecciones/{fuente}")]
+  API["API en Render<br/>/api/meta-busquedas"] --> B[("busquedas/{usuario}")]
+  M --> API
+  I --> API
+  A --> API
+  NEON[("Neon: vehiculo")] -->|"los autos de AutoCar"| API
+```
+
+**Por qué así.** Cada pantalla necesita pocos documentos enteros: un reporte lee el modelo buscado, el índice y las corridas; el detalle de un auto lee un solo documento (el id del auto ya dice de qué modelo es: `kavak~renault_sandero~562339`). No hace falta cruzar tablas. Las búsquedas y los avisos van en documentos distintos porque los escriben procesos distintos (la API y el importador) y así nunca se pisan.
+
+**Escrituras.** El importador escribe solo los modelos que cambiaron. Con las corridas de prueba del 08/11 (6.081 autos) fueron 205 modelos; con todo MercadoLibre (~1.500 modelos por fuente y por día) queda por debajo de las 20.000 escrituras diarias del plan gratis. Una corrida que falla a mitad de camino se puede volver a importar: da el mismo resultado y los avisos no se repiten.
+
+**Credencial.** Como la API escribe las búsquedas, la cuenta de servicio de Render tiene que ser de escritura (*Cloud Datastore User*), no de solo lectura.
+
+**Lo que cambió para quien usa la API.** Los ids de los autos externos ahora son texto, y el detalle pasó de `GET /api/autos-externos/{id}` a `GET /api/autos-externos?id=...` (las rutas solo aceptan números). Marca y modelo se comparan por la clave del modelo ("VW Gol-Trend" = "Volkswagen Gol Trend"). El front todavía no consumía estos endpoints (es la tarea F7), así que no se rompió ninguna pantalla.
+
+## 7. Archivos
 
 | Archivo | Qué hace | ¿Va a Render? |
 |---|---|---|
@@ -159,9 +193,11 @@ Con `"etiqueta": "sin_datos"` solo vienen `clave`, `fecha_datos`, `precio`, `pre
 | `bin/comparar.php` | Prueba el comparador desde la consola | No se usa |
 | `bin/medir-cambios.php` | Cuenta qué cambió entre dos corridas | No se usa |
 | `src/Comparador/` | `Clave`, `Modelos`, `Comparador`, `Almacen` (+ archivos y Firestore), `Firestore` (REST con curl y openssl), `ComparadorController` | Sí |
+| `src/MetaBusqueda/` | `Documentos` (+ archivos, memoria y Firestore), `Catalogo` (documento por modelo), `Indice`, `Importador`, `Busqueda`, `Avisos`, `Mercado`, `Reporte` | Sí |
+| `bin/importar-autos.php` | JSON del día → `mercado/{modelo}`, índice, avisos | No se usa |
 | `tests/Unit/ComparadorTest.php`, `RecolectoresTest.php` | 16 pruebas nuevas, sin red ni base | No |
 
-Lo de Taro (`src/MetaBusqueda/`, rama `scraper`) queda como está: el comparador nuevo usa su `Estadistica` y su `Normalizador` de Kavak. Su metabuscador sigue en Neon y se puede pasar al documento por modelo después.
+Lo de Taro (`src/MetaBusqueda/`, rama `scraper`): el comparador usa su `Estadistica` y su `Normalizador` de Kavak, y su metabuscador pasó a la base de documentos (ver la sección 6).
 
 ### Probarlo en local
 
@@ -189,11 +225,11 @@ MercadoLibre solo Volkswagen con tope de 3 páginas por búsqueda (140 pedidos, 
 | Polo 2020, 60.000 km, $ 28 M | `caro`: 15,1 % arriba de 21 autos |
 | Fiat Cronos 2022, 60.000 km, $ 21 M | `buen_precio`: 8,7 % abajo de 5 autos (Autocosmos y Kavak) |
 
-## 7. Pendiente
+## 8. Pendiente
 
 1. **Crear el proyecto de Firebase** (Firestore en modo producción, plan Spark) y dos cuentas de servicio: una de escritura (rol *Cloud Datastore User*, el `.json` queda en la PC) y una de solo lectura (*Cloud Datastore Viewer*, su contenido va en `FIRESTORE_CREDENCIALES_JSON` de Render). Después: `COMPARADOR_ALMACEN=firestore` y `php bin/armar-modelos.php --almacen=firestore`. El cliente de Firestore está escrito y probado sin red (firma del token y conversión de datos), falta probarlo contra el proyecto real.
 2. **Programar la corrida diaria** en la PC: `schtasks /create /tn "AutoCar scraper" /sc daily /st 09:00 /tr "C:\...\Backend\recolectores\diario.bat"`.
 3. **Primera corrida completa de MercadoLibre** (~2 h 15 min) y al día siguiente `php bin/medir-cambios.php mercadolibre`, para tener el dato real de cuánto cambia por día.
 4. **Front:** el bloque de la ficha que consume `/api/vehiculos/{id}/comparacion`.
 5. **Respaldo con GitHub Actions** (si la PC no corrió): GitHub solo ejecuta los `schedule` desde `main`, así que para que corra solo el workflow tiene que estar en `main`. Decidir si se sube solo el workflow o se deja manual.
-6. **Pasar el metabuscador de Taro** a leer los documentos por modelo en vez de Neon.
+6. ~~Pasar el metabuscador de Taro a NoSQL~~: hecho el 08/11 (sección 6). Queda unificar `modelos/{clave}` del comparador con `mercado/{clave}`, que hoy guardan casi los mismos autos dos veces.

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace AutoCar\Tests\Integration;
 
+use AutoCar\MetaBusqueda\DocumentosArchivos;
 use PDO;
 use RuntimeException;
 
@@ -16,6 +17,7 @@ final class Entorno
     /** @var resource|null */
     private static $proceso = null;
     private static ?PDO $pdo = null;
+    private static ?string $carpetaDocumentos = null;
 
     public static function db(): array
     {
@@ -38,6 +40,16 @@ final class Entorno
             );
         }
         return self::$pdo;
+    }
+
+    /** Base de documentos del metabuscador que usa la API de prueba: una carpeta temporal nueva en cada corrida. */
+    public static function documentos(): DocumentosArchivos
+    {
+        if (self::$carpetaDocumentos === null) {
+            self::$carpetaDocumentos = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'autocar-docs-' . bin2hex(random_bytes(4));
+            mkdir(self::$carpetaDocumentos, 0775, true);
+        }
+        return new DocumentosArchivos(self::$carpetaDocumentos);
     }
 
     /** URL base de la API levantada para las pruebas (la levanta la primera vez). */
@@ -80,6 +92,9 @@ final class Entorno
             'FRONT_URL' => 'http://front.test',
             'SESION_TTL' => '7200',
         ]);
+        self::documentos();
+        $env['MERCADO_ALMACEN'] = 'archivos';
+        $env['MERCADO_CARPETA'] = self::$carpetaDocumentos;
         $log = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'autocar-api-pruebas.log';
         self::$proceso = proc_open(
             [PHP_BINARY, '-S', "127.0.0.1:$puerto", '-t', 'public', 'public/index.php'],
