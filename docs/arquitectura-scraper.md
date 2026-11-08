@@ -1,6 +1,6 @@
 # Scraper y comparador de precios
 
-Estado al 08/11/2026, rama `feat/comparador`. El recolector de cada sitio, el comparador y el endpoint de la ficha **ya están hechos y probados en local** con datos reales. Falta crear el proyecto de Firebase para que Render lea los datos (ver [Pendiente](#7-pendiente)).
+Estado al 08/11/2026, en `dev` (vino de la rama `feat/comparador`). El recolector de cada sitio, el comparador y el endpoint de la ficha **ya están hechos y probados en local** con datos reales. Falta crear el proyecto de Firebase para que Render lea los datos (ver [Pendiente](#7-pendiente)).
 
 ## 1. La idea
 

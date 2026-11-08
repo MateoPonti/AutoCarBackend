@@ -1,6 +1,6 @@
 # Inspecciones: el mecánico que firma
 
-Estado al 08/11/2026, rama `feat/inspecciones`. Ya están **la base de datos y las reglas de negocio**, con pruebas. Faltan los endpoints. El porqué del modelo y el plan completo están en `modelo-de-negocio/README.md` y `PLAN.md` del repo del front.
+Estado al 08/11/2026, en `dev` (vino de la rama `feat/inspecciones`). Ya están **la base de datos y las reglas de negocio**, con pruebas. Faltan los endpoints. El porqué del modelo y el plan completo están en `modelo-de-negocio/README.md` y `PLAN.md` del repo del front.
 
 ## 1. La idea
 
