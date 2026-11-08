@@ -45,7 +45,7 @@ El ranking cierra el círculo: el mecánico que revisa mal recibe reclamos que p
 
 ## 3. Las tablas
 
-Están en `database/schema.sql` (y en `database/migracion-inspecciones.sql` para la base de Neon que ya existe).
+Están en `database/schema.sql` (y en `database/006-inspecciones.sql` para la base de Neon que ya existe).
 
 ```mermaid
 erDiagram
@@ -100,7 +100,7 @@ Orden: primero el puntaje, después la cantidad de firmadas, y los nuevos al fin
 
 ## 6. Datos de demo
 
-`database/demo-inspecciones.sql`, **solo para la base de dev**: 5 mecánicos de Mercedes y Luján con su taller, marcados como demo. La contraseña de todos es `mecanico-demo`. Las inspecciones firmadas de ejemplo se van a cargar con la API cuando esté la firma, para que la huella de cada informe sea la real.
+`database/007-demo-inspecciones-solo-dev.sql`, **solo para la base de dev**: 5 mecánicos de Mercedes y Luján con su taller, marcados como demo. La contraseña de todos es `mecanico-demo`. Las inspecciones firmadas de ejemplo se van a cargar con la API cuando esté la firma, para que la huella de cada informe sea la real.
 
 ## 7. Endpoints: hechos y pendientes
 

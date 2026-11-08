@@ -1,6 +1,6 @@
 -- AutoCar · inspecciones independientes: el comprador elige un mecánico de la red, el mecánico revisa el auto
 -- con un checklist y firma el informe con su nombre. Si se le pasó algo que se veía, el comprador reclama.
--- Se ejecuta UNA vez en el SQL Editor de Neon, DESPUÉS de migracion-roles.sql. Es idempotente.
+-- Se ejecuta UNA vez en el SQL Editor de Neon, DESPUÉS de 005-roles.sql. Es idempotente.
 -- Una base nueva no la necesita: schema.sql ya trae todo.
 
 INSERT INTO permiso (nombre, descripcion) VALUES
@@ -21,7 +21,7 @@ SELECT r.id, p.id FROM rol r CROSS JOIN permiso p WHERE r.nombre = 'admin'
 ON CONFLICT DO NOTHING;
 
 -- Un mecánico (usuario con rol mecanico) tiene UN taller. Sin el perfil completo no aparece en el ranking.
--- demo = true en los talleres de ejemplo (database/demo-inspecciones.sql, solo en dev).
+-- demo = true en los talleres de ejemplo (database/007-demo-inspecciones-solo-dev.sql, solo en dev).
 CREATE TABLE IF NOT EXISTS taller (
   usuario_id        INTEGER       PRIMARY KEY REFERENCES usuario(id),
   nombre            VARCHAR(80)   NOT NULL,

@@ -150,9 +150,9 @@ CREATE TABLE IF NOT EXISTS sesion (
 
 CREATE INDEX IF NOT EXISTS idx_sesion_vence ON sesion (vence);
 
--- Inspecciones independientes (ver migracion-inspecciones.sql): el comprador elige al mecánico y el mecánico firma.
+-- Inspecciones independientes (ver 006-inspecciones.sql): el comprador elige al mecánico y el mecánico firma.
 -- Un mecánico (usuario con rol mecanico) tiene UN taller. Sin el perfil completo no aparece en el ranking.
--- demo = true en los talleres de ejemplo (database/demo-inspecciones.sql, solo en dev).
+-- demo = true en los talleres de ejemplo (database/007-demo-inspecciones-solo-dev.sql, solo en dev).
 CREATE TABLE IF NOT EXISTS taller (
   usuario_id        INTEGER       PRIMARY KEY REFERENCES usuario(id),
   nombre            VARCHAR(80)   NOT NULL,

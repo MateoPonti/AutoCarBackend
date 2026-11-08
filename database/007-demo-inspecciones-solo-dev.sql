@@ -1,5 +1,5 @@
 -- AutoCar · datos de DEMO de la red de mecánicos. SOLO para la base de dev (Neon dev o la local), nunca en main.
--- Se ejecuta después de schema.sql (o de migracion-inspecciones.sql). Es idempotente.
+-- Se ejecuta después de schema.sql (o de 006-inspecciones.sql). Es idempotente.
 -- 5 mecánicos de Mercedes y Luján con su taller, marcados con demo = true para poder borrarlos:
 --   DELETE FROM taller WHERE demo; DELETE FROM usuario WHERE email LIKE '%@demo.autocar.com.ar';
 -- Contraseña de todos: mecanico-demo

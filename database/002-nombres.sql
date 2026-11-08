@@ -1,5 +1,5 @@
 -- AutoCar · renombra las tablas a singular (users → usuario, vehiculos → vehiculo, vehiculo_fotos → vehiculo_foto).
--- Se ejecuta UNA vez en el SQL Editor de Neon, después de migracion-e4.sql. No borra datos y es idempotente.
+-- Se ejecuta UNA vez en el SQL Editor de Neon, después de 001-e4.sql. No borra datos y es idempotente.
 -- Una base nueva no la necesita: schema.sql ya usa los nombres nuevos.
 
 ALTER TABLE IF EXISTS users          RENAME TO usuario;
