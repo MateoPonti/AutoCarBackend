@@ -20,6 +20,7 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `GET /api/me` | sesión | `{usuario, csrf}` del usuario autenticado |
 | `GET /api/vehiculos` | público | Listado. Filtros: `q`, `marca`, `combustible`, `precio_max`, `page` |
 | `GET /api/vehiculos/{id}` | público | Detalle |
+| `GET /api/vehiculos/{id}/comparacion` | público | Precio frente a autos iguales de MercadoLibre, Kavak y Autocosmos: `buen_precio`, `en_precio`, `caro` o `sin_datos`, con mediana, ahorro y autos parecidos. Detalle en [docs/arquitectura-scraper.md](docs/arquitectura-scraper.md#5-cómo-decide-el-comparador). 503 si el almacén no responde |
 | `GET /api/marcas` | público | Marcas existentes (para armar el filtro) |
 | `GET /api/admin/vehiculos?estado=pendiente` | `vehiculos.moderar` o `vehiculos.gestionar` | Listado / cola de moderación |
 | `GET /api/admin/vehiculos/{id}` | `vehiculos.moderar` o `vehiculos.gestionar` | Detalle con fotos y quién lo publicó |
@@ -100,9 +101,10 @@ src/Auth/          Auth (sesión, cookie y CSRF), SesionDb (guarda $_SESSION en 
 src/Catalogo/      Vehiculo (modelo + validación), CatalogoController (API pública)
 src/Admin/         AdminVehiculoController (ABM y moderación), AdminUsuarioController (usuarios), AdminMetricasController (métricas)
 src/MetaBusqueda/  búsquedas guardadas, importador, comparables, novedades y reporte
-bin/               importar-autos.php: carga en la base la salida de un recolector
+src/Comparador/    comparador de precios: documento por modelo, comparación y almacén (archivos o Firestore)
+bin/               importar-autos.php (metabuscador), armar-modelos.php, comparar.php y medir-cambios.php (comparador)
 database/          schema.sql, seed.sql y las migraciones para bases que ya existían (PostgreSQL)
-recolectores/      obtienen autos de otras plataformas, cada una en su carpeta (no se despliegan). Kavak: recolectores/kavak/README.md
+recolectores/      MercadoLibre, Kavak y Autocosmos con curl, cada una en su carpeta (no se despliegan): recolectores/README.md
 storage/logs/      app.log (fuera de public/)
 vendor/            librerías de Composer (se genera, no se sube al repo)
 ```
