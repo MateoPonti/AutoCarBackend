@@ -1,5 +1,5 @@
 -- AutoCar · migración del chat (entrega 4). Se ejecuta UNA vez en el SQL Editor de Neon, en este orden:
---   1. migracion-e4.sql   2. migracion-nombres.sql   3. este archivo
+--   1. 001-e4.sql   2. 002-nombres.sql   3. este archivo
 -- Usa los nombres en singular (usuario, vehiculo). Es idempotente: se puede volver a correr.
 -- Una base nueva no la necesita: schema.sql ya trae todo.
 
