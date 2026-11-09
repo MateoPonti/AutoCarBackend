@@ -146,6 +146,7 @@ Todas están en el back (el front repite algunas para avisar antes, pero la que 
 **Pedir una inspección**
 - La pide y la paga **el comprador**. El vendedor no la elige ni la paga.
 - Solo links de **MercadoLibre, Kavak, Autocosmos o AutoCar** (`Fuente`); otro sitio, 422. Se controla el dominio, **no** que el auto esté entre los que juntó el scraper.
+- Si el comprador llega desde un aviso ("Mandale un mecánico" en el detalle del auto o en el metabuscador), el front deja el link **fijo**. Sin aviso, lo pega a mano (lo pidió el profe: un auto de cualquiera de esos sitios).
 - Solo mecánicos **de la red**: taller aprobado y activo, cuenta activa y con `verificaciones.realizar`.
 - 409 si hay interés propio: el mecánico no se pide una a sí mismo (`mecanico_propio`), el vendedor no la pide para su auto (`vehiculo_propio`), no se elige al mecánico que publicó el auto (`mecanico_vendedor`), y no se pide dos veces el mismo link mientras hay una en curso (`duplicada`).
 
