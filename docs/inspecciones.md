@@ -1,6 +1,6 @@
 # Inspecciones: el mecánico que firma
 
-Estado al 08/11/2026, en `dev` (vino de la rama `feat/inspecciones`). Ya están **la base de datos y las reglas de negocio**, con pruebas. Faltan los endpoints. El porqué del modelo y el plan completo están en `modelo-de-negocio/README.md` y `PLAN.md` del repo del front.
+Estado al 09/11/2026, en `dev` y `main`: la base, las reglas de negocio y todos los endpoints están hechos y con pruebas. Las reglas juntas están en el § 8. El porqué del modelo y el plan completo están en `modelo-de-negocio/README.md` y `PLAN.md` del repo del front.
 
 ## 1. La idea
 
@@ -100,7 +100,7 @@ Orden: primero el puntaje, después la cantidad de firmadas, y los nuevos al fin
 
 ## 6. Datos de demo
 
-`database/007-demo-inspecciones-solo-dev.sql`, **solo para la base de dev**: 5 mecánicos de Mercedes y Luján con su taller, marcados como demo. La contraseña de todos es `mecanico-demo`. Las inspecciones firmadas de ejemplo se van a cargar con la API cuando esté la firma, para que la huella de cada informe sea la real.
+`database/007-demo-inspecciones-solo-dev.sql`, **solo para la base de dev**: 5 mecánicos de Mercedes y Luján con su taller, marcados como demo. La contraseña de todos es `mecanico-demo`. Las inspecciones firmadas de ejemplo (para que el ranking tenga números) se cargan con `php bin/demo-historial.php`, que firma con el mismo código que la API: así la huella de cada informe es la real.
 
 ## 7. Endpoints: hechos y pendientes
 
@@ -130,3 +130,38 @@ Los números son los del `PLAN.md`. Los controladores son `InspeccionController`
 Todavía no está decidido y no afecta a esta base:
 - Qué datos del auto externo se completan solos con lo que juntó el scraper y cuáles carga el comprador.
 - El precio de referencia ($ 130.000), el plazo para reclamar y el tope de la compensación. Son constantes (`Precio`, `Estados`): se cambian en un solo lugar.
+
+## 8. Reglas de negocio (resumen)
+
+Todas están en el back (el front repite algunas para avisar antes, pero la que vale es la del back). Las constantes se cambian en un solo lugar.
+
+**Cuenta del taller ("Adherí tu taller")**
+- La cuenta del taller es **aparte** de la cuenta personal. Se crea con la solicitud, sin sesión (`POST /api/solicitudes-taller`).
+- **Un email es una sola cuenta**: si el email ya tiene cuenta (aunque cambien mayúsculas), 422. El login es el mismo para todos; el panel depende del rol.
+- Mientras la solicitud está **pendiente** o **rechazada**, la cuenta no puede ingresar (403 `taller_pendiente` / `taller_rechazado` con el motivo) y el taller no aparece en el ranking.
+- La aprueba o rechaza **un admin** (`usuarios.editar`), nunca el propio taller. El rechazo lleva un motivo (5 a 300 caracteres).
+- Rechazada, se vuelve a mandar con **el mismo email y la misma contraseña** (con otra, 422: así nadie pisa la solicitud de otro).
+- En el front, el formulario se muestra solo **sin sesión**.
+
+**Pedir una inspección**
+- La pide y la paga **el comprador**. El vendedor no la elige ni la paga.
+- Solo links de **MercadoLibre, Kavak, Autocosmos o AutoCar** (`Fuente`); otro sitio, 422. Se controla el dominio, **no** que el auto esté entre los que juntó el scraper.
+- Si el comprador llega desde un aviso ("Mandale un mecánico" en el detalle del auto o en el metabuscador), el front deja el link **fijo**. Sin aviso, lo pega a mano (lo pidió el profe: un auto de cualquiera de esos sitios).
+- Solo mecánicos **de la red**: taller aprobado y activo, cuenta activa y con `verificaciones.realizar`.
+- 409 si hay interés propio: el mecánico no se pide una a sí mismo (`mecanico_propio`), el vendedor no la pide para su auto (`vehiculo_propio`), no se elige al mecánico que publicó el auto (`mecanico_vendedor`), y no se pide dos veces el mismo link mientras hay una en curso (`duplicada`).
+
+**Plata (`Precio`, el pago todavía es simulado)**
+- Precio de referencia **$ 130.000** (cada taller pone el suyo). **77 %** para el mecánico y **23 %** para AutoCar (`COMISION`); de lo de AutoCar, **un tercio** va al fondo de garantía que paga los reclamos (`PARTE_FONDO`). Se redondea a $ 1.000.
+- Los montos se guardan al pedirla: si el taller cambia el precio después, no afecta a las pedidas.
+- Pago: `retenido` al pedir → `liberado` al firmar, o `reembolsado` si el mecánico la rechaza, el comprador la cancela o el reclamo procede.
+
+**El informe**
+- El mecánico acepta con un turno de **hasta 60 días** o rechaza con motivo.
+- Checklist de **10 ítems** (`ok`, `observado` o `falla`); lo que no está `ok` exige nota. Conclusión: `recomendable`, `con_reparos` o `no_recomendable`.
+- Para firmar hacen falta los 10 ítems y la conclusión. La firma guarda el nombre del mecánico y del taller, el momento y la **huella SHA-256**. Firmada, **no cambia más** (409).
+
+**Reclamos y ranking**
+- El comprador tiene **15 días** desde la firma para reclamar, **una sola vez** (`DIAS_RECLAMO`).
+- Lo resuelve un moderador o admin (`reclamos.resolver`), nunca alguien con interés en esa inspección (`interes_propio`).
+- Si procede: se devuelve el pago y la compensación llega hasta **3 veces** el precio (`TOPE_VECES`).
+- Ranking: `5 × (1 − 2 × procedentes ÷ firmadas)`, mínimo 0; con **menos de 3** firmadas, "Nuevo en la red" (§ 5). Nadie paga para subir.
