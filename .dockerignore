@@ -9,3 +9,5 @@ tests
 phpunit.xml.dist
 .phpunit.cache
 .claude
+recolectores
+storage/mercado

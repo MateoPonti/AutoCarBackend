@@ -6,3 +6,5 @@
 cookies.txt
 .phpunit.cache/
 .claude/
+/postman/
+/storage/mercado/
