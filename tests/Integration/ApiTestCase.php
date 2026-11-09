@@ -71,6 +71,45 @@ abstract class ApiTestCase extends TestCase
         return ['status' => $status, 'json' => json_decode(substr($crudo, $largoCabeceras), true), 'headers' => $headers];
     }
 
+    /**
+     * POST multipart/form-data, como el formulario de publicar: $campos de texto y $fotos PNG generadas en el momento.
+     * @return array{status: int, json: mixed}
+     */
+    protected function pedirFormulario(string $ruta, array $campos, int $fotos = 0): array
+    {
+        $h = ['Accept: application/json'];
+        if ($this->cookie !== null) {
+            $h[] = 'Cookie: autocar_sesion=' . $this->cookie;
+        }
+        if ($this->csrf !== null) {
+            $h[] = 'X-CSRF-Token: ' . $this->csrf;
+        }
+        // Un PNG de 1×1 píxel (el back revisa el contenido, no la extensión)
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+        $archivos = [];
+        for ($i = 0; $i < $fotos; $i++) {
+            $ruta_tmp = tempnam(sys_get_temp_dir(), 'foto');
+            file_put_contents($ruta_tmp, $png);
+            $archivos[] = $ruta_tmp;
+            $campos["fotos[$i]"] = new \CURLFile($ruta_tmp, 'image/png', "foto$i.png");
+        }
+
+        $c = curl_init(Entorno::url() . $ruta);
+        curl_setopt_array($c, [
+            CURLOPT_POST => true,
+            CURLOPT_HTTPHEADER => $h,
+            CURLOPT_POSTFIELDS => $campos,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 20,
+        ]);
+        $cuerpo = (string)curl_exec($c);
+        $status = (int)curl_getinfo($c, CURLINFO_RESPONSE_CODE);
+        foreach ($archivos as $archivo) {
+            unlink($archivo);
+        }
+        return ['status' => $status, 'json' => json_decode($cuerpo, true)];
+    }
+
     protected static function emailNuevo(): string
     {
         return 'it+' . bin2hex(random_bytes(5)) . '@autocar.test';

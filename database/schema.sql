@@ -70,6 +70,8 @@ CREATE INDEX IF NOT EXISTS idx_usuario_rol ON usuario (rol_id);
 
 -- usuario_id: dueño de la publicación (NULL en los que carga el admin). Una publicación de un usuario
 -- nace 'pendiente' y el catálogo público sólo muestra las 'disponible'.
+-- Se publica por partes (010-publicar-por-partes.sql): con marca, modelo y año ya se crea, y el resto se completa
+-- después. Por eso precio, kilometraje, combustible y transmisión pueden estar vacíos, pero no en una visible.
 CREATE TABLE IF NOT EXISTS vehiculo (
   id           INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   usuario_id   INTEGER       REFERENCES usuario(id),
@@ -77,10 +79,10 @@ CREATE TABLE IF NOT EXISTS vehiculo (
   modelo       VARCHAR(60)   NOT NULL,
   version      VARCHAR(60),
   anio         SMALLINT      NOT NULL CHECK (anio BETWEEN 1950 AND 2100),
-  precio       NUMERIC(11,2) NOT NULL CHECK (precio > 0),
-  kilometraje  INTEGER       NOT NULL DEFAULT 0 CHECK (kilometraje >= 0),
-  combustible  VARCHAR(10)   NOT NULL CHECK (combustible IN ('nafta', 'diesel', 'gnc', 'hibrido', 'electrico')),
-  transmision  VARCHAR(10)   NOT NULL CHECK (transmision IN ('manual', 'automatica')),
+  precio       NUMERIC(11,2) CHECK (precio > 0),
+  kilometraje  INTEGER       CHECK (kilometraje >= 0),
+  combustible  VARCHAR(10)   CHECK (combustible IN ('nafta', 'diesel', 'gnc', 'hibrido', 'electrico')),
+  transmision  VARCHAR(10)   CHECK (transmision IN ('manual', 'automatica')),
   condicion    VARCHAR(10)   CHECK (condicion IN ('excelente', 'muy_bueno', 'bueno', 'regular')),
   estado       VARCHAR(12)   NOT NULL DEFAULT 'disponible'
                CONSTRAINT vehiculo_estado_check
@@ -92,7 +94,11 @@ CREATE TABLE IF NOT EXISTS vehiculo (
   localidad    VARCHAR(100),
   motivo_rechazo VARCHAR(300), -- lo escribe el admin al rechazar; el dueño lo ve en sus publicaciones
   created_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
-  updated_at   TIMESTAMPTZ   NOT NULL DEFAULT now()
+  updated_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  CONSTRAINT vehiculo_completo_si_visible CHECK (
+    estado NOT IN ('disponible', 'vendido')
+    OR (precio IS NOT NULL AND kilometraje IS NOT NULL AND combustible IS NOT NULL AND transmision IS NOT NULL)
+  )
 );
 
 CREATE INDEX IF NOT EXISTS idx_vehiculo_marca ON vehiculo (marca);

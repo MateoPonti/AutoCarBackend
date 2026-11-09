@@ -54,6 +54,7 @@ final class CatalogoController
         $estado = $texto('estado', 12);
         return [
             'estado'      => in_array($estado, Vehiculo::ESTADOS, true) ? $estado : '', // sólo lo usa el admin
+            'completa'    => in_array($texto('completa', 1), ['0', '1'], true) ? $texto('completa', 1) : '', // sólo el admin
             'q'           => $texto('q', 60),
             'marca'       => $texto('marca', 50),
             'combustible' => in_array($comb, Vehiculo::COMBUSTIBLES, true) ? $comb : '',

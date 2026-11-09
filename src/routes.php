@@ -38,6 +38,9 @@ $router->post('/api/mis-vehiculos', [PublicacionController::class, 'crear'], 'au
 $router->put('/api/mis-vehiculos/{id}', [PublicacionController::class, 'actualizar'], 'auth');
 $router->patch('/api/mis-vehiculos/{id}/estado', [PublicacionController::class, 'cambiarEstado'], 'auth');
 $router->delete('/api/mis-vehiculos/{id}', [PublicacionController::class, 'eliminar'], 'auth');
+// Publicar por partes: las fotos se pueden agregar o sacar después de crear la publicación
+$router->post('/api/mis-vehiculos/{id}/fotos', [PublicacionController::class, 'agregarFotos'], 'auth');
+$router->delete('/api/mis-vehiculos/{id}/fotos/{foto}', [PublicacionController::class, 'eliminarFoto'], 'auth');
 
 // Chat entre interesado y vendedor (sólo los participantes ven cada conversación)
 $router->post('/api/vehiculos/{id}/conversacion', [ChatController::class, 'abrir'], 'auth');

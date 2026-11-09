@@ -87,6 +87,11 @@ final class AdminVehiculoController
         if ($errores) {
             Response::error(422, 'validacion', 'Revisá los datos ingresados.', $errores);
         }
+        // Publicar por partes: no se aprueba hasta que el vendedor la complete (rechazarla sí se puede)
+        $faltan = Vehiculo::faltan($actual);
+        if ($nuevo === 'disponible' && $faltan) {
+            Response::error(409, 'incompleta', 'Todavía no se puede aprobar: le falta ' . implode(', ', $faltan) . '.');
+        }
 
         Vehiculo::cambiarEstado($id, $nuevo, $motivo);
         Response::json(['vehiculo' => Vehiculo::paraApi(Vehiculo::find($id))]);
