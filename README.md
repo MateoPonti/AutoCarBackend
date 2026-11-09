@@ -57,6 +57,10 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `PATCH /api/mecanico/inspecciones/{id}` | `verificaciones.realizar` | Solo desde `pedida`: `{"accion":"aceptar","fecha_turno":"ISO 8601"}` (desde ahora y hasta 60 días; hace falta el perfil, si no 409 `sin_taller`) o `{"accion":"rechazar","motivo":"..."}` (pago `reembolsado`). Otro estado → 409 |
 | `PUT /api/mecanico/inspecciones/{id}/informe` | `verificaciones.realizar` | Borrador del checklist `{items: [{codigo, resultado, nota}], conclusion?, resumen?}`, se puede a medias. Solo con la inspección `aceptada`; firmada → 409 `firmada` |
 | `POST /api/mecanico/inspecciones/{id}/firma` | `verificaciones.realizar` | Firma lo guardado: exige los 10 ítems y la conclusión (si no, 422 `informe_incompleto`). Guarda el nombre del mecánico y del taller, el momento y la huella SHA-256; pago `liberado` |
+| `GET /api/mi-solicitud-taller` | sesión | "Adherí tu taller": `{solicitud}` con su `estado` (`pendiente`, `aprobado` o `rechazado`) y el `motivo_rechazo`, o `{solicitud: null}` si nunca pidió sumarse |
+| `POST /api/mi-solicitud-taller` | sesión (rol `usuario`) | Pide sumar su taller a la red: `nombre`, `cuit` (`30-12345678-9`, con o sin guiones), `direccion`, `localidad`, `telefono`, `horarios`, `precio_inspeccion` y `condiciones: true` → 201. Queda `pendiente` y **no** aparece en el ranking. Ya pendiente o aprobada → 409; con otro rol (mecánico, admin, moderador) → 409 `rol`. Si estaba rechazada, la vuelve a mandar |
+| `GET /api/admin/solicitudes-taller?estado=pendiente` | `usuarios.editar` (admin) | Cola de solicitudes con el responsable, su email y su rol |
+| `PATCH /api/admin/solicitudes-taller/{id}` | `usuarios.editar` | `{id}` = usuario. `{aprobar: true}`: el taller entra al ranking y el usuario pasa a rol `mecanico`. `{aprobar: false, motivo}`: queda rechazada con el motivo (5 a 300 caracteres). Ya resuelta → 409 |
 | `GET /health` | público | Chequeo de vida (no toca la base) |
 
 Las rutas con sesión o con permiso que cambian datos (`POST`, `PUT`, `PATCH`, `DELETE`) exigen además el header `X-CSRF-Token` con el valor `csrf` que devolvió el login.
@@ -148,7 +152,7 @@ El código sólo usa funciones de PHP 8.2 o anteriores, así que la diferencia e
 ## Base de datos (Neon)
 
 1. Crear el proyecto en Neon. En la consola, abrir el **SQL Editor** de la rama `production`, pegar el contenido de `database/schema.sql` y ejecutarlo. Después hacer lo mismo con `database/seed.sql` (datos de prueba).
-   Si la base ya existía de una entrega anterior, en vez de `schema.sql` correr las migraciones en orden: `001-e4.sql`, `002-nombres.sql`, `003-chat.sql`, `004-sesion.sql`, `005-roles.sql`, `006-inspecciones.sql` y `008-separar-version.sql` (todas se pueden correr más de una vez). Solo en dev, para tener mecánicos de ejemplo: `007-demo-inspecciones-solo-dev.sql`.
+   Si la base ya existía de una entrega anterior, en vez de `schema.sql` correr las migraciones en orden: `001-e4.sql`, `002-nombres.sql`, `003-chat.sql`, `004-sesion.sql`, `005-roles.sql`, `006-inspecciones.sql`, `008-separar-version.sql` y `009-solicitud-taller.sql` (todas se pueden correr más de una vez). Solo en dev, para tener mecánicos de ejemplo: `007-demo-inspecciones-solo-dev.sql`.
    **Migraciones nuevas:** formato obligatorio `NNN-nombre.sql` con el número que sigue (`008-algo.sql`), idempotentes y con el mismo cambio en `schema.sql`. Reglas completas en [`database/README.md`](database/README.md); una prueba hace fallar el CI si el nombre no cumple.
 2. Botón **Connect** → desactivar **Connection pooling** → copiar host, base (`neondb`), usuario y contraseña. Esos valores van a `DB_HOST`, `DB_NAME`, `DB_USER` y `DB_PASS` (`DB_PORT` es 5432).
 3. Para desarrollar sin tocar producción: **Create child branch** (por ejemplo `dev`) y usar sus datos en el `.env` local.

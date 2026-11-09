@@ -153,6 +153,8 @@ CREATE INDEX IF NOT EXISTS idx_sesion_vence ON sesion (vence);
 -- Inspecciones independientes (ver 006-inspecciones.sql): el comprador elige al mecánico y el mecánico firma.
 -- Un mecánico (usuario con rol mecanico) tiene UN taller. Sin el perfil completo no aparece en el ranking.
 -- demo = true en los talleres de ejemplo (database/007-demo-inspecciones-solo-dev.sql, solo en dev).
+-- estado: un usuario pide sumar su taller ("Adherí tu taller", 009-solicitud-taller.sql) y queda 'pendiente'
+-- hasta que un admin lo aprueba (pasa a rol mecanico) o lo rechaza con un motivo. Solo los aprobados están en la red.
 CREATE TABLE IF NOT EXISTS taller (
   usuario_id        INTEGER       PRIMARY KEY REFERENCES usuario(id),
   nombre            VARCHAR(80)   NOT NULL,
@@ -162,11 +164,19 @@ CREATE TABLE IF NOT EXISTS taller (
   precio_inspeccion NUMERIC(11,2) NOT NULL CHECK (precio_inspeccion > 0),
   activo            BOOLEAN       NOT NULL DEFAULT true,
   demo              BOOLEAN       NOT NULL DEFAULT false,
+  cuit              VARCHAR(13),
+  horarios          VARCHAR(80),
+  estado            VARCHAR(10)   NOT NULL DEFAULT 'aprobado',
+  motivo_rechazo    VARCHAR(300),
+  resuelto_por      INTEGER       REFERENCES usuario(id),
+  resuelto_at       TIMESTAMPTZ,
   created_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),
-  updated_at        TIMESTAMPTZ   NOT NULL DEFAULT now()
+  updated_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  CONSTRAINT taller_estado_check CHECK (estado IN ('pendiente', 'aprobado', 'rechazado'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_taller_localidad ON taller (localidad);
+CREATE INDEX IF NOT EXISTS idx_taller_estado ON taller (estado, created_at);
 
 -- El auto puede ser de cualquier sitio: url + fuente siempre; vehiculo_id solo si es de AutoCar.
 -- Los montos se guardan al pedirla (el taller puede cambiar su precio después). El pago es simulado.

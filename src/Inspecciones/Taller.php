@@ -14,7 +14,7 @@ final class Taller
     public const PRECIO_MINIMO = 1000;
     public const PRECIO_MAXIMO = 10000000;
 
-    private const COLUMNAS = 'usuario_id, nombre, direccion, localidad, telefono, precio_inspeccion, activo';
+    private const COLUMNAS = 'usuario_id, nombre, direccion, localidad, telefono, precio_inspeccion, activo, estado';
 
     public static function delMecanico(int $usuarioId): ?array
     {
@@ -24,8 +24,9 @@ final class Taller
         return $t ?: null;
     }
 
-    // Quién está en la red: taller activo, cuenta activa y un rol que puede hacer inspecciones
-    private const EN_LA_RED = "t.activo AND u.activo AND EXISTS (
+    // Quién está en la red: taller aprobado y activo, cuenta activa y un rol que puede hacer inspecciones.
+    // Un taller 'pendiente' (pidió sumarse desde "Adherí tu taller") no aparece hasta que lo aprueba un admin.
+    private const EN_LA_RED = "t.estado = 'aprobado' AND t.activo AND u.activo AND EXISTS (
         SELECT 1 FROM rol_permiso rp JOIN permiso p ON p.id = rp.permiso_id
         WHERE rp.rol_id = u.rol_id AND p.nombre = 'verificaciones.realizar')";
 
@@ -162,6 +163,7 @@ final class Taller
             'telefono'          => $t['telefono'],
             'precio_inspeccion' => (float)$t['precio_inspeccion'],
             'activo'            => (bool)$t['activo'],
+            'estado'            => $t['estado'],
         ];
     }
 }
