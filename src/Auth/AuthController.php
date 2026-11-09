@@ -5,6 +5,7 @@ namespace AutoCar\Auth;
 
 use AutoCar\Core\Request;
 use AutoCar\Core\Response;
+use AutoCar\Inspecciones\SolicitudTaller;
 use PDOException;
 
 final class AuthController
@@ -16,23 +17,7 @@ final class AuthController
         $email   = mb_strtolower(Request::texto($in, 'email'));
         $pass    = is_string($in['password'] ?? null) ? $in['password'] : '';
         $confirm = is_string($in['password_confirm'] ?? null) ? $in['password_confirm'] : $pass; // opcional
-        $errores = [];
-
-        $len = mb_strlen($nombre);
-        if ($len < 2 || $len > 80) {
-            $errores['nombre'] = 'Ingresá tu nombre (entre 2 y 80 caracteres).';
-        }
-        if (strlen($email) > 254 || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $errores['email'] = 'Ingresá un email válido.';
-        }
-        if (strlen($pass) < 8 || strlen($pass) > 72) {
-            $errores['password'] = 'La contraseña debe tener entre 8 y 72 caracteres.';
-        } elseif (!preg_match('/[A-Za-z]/', $pass) || !preg_match('/\d/', $pass)) {
-            $errores['password'] = 'La contraseña necesita al menos una letra y un número.';
-        }
-        if ($pass !== $confirm) {
-            $errores['password_confirm'] = 'Las contraseñas no coinciden.';
-        }
+        $errores = Usuario::validarCuenta($nombre, $email, $pass, $confirm);
         if ($errores) {
             Response::error(422, 'validacion', 'Revisá los datos ingresados.', $errores);
         }
@@ -71,6 +56,18 @@ final class AuthController
         // Recién con la contraseña correcta se dice que la cuenta está dada de baja (no revela qué emails existen)
         if (!$usuario['activo']) {
             Response::error(403, 'cuenta_deshabilitada', 'Tu cuenta está dada de baja. Si creés que es un error, escribinos.');
+        }
+        // La cuenta de un taller ingresa recién cuando un admin aprueba la solicitud ("Adherí tu taller")
+        if ($usuario['rol'] === 'mecanico') {
+            $taller = SolicitudTaller::delUsuario((int)$usuario['id']);
+            if ($taller !== null && $taller['estado'] === 'pendiente') {
+                Response::error(403, 'taller_pendiente',
+                    'Tu taller todavía está en revisión. Vas a poder ingresar cuando un administrador apruebe la solicitud.');
+            }
+            if ($taller !== null && $taller['estado'] === 'rechazado') {
+                Response::error(403, 'taller_rechazado', 'La solicitud de tu taller fue rechazada. Motivo: '
+                    . $taller['motivo_rechazo'] . ' Corregí los datos y volvé a mandarla desde "Adherí tu taller" con el mismo email y contraseña.');
+            }
         }
 
         // El id de sesión va solo en la cookie HttpOnly; al front se le da el token CSRF para mandarlo en cada cambio
