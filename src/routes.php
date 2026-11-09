@@ -82,8 +82,7 @@ $router->put('/api/mecanico/inspecciones/{id}/informe', [MecanicoController::cla
 $router->post('/api/mecanico/inspecciones/{id}/firma', [MecanicoController::class, 'firmar'], $mecanico);
 // "Adherí tu taller": el usuario pide sumarse y un admin lo aprueba (pasa a rol mecanico) o lo rechaza.
 // Aprobar le cambia el rol al usuario, por eso pide el mismo permiso que editar usuarios.
-$router->get('/api/mi-solicitud-taller', [SolicitudTallerController::class, 'mia'], 'auth');
-$router->post('/api/mi-solicitud-taller', [SolicitudTallerController::class, 'enviar'], 'auth');
+$router->post('/api/solicitudes-taller', [SolicitudTallerController::class, 'enviar']);
 $router->get('/api/admin/solicitudes-taller', [SolicitudTallerController::class, 'index'], 'permiso:usuarios.editar');
 $router->patch('/api/admin/solicitudes-taller/{id}', [SolicitudTallerController::class, 'resolver'], 'permiso:usuarios.editar');
 

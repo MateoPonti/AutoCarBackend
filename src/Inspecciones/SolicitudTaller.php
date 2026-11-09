@@ -7,10 +7,11 @@ use AutoCar\Core\Database;
 use DateTimeImmutable;
 
 /**
- * "Adherí tu taller": un usuario pide sumar su taller a la red y un admin lo aprueba o lo rechaza.
+ * "Adherí tu taller": un taller pide sumarse a la red y un admin lo aprueba o lo rechaza.
+ * La cuenta del taller es aparte de la cuenta personal (otro email): se crea con la solicitud, con rol mecanico,
+ * y no puede ingresar mientras la solicitud está pendiente o rechazada (ver AuthController::login).
  * La solicitud es la misma fila de la tabla taller, con estado 'pendiente', 'aprobado' o 'rechazado'.
  * Mientras está pendiente o rechazada, el taller no aparece en el ranking (ver Taller::EN_LA_RED).
- * Al aprobarla, el usuario pasa a rol mecanico: desde ahí entra con su usuario de siempre y ve su panel.
  */
 final class SolicitudTaller
 {
@@ -93,7 +94,7 @@ final class SolicitudTaller
     }
 
     /**
-     * Guarda la solicitud como pendiente. Si el usuario ya tenía una rechazada, la reemplaza (puede volver a pedir).
+     * Guarda la solicitud como pendiente. Si la cuenta ya tenía una rechazada, la reemplaza (puede volver a pedir).
      * Se llama después de revisar que no tenga una pendiente ni aprobada.
      */
     public static function guardar(int $usuarioId, array $datos): void
@@ -137,7 +138,8 @@ final class SolicitudTaller
 
     /**
      * Aprueba o rechaza. Se llama dentro de una transacción con la solicitud bloqueada y todavía pendiente.
-     * Al aprobar, el usuario pasa a rol mecanico (si era un usuario común: a un admin o moderador no se le baja el rol).
+     * Las cuentas nuevas ya nacen mecanico. Las solicitudes viejas (de antes de la cuenta aparte) se mandaban con
+     * una cuenta común: al aprobarlas, ese usuario pasa a mecanico (a un admin o moderador no se le baja el rol).
      */
     public static function resolver(int $usuarioId, bool $aprobar, ?string $motivo, int $resueltoPor): void
     {

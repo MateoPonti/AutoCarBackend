@@ -15,7 +15,7 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | Método y ruta | Acceso | Descripción |
 |---|---|---|
 | `POST /api/registro` | público | Crea una cuenta (`nombre`, `email`, `password`, `password_confirm` opcional). Rol siempre `usuario`. → 201 |
-| `POST /api/login` | público | `email`, `password` → `{csrf, expira_en, usuario}` y la cookie de sesión (`Set-Cookie`) |
+| `POST /api/login` | público | `email`, `password` → `{csrf, expira_en, usuario}` y la cookie de sesión (`Set-Cookie`). La cuenta de un taller con la solicitud pendiente o rechazada → 403 `taller_pendiente` o `taller_rechazado` (con el motivo) |
 | `POST /api/logout` | público | Borra la cookie de sesión → 204 |
 | `GET /api/me` | sesión | `{usuario, csrf}` del usuario autenticado |
 | `GET /api/vehiculos` | público | Listado. Filtros: `q`, `marca`, `combustible`, `precio_max`, `page` |
@@ -70,15 +70,14 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `PATCH /api/mecanico/inspecciones/{id}` | `verificaciones.realizar` | Solo desde `pedida`: `{"accion":"aceptar","fecha_turno":"ISO 8601"}` (desde ahora y hasta 60 días; hace falta el perfil, si no 409 `sin_taller`) o `{"accion":"rechazar","motivo":"..."}` (pago `reembolsado`). Otro estado → 409 |
 | `PUT /api/mecanico/inspecciones/{id}/informe` | `verificaciones.realizar` | Borrador del checklist `{items: [{codigo, resultado, nota}], conclusion?, resumen?}`, se puede a medias. Solo con la inspección `aceptada`; firmada → 409 `firmada` |
 | `POST /api/mecanico/inspecciones/{id}/firma` | `verificaciones.realizar` | Firma lo guardado: exige los 10 ítems y la conclusión (si no, 422 `informe_incompleto`). Guarda el nombre del mecánico y del taller, el momento y la huella SHA-256; pago `liberado` |
-| `GET /api/mi-solicitud-taller` | sesión | "Adherí tu taller": `{solicitud}` con su `estado` (`pendiente`, `aprobado` o `rechazado`) y el `motivo_rechazo`, o `{solicitud: null}` si nunca pidió sumarse |
-| `POST /api/mi-solicitud-taller` | sesión (rol `usuario`) | Pide sumar su taller a la red: `nombre`, `cuit` (`30-12345678-9`, con o sin guiones), `direccion`, `localidad`, `telefono`, `horarios`, `precio_inspeccion` y `condiciones: true` → 201. Queda `pendiente` y **no** aparece en el ranking. Ya pendiente o aprobada → 409; con otro rol (mecánico, admin, moderador) → 409 `rol`. Si estaba rechazada, la vuelve a mandar |
+| `POST /api/solicitudes-taller` | público | "Adherí tu taller". Crea la **cuenta del taller**, aparte de la cuenta personal: `responsable`, `email`, `password` y los datos del taller (`nombre`, `cuit` en formato `30-12345678-9` con o sin guiones, `direccion`, `localidad`, `telefono`, `horarios`, `precio_inspeccion`, `condiciones: true`) → 201 `{solicitud}`. La cuenta nace con rol `mecanico`, pero no puede ingresar ni aparece en el ranking hasta que un admin la aprueba. Si el email ya tiene una cuenta → 422 en `email` (un email es una sola cuenta). Si ya hay una solicitud pendiente con ese email → 409. Si estaba rechazada, se vuelve a mandar con la misma contraseña (con otra → 422 en `password`) |
 | `GET /api/admin/solicitudes-taller?estado=pendiente` | `usuarios.editar` (admin) | Cola de solicitudes con el responsable, su email y su rol |
-| `PATCH /api/admin/solicitudes-taller/{id}` | `usuarios.editar` | `{id}` = usuario. `{aprobar: true}`: el taller entra al ranking y el usuario pasa a rol `mecanico`. `{aprobar: false, motivo}`: queda rechazada con el motivo (5 a 300 caracteres). Ya resuelta → 409 |
+| `PATCH /api/admin/solicitudes-taller/{id}` | `usuarios.editar` | `{id}` = usuario. `{aprobar: true}`: el taller entra al ranking y su cuenta ya puede ingresar. `{aprobar: false, motivo}`: queda rechazada con el motivo (5 a 300 caracteres). Ya resuelta → 409 |
 | `GET /health` | público | Chequeo de vida (no toca la base) |
 
 Las rutas con sesión o con permiso que cambian datos (`POST`, `PUT`, `PATCH`, `DELETE`) exigen además el header `X-CSRF-Token` con el valor `csrf` que devolvió el login.
 
-Códigos: `400` JSON inválido, `401` sin sesión o sesión vencida, `403` sin el permiso o token CSRF incorrecto (o cuenta dada de baja, en el login), `404` no existe, `405` método no permitido, `422` validación, `500` error del servidor.
+Códigos: `400` JSON inválido, `401` sin sesión o sesión vencida, `403` sin el permiso o token CSRF incorrecto (o, en el login, cuenta dada de baja o taller todavía no aprobado), `404` no existe, `405` método no permitido, `422` validación, `500` error del servidor.
 
 Campos de un vehículo: `marca`, `modelo`, `anio`, `precio`, `kilometraje`, `combustible` (`nafta|diesel|gnc|hibrido|electrico`), `transmision` (`manual|automatica`), `estado` (`disponible|vendido`), `descripcion` (opcional), `imagen_url` (opcional, URL http/https).
 

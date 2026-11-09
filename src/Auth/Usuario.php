@@ -33,14 +33,43 @@ final class Usuario
         return $st->fetch() ?: null;
     }
 
-    public static function crear(string $nombre, string $email, string $hash): int
+    /**
+     * Valida los datos de una cuenta nueva (registro y "Adherí tu taller"). Función pura (se prueba sin base).
+     * @return array<string, string> errores por campo: nombre, email, password, password_confirm
+     */
+    public static function validarCuenta(string $nombre, string $email, string $pass, string $confirm): array
     {
-        // Un registro público siempre nace con el rol 'usuario'; los demás roles los asigna el admin.
+        $errores = [];
+        $len = mb_strlen($nombre);
+        if ($len < 2 || $len > 80) {
+            $errores['nombre'] = 'Ingresá tu nombre (entre 2 y 80 caracteres).';
+        }
+        if (strlen($email) > 254 || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $errores['email'] = 'Ingresá un email válido.';
+        }
+        if (strlen($pass) < 8 || strlen($pass) > 72) {
+            $errores['password'] = 'La contraseña debe tener entre 8 y 72 caracteres.';
+        } elseif (!preg_match('/[A-Za-z]/', $pass) || !preg_match('/\d/', $pass)) {
+            $errores['password'] = 'La contraseña necesita al menos una letra y un número.';
+        }
+        if ($pass !== $confirm) {
+            $errores['password_confirm'] = 'Las contraseñas no coinciden.';
+        }
+        return $errores;
+    }
+
+    /**
+     * Un registro público nace con el rol 'usuario'. La cuenta de un taller ("Adherí tu taller") nace 'mecanico',
+     * pero no puede ingresar hasta que un admin apruebe la solicitud (ver AuthController::login).
+     * Los demás roles los asigna el admin.
+     */
+    public static function crear(string $nombre, string $email, string $hash, string $rol = 'usuario'): int
+    {
         $st = Database::pdo()->prepare(
             "INSERT INTO usuario (nombre, email, password_hash, rol_id)
-             VALUES (:nombre, :email, :hash, (SELECT id FROM rol WHERE nombre = 'usuario')) RETURNING id"
+             VALUES (:nombre, :email, :hash, (SELECT id FROM rol WHERE nombre = :rol)) RETURNING id"
         );
-        $st->execute(['nombre' => $nombre, 'email' => $email, 'hash' => $hash]);
+        $st->execute(['nombre' => $nombre, 'email' => $email, 'hash' => $hash, 'rol' => $rol]);
         return (int)$st->fetchColumn();
     }
 
