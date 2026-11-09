@@ -30,6 +30,10 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `DELETE /api/mis-vehiculos/{id}/fotos/{foto}` | sesión (dueño) | Saca una foto. Vuelve a `pendiente` |
 | `PATCH /api/mis-vehiculos/{id}/estado` | sesión (dueño) | `{"estado":"vendido"}`, solo desde `disponible` |
 | `DELETE /api/mis-vehiculos/{id}` | sesión (dueño) | Baja lógica → 204 |
+| `POST /api/vehiculos/{id}/conversacion` | sesión | Abre (o recupera) el chat con el vendedor de ese vehículo → 201 si es nueva, 200 si ya existía: `{conversacion: {id}}`. Sobre la publicación propia → 409 `vehiculo_propio`; sin vendedor (cargado por el admin) → 409 `sin_vendedor` |
+| `GET /api/conversaciones` | sesión | Bandeja de chats del usuario, la de actividad más reciente primero |
+| `GET /api/conversaciones/{id}/mensajes?desde=N` | sesión (participante) | Mensajes con id mayor a `N` (sin `desde`, todos) → `{items, ultimo_id, abierta}`. Los que devuelve quedan leídos. El front guarda `ultimo_id` y pregunta cada tanto por los nuevos. De otro → 404 |
+| `POST /api/conversaciones/{id}/mensajes` | sesión (participante) | `{"texto": "..."}` (hasta 1000 caracteres) → 201 `{mensaje}`. Si la publicación se eliminó → 409 `conversacion_cerrada` |
 | `GET /api/fotos/{id}` | público / dueño | La foto. Las de publicaciones visibles son públicas; las de una pendiente o rechazada solo las ven el dueño y el moderador (si no, 404) |
 | `GET /api/admin/vehiculos?estado=pendiente&completa=1` | `vehiculos.moderar` o `vehiculos.gestionar` | Listado / cola de moderación. `completa=1`: solo las que se pueden aprobar; `completa=0`: las que el vendedor todavía está completando |
 | `GET /api/admin/vehiculos/{id}` | `vehiculos.moderar` o `vehiculos.gestionar` | Detalle con fotos y quién lo publicó |
