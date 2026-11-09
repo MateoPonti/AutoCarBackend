@@ -13,6 +13,8 @@ final class Pedido
     public const MAX_LOCALIDAD = 100;
     public const MAX_KM        = 2000000;
     public const MAX_PRECIO    = 99999999999; // NUMERIC(13,2)
+    // Los links de otros sitios se rechazan: el mecánico no abre links de un sitio cualquiera
+    public const SOLO_SITIOS_CONOCIDOS = 'Por ahora solo inspeccionamos autos publicados en MercadoLibre, Kavak, Autocosmos o AutoCar.';
 
     /**
      * Valida el cuerpo del pedido.
@@ -26,6 +28,9 @@ final class Pedido
         $fuente = Fuente::detectar($url, $hostsAutoCar);
         if ($fuente === null) {
             $errores['url'] = 'Pegá el link completo del aviso (empieza con https://).';
+        } elseif ($fuente['fuente'] === 'otro') {
+            // Solo sitios conocidos: así el mecánico nunca abre un link de un sitio cualquiera
+            $errores['url'] = self::SOLO_SITIOS_CONOCIDOS;
         }
 
         $mecanico = filter_var($in['mecanico_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);

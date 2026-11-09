@@ -45,6 +45,17 @@ final class InspeccionesCompradorTest extends TestCase
         self::assertArrayHasKey('url', self::pedido(['url' => 'javascript:alert(1)', 'mecanico_id' => 1])[1]);
     }
 
+    public function testSoloAceptaLinksDeSitiosConocidos(): void
+    {
+        [, $errores] = self::pedido(['url' => 'https://www.otrositio.com/auto/1', 'mecanico_id' => 7]);
+        self::assertSame(Pedido::SOLO_SITIOS_CONOCIDOS, $errores['url']);
+        [, $errores] = self::pedido(['url' => 'https://mercadolibre.com.ar.estafa.com/MLA-1', 'mecanico_id' => 7]);
+        self::assertArrayHasKey('url', $errores);
+        // Un link de AutoCar que no es de un vehículo tampoco
+        [, $errores] = self::pedido(['url' => 'https://autocar-zeta.vercel.app/front/catalogo.html?id=7', 'mecanico_id' => 7]);
+        self::assertArrayHasKey('url', $errores);
+    }
+
     public function testDatosOpcionalesDelAuto(): void
     {
         [$datos, $errores] = self::pedido(['url' => self::ML, 'mecanico_id' => 7, 'titulo' => ' VW Gol ',
