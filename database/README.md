@@ -29,4 +29,8 @@ Se copian y pegan enteras en el **SQL Editor de Neon**, primero en la branch `de
 4. **Encabezado:** qué hace, en qué base se corre y si tiene que ir antes de desplegar el back que la usa.
 5. Sumarla a la tabla de arriba.
 
+## Historial de la demo (solo dev)
+
+Después de la 007, `php bin/demo-historial.php` carga inspecciones firmadas de meses anteriores de los 5 mecánicos (31 en total, 2 con reclamo que procedió), firmadas con el mismo código que la API. Sin eso, todos figuran como "Nuevo en la red" y en la demo no se ve al mecánico bajar en el ranking. No es una migración: es un script de PHP porque la huella se calcula en PHP. Toma la base de `.env` o de las variables de entorno, como `bin/importar-autos.php`; para Neon dev, con los datos de conexión de esa branch. Se puede correr más de una vez: si un mecánico ya tiene historial, no le agrega nada.
+
 **Lo que no va acá:** los autos de otros sitios (MercadoLibre, Kavak, Autocosmos), las búsquedas guardadas y los avisos del metabuscador están en **Firestore (NoSQL)**, no en Neon. Ver `docs/arquitectura-scraper.md`, sección 6.
