@@ -24,6 +24,7 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `GET /api/marcas` | público | Marcas existentes (para armar el filtro) |
 | `GET /api/mis-vehiculos` | sesión | Las publicaciones propias (menos las eliminadas), con `estado`, `motivo_rechazo`, `completa` y `faltan` |
 | `POST /api/mis-vehiculos` | sesión | **Publicar por partes** (multipart/form-data). Alcanza con `marca`, `modelo` y `anio`; `precio`, `kilometraje`, `combustible`, `transmision`, `condicion`, `localidad`, el resto de los campos y `fotos[]` (hasta 5, JPG/PNG/WebP, 2 MB c/u) se pueden mandar ahora o después. Lo que viene se valida. Nace `pendiente` → 201 `{vehiculo}` con `completa` y `faltan` (lo que le falta para que el moderador la pueda aprobar) |
+| `GET /api/mis-vehiculos/{id}` | sesión (dueño) | Una publicación propia con todas sus `fotos` (para seguir completándola). De otro → 404 |
 | `PUT /api/mis-vehiculos/{id}` | sesión (dueño) | Completa o edita (JSON, sin fotos): lo que no se manda queda igual. Vuelve a `pendiente`. Vendida → 409 |
 | `POST /api/mis-vehiculos/{id}/fotos` | sesión (dueño) | Agrega `fotos[]` (multipart) a las que ya tiene, hasta 5 entre todas → 201. Vuelve a `pendiente` |
 | `DELETE /api/mis-vehiculos/{id}/fotos/{foto}` | sesión (dueño) | Saca una foto. Vuelve a `pendiente` |

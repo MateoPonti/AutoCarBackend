@@ -35,6 +35,7 @@ $router->get('/api/fotos/{id}', [PublicacionController::class, 'foto']); // cont
 // Publicaciones del usuario logueado
 $router->get('/api/mis-vehiculos', [PublicacionController::class, 'index'], 'auth');
 $router->post('/api/mis-vehiculos', [PublicacionController::class, 'crear'], 'auth');
+$router->get('/api/mis-vehiculos/{id}', [PublicacionController::class, 'detalle'], 'auth');
 $router->put('/api/mis-vehiculos/{id}', [PublicacionController::class, 'actualizar'], 'auth');
 $router->patch('/api/mis-vehiculos/{id}/estado', [PublicacionController::class, 'cambiarEstado'], 'auth');
 $router->delete('/api/mis-vehiculos/{id}', [PublicacionController::class, 'eliminar'], 'auth');

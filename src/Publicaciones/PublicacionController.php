@@ -26,6 +26,13 @@ final class PublicacionController
         Response::json(['items' => array_map([Vehiculo::class, 'paraApi'], $items)]);
     }
 
+    /** GET /api/mis-vehiculos/{id}: una publicación propia con todas sus fotos (para seguir completándola). */
+    public function detalle(int $id): void
+    {
+        $v = self::propio($id);
+        Response::json(['vehiculo' => Vehiculo::paraApi($v) + ['fotos' => Foto::rutasDe($id)]]);
+    }
+
     /**
      * POST /api/mis-vehiculos (multipart/form-data: campos del vehículo + fotos[]).
      * Se publica por partes: con marca, modelo y año ya se crea; lo demás y las fotos se pueden mandar ahora o

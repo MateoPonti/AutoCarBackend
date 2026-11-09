@@ -96,8 +96,14 @@ final class PublicarPorPartesTest extends ApiTestCase
         self::assertCount(3, $sin['json']['vehiculo']['fotos']);
         self::assertSame(404, $this->pedir('DELETE', "/api/mis-vehiculos/$id/fotos/$idFoto")['status']);
 
-        // Las fotos de una publicación ajena no se tocan
+        // El dueño la lee con todas sus fotos
+        $detalle = $this->pedir('GET', "/api/mis-vehiculos/$id");
+        self::assertSame(200, $detalle['status']);
+        self::assertCount(3, $detalle['json']['vehiculo']['fotos']);
+
+        // Las fotos de una publicación ajena no se tocan ni se ven
         $this->ingresarComoUsuario();
+        self::assertSame(404, $this->pedir('GET', "/api/mis-vehiculos/$id")['status']);
         self::assertSame(404, $this->pedirFormulario("/api/mis-vehiculos/$id/fotos", [], 1)['status']);
     }
 
