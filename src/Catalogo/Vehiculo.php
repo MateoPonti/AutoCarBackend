@@ -38,6 +38,12 @@ final class Vehiculo
             $where[] = '(marca ILIKE :q1 OR modelo ILIKE :q2 OR descripcion ILIKE :q3)';
             $params += ['q1' => $like, 'q2' => $like, 'q3' => $like];
         }
+        // Cola del moderador: '1' = solo las completas (las que se pueden aprobar), '0' = solo las incompletas
+        if (($f['completa'] ?? '') === '1') {
+            $where[] = self::COMPLETA_SQL;
+        } elseif (($f['completa'] ?? '') === '0') {
+            $where[] = 'NOT ' . self::COMPLETA_SQL;
+        }
         if (($f['marca'] ?? '') !== '') {
             $where[] = 'marca = :marca';
             $params['marca'] = $f['marca'];
@@ -74,8 +80,47 @@ final class Vehiculo
         return Database::pdo()->query('SELECT DISTINCT marca FROM vehiculo ORDER BY marca')->fetchAll(PDO::FETCH_COLUMN);
     }
 
-    /** Subconsulta con el id de la primera foto subida (para la ficha del listado). */
-    private const PRIMERA_FOTO = '(SELECT f.id FROM vehiculo_foto f WHERE f.vehiculo_id = vehiculo.id ORDER BY f.orden, f.id LIMIT 1) AS foto_id';
+    /**
+     * Subconsultas con el id de la primera foto subida (para la ficha del listado) y la cantidad de fotos
+     * (para saber si la publicación está completa).
+     */
+    private const PRIMERA_FOTO = '(SELECT f.id FROM vehiculo_foto f WHERE f.vehiculo_id = vehiculo.id ORDER BY f.orden, f.id LIMIT 1) AS foto_id,
+        (SELECT COUNT(*) FROM vehiculo_foto f WHERE f.vehiculo_id = vehiculo.id) AS fotos_cantidad';
+
+    /**
+     * Publicar por partes: con marca, modelo y año ya se crea la publicación; estos datos se pueden completar después.
+     * Mientras falte alguno, el moderador no la puede aprobar (ver faltan()). Clave = campo, valor = cómo se lo nombra.
+     */
+    public const PARA_COMPLETAR = [
+        'precio'      => 'precio',
+        'kilometraje' => 'kilometraje',
+        'combustible' => 'combustible',
+        'transmision' => 'transmisión',
+        'condicion'   => 'estado general',
+        'localidad'   => 'localidad',
+    ];
+
+    /**
+     * Lo que le falta a una publicación para que el moderador la pueda aprobar: los datos de PARA_COMPLETAR y al
+     * menos una foto. Los vehículos que carga el admin (sin dueño) no pasan por moderación y no piden condición,
+     * localidad ni fotos. Función pura: recibe la fila con fotos_cantidad.
+     * @return string[] los nombres de lo que falta, vacío si está completa
+     */
+    public static function faltan(array $v): array
+    {
+        $deUsuario = ($v['usuario_id'] ?? null) !== null;
+        $faltan = [];
+        foreach (self::PARA_COMPLETAR as $campo => $nombre) {
+            $opcionalParaElAdmin = in_array($campo, ['condicion', 'localidad'], true);
+            if (($v[$campo] ?? null) === null && ($deUsuario || !$opcionalParaElAdmin)) {
+                $faltan[] = $nombre;
+            }
+        }
+        if ($deUsuario && (int)($v['fotos_cantidad'] ?? 0) === 0) {
+            $faltan[] = 'fotos';
+        }
+        return $faltan;
+    }
 
     public static function find(int $id): ?array
     {
@@ -246,12 +291,40 @@ final class Vehiculo
         return [$datos, $errores];
     }
 
+    /**
+     * La misma regla que faltan(), en SQL, para filtrar la cola del moderador (completas o incompletas).
+     * Si cambia una, cambiar la otra.
+     */
+    private const COMPLETA_SQL = "(precio IS NOT NULL AND kilometraje IS NOT NULL AND combustible IS NOT NULL
+        AND transmision IS NOT NULL AND (usuario_id IS NULL OR (condicion IS NOT NULL AND localidad IS NOT NULL
+        AND EXISTS (SELECT 1 FROM vehiculo_foto f WHERE f.vehiculo_id = vehiculo.id))))";
+
+    /**
+     * Valida una publicación que se carga por partes: marca, modelo y año son obligatorios; los datos de
+     * PARA_COMPLETAR, si vienen vacíos, quedan sin cargar (null) en vez de dar error. Si vienen, se validan igual
+     * que en validar(). El estado siempre es 'pendiente'.
+     * @return array{0: array, 1: array} [datos limpios, errores por campo]
+     */
+    public static function validarPorPartes(array $in): array
+    {
+        [$datos, $errores] = self::validar($in, true);
+        foreach (array_keys(self::PARA_COMPLETAR) as $campo) {
+            if (Request::texto($in, $campo) === '') {
+                unset($errores[$campo]);
+                $datos[$campo] = null;
+            }
+        }
+        return [$datos, $errores];
+    }
+
     /** Fila de la base → JSON con los tipos correctos (NUMERIC llega como texto desde la base). */
     public static function paraApi(array $v): array
     {
         return [
             'id' => (int)$v['id'], 'marca' => $v['marca'], 'modelo' => $v['modelo'], 'anio' => (int)$v['anio'],
-            'precio' => (float)$v['precio'], 'kilometraje' => (int)$v['kilometraje'],
+            // Sin cargar todavía (publicación por partes): null
+            'precio' => $v['precio'] === null ? null : (float)$v['precio'],
+            'kilometraje' => $v['kilometraje'] === null ? null : (int)$v['kilometraje'],
             'combustible' => $v['combustible'], 'transmision' => $v['transmision'], 'estado' => $v['estado'],
             'descripcion' => $v['descripcion'], 'imagen_url' => $v['imagen_url'],
             'version' => $v['version'], 'condicion' => $v['condicion'], 'acepta_canje' => (bool)$v['acepta_canje'],
@@ -260,6 +333,9 @@ final class Vehiculo
             // Ruta relativa a la API: el front le antepone API_URL
             'foto' => isset($v['foto_id']) ? '/api/fotos/' . (int)$v['foto_id'] : null,
             'creado' => date('c', (int)strtotime((string)$v['created_at'])),
+            // Publicar por partes: qué le falta para que el moderador la pueda aprobar
+            'completa' => self::faltan($v) === [],
+            'faltan' => self::faltan($v),
         ];
     }
 }

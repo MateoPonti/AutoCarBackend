@@ -114,4 +114,46 @@ final class VehiculoValidarTest extends TestCase
         self::assertNull($api['motivo_rechazo']);
         self::assertMatchesRegularExpression('/^2026-10-01T/', $api['creado']);
     }
+
+    // --- Publicar por partes
+
+    public function testPorPartesAlcanzaConMarcaModeloYAnio(): void
+    {
+        [$datos, $errores] = Vehiculo::validarPorPartes(['marca' => 'Ford', 'modelo' => 'Ka', 'anio' => '2015']);
+        self::assertSame([], $errores);
+        self::assertSame('pendiente', $datos['estado']);
+        self::assertNull($datos['precio']);
+        self::assertNull($datos['kilometraje']);
+        self::assertNull($datos['combustible']);
+    }
+
+    public function testPorPartesValidaLoQueSiVino(): void
+    {
+        [, $errores] = Vehiculo::validarPorPartes(['marca' => 'Ford', 'modelo' => 'Ka', 'anio' => '2015',
+            'precio' => '10', 'combustible' => 'agua']);
+        self::assertArrayHasKey('precio', $errores);
+        self::assertArrayHasKey('combustible', $errores);
+
+        [, $errores] = Vehiculo::validarPorPartes(['precio' => '9000000']);
+        self::assertArrayHasKey('marca', $errores);
+        self::assertArrayHasKey('anio', $errores);
+    }
+
+    public function testFaltanDeUnaPublicacionDeUsuario(): void
+    {
+        $fila = ['usuario_id' => 3, 'precio' => null, 'kilometraje' => '0', 'combustible' => 'nafta',
+            'transmision' => null, 'condicion' => 'bueno', 'localidad' => null, 'fotos_cantidad' => 0];
+        self::assertSame(['precio', 'transmisión', 'localidad', 'fotos'], Vehiculo::faltan($fila));
+
+        $completa = ['usuario_id' => 3, 'precio' => '9000000', 'kilometraje' => '0', 'combustible' => 'nafta',
+            'transmision' => 'manual', 'condicion' => 'bueno', 'localidad' => 'Mercedes', 'fotos_cantidad' => 1];
+        self::assertSame([], Vehiculo::faltan($completa));
+    }
+
+    public function testElAdminNoNecesitaCondicionLocalidadNiFotos(): void
+    {
+        $fila = ['usuario_id' => null, 'precio' => '9000000', 'kilometraje' => '1000', 'combustible' => 'nafta',
+            'transmision' => 'manual', 'condicion' => null, 'localidad' => null, 'fotos_cantidad' => 0];
+        self::assertSame([], Vehiculo::faltan($fila));
+    }
 }

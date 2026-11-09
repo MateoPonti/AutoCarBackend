@@ -70,6 +70,8 @@ CREATE INDEX IF NOT EXISTS idx_usuario_rol ON usuario (rol_id);
 
 -- usuario_id: dueño de la publicación (NULL en los que carga el admin). Una publicación de un usuario
 -- nace 'pendiente' y el catálogo público sólo muestra las 'disponible'.
+-- Se publica por partes (010-publicar-por-partes.sql): con marca, modelo y año ya se crea, y el resto se completa
+-- después. Por eso precio, kilometraje, combustible y transmisión pueden estar vacíos, pero no en una visible.
 CREATE TABLE IF NOT EXISTS vehiculo (
   id           INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   usuario_id   INTEGER       REFERENCES usuario(id),
@@ -77,10 +79,10 @@ CREATE TABLE IF NOT EXISTS vehiculo (
   modelo       VARCHAR(60)   NOT NULL,
   version      VARCHAR(60),
   anio         SMALLINT      NOT NULL CHECK (anio BETWEEN 1950 AND 2100),
-  precio       NUMERIC(11,2) NOT NULL CHECK (precio > 0),
-  kilometraje  INTEGER       NOT NULL DEFAULT 0 CHECK (kilometraje >= 0),
-  combustible  VARCHAR(10)   NOT NULL CHECK (combustible IN ('nafta', 'diesel', 'gnc', 'hibrido', 'electrico')),
-  transmision  VARCHAR(10)   NOT NULL CHECK (transmision IN ('manual', 'automatica')),
+  precio       NUMERIC(11,2) CHECK (precio > 0),
+  kilometraje  INTEGER       CHECK (kilometraje >= 0),
+  combustible  VARCHAR(10)   CHECK (combustible IN ('nafta', 'diesel', 'gnc', 'hibrido', 'electrico')),
+  transmision  VARCHAR(10)   CHECK (transmision IN ('manual', 'automatica')),
   condicion    VARCHAR(10)   CHECK (condicion IN ('excelente', 'muy_bueno', 'bueno', 'regular')),
   estado       VARCHAR(12)   NOT NULL DEFAULT 'disponible'
                CONSTRAINT vehiculo_estado_check
@@ -92,7 +94,11 @@ CREATE TABLE IF NOT EXISTS vehiculo (
   localidad    VARCHAR(100),
   motivo_rechazo VARCHAR(300), -- lo escribe el admin al rechazar; el dueño lo ve en sus publicaciones
   created_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
-  updated_at   TIMESTAMPTZ   NOT NULL DEFAULT now()
+  updated_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  CONSTRAINT vehiculo_completo_si_visible CHECK (
+    estado NOT IN ('disponible', 'vendido')
+    OR (precio IS NOT NULL AND kilometraje IS NOT NULL AND combustible IS NOT NULL AND transmision IS NOT NULL)
+  )
 );
 
 CREATE INDEX IF NOT EXISTS idx_vehiculo_marca ON vehiculo (marca);
@@ -153,6 +159,8 @@ CREATE INDEX IF NOT EXISTS idx_sesion_vence ON sesion (vence);
 -- Inspecciones independientes (ver 006-inspecciones.sql): el comprador elige al mecánico y el mecánico firma.
 -- Un mecánico (usuario con rol mecanico) tiene UN taller. Sin el perfil completo no aparece en el ranking.
 -- demo = true en los talleres de ejemplo (database/007-demo-inspecciones-solo-dev.sql, solo en dev).
+-- estado: un usuario pide sumar su taller ("Adherí tu taller", 009-solicitud-taller.sql) y queda 'pendiente'
+-- hasta que un admin lo aprueba (pasa a rol mecanico) o lo rechaza con un motivo. Solo los aprobados están en la red.
 CREATE TABLE IF NOT EXISTS taller (
   usuario_id        INTEGER       PRIMARY KEY REFERENCES usuario(id),
   nombre            VARCHAR(80)   NOT NULL,
@@ -162,11 +170,19 @@ CREATE TABLE IF NOT EXISTS taller (
   precio_inspeccion NUMERIC(11,2) NOT NULL CHECK (precio_inspeccion > 0),
   activo            BOOLEAN       NOT NULL DEFAULT true,
   demo              BOOLEAN       NOT NULL DEFAULT false,
+  cuit              VARCHAR(13),
+  horarios          VARCHAR(80),
+  estado            VARCHAR(10)   NOT NULL DEFAULT 'aprobado',
+  motivo_rechazo    VARCHAR(300),
+  resuelto_por      INTEGER       REFERENCES usuario(id),
+  resuelto_at       TIMESTAMPTZ,
   created_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),
-  updated_at        TIMESTAMPTZ   NOT NULL DEFAULT now()
+  updated_at        TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  CONSTRAINT taller_estado_check CHECK (estado IN ('pendiente', 'aprobado', 'rechazado'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_taller_localidad ON taller (localidad);
+CREATE INDEX IF NOT EXISTS idx_taller_estado ON taller (estado, created_at);
 
 -- El auto puede ser de cualquier sitio: url + fuente siempre; vehiculo_id solo si es de AutoCar.
 -- Los montos se guardan al pedirla (el taller puede cambiar su precio después). El pago es simulado.

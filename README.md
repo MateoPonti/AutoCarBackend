@@ -22,9 +22,18 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `GET /api/vehiculos/{id}` | público | Detalle |
 | `GET /api/vehiculos/{id}/comparacion` | público | Precio frente a autos iguales de MercadoLibre, Kavak y Autocosmos: `buen_precio`, `en_precio`, `caro` o `sin_datos`, con mediana, ahorro y autos parecidos. Detalle en [docs/arquitectura-scraper.md](docs/arquitectura-scraper.md#5-cómo-decide-el-comparador). 503 si el almacén no responde |
 | `GET /api/marcas` | público | Marcas existentes (para armar el filtro) |
-| `GET /api/admin/vehiculos?estado=pendiente` | `vehiculos.moderar` o `vehiculos.gestionar` | Listado / cola de moderación |
+| `GET /api/mis-vehiculos` | sesión | Las publicaciones propias (menos las eliminadas), con `estado`, `motivo_rechazo`, `completa` y `faltan` |
+| `POST /api/mis-vehiculos` | sesión | **Publicar por partes** (multipart/form-data). Alcanza con `marca`, `modelo` y `anio`; `precio`, `kilometraje`, `combustible`, `transmision`, `condicion`, `localidad`, el resto de los campos y `fotos[]` (hasta 5, JPG/PNG/WebP, 2 MB c/u) se pueden mandar ahora o después. Lo que viene se valida. Nace `pendiente` → 201 `{vehiculo}` con `completa` y `faltan` (lo que le falta para que el moderador la pueda aprobar) |
+| `GET /api/mis-vehiculos/{id}` | sesión (dueño) | Una publicación propia con todas sus `fotos` (para seguir completándola). De otro → 404 |
+| `PUT /api/mis-vehiculos/{id}` | sesión (dueño) | Completa o edita (JSON, sin fotos): lo que no se manda queda igual. Vuelve a `pendiente`. Vendida → 409 |
+| `POST /api/mis-vehiculos/{id}/fotos` | sesión (dueño) | Agrega `fotos[]` (multipart) a las que ya tiene, hasta 5 entre todas → 201. Vuelve a `pendiente` |
+| `DELETE /api/mis-vehiculos/{id}/fotos/{foto}` | sesión (dueño) | Saca una foto. Vuelve a `pendiente` |
+| `PATCH /api/mis-vehiculos/{id}/estado` | sesión (dueño) | `{"estado":"vendido"}`, solo desde `disponible` |
+| `DELETE /api/mis-vehiculos/{id}` | sesión (dueño) | Baja lógica → 204 |
+| `GET /api/fotos/{id}` | público / dueño | La foto. Las de publicaciones visibles son públicas; las de una pendiente o rechazada solo las ven el dueño y el moderador (si no, 404) |
+| `GET /api/admin/vehiculos?estado=pendiente&completa=1` | `vehiculos.moderar` o `vehiculos.gestionar` | Listado / cola de moderación. `completa=1`: solo las que se pueden aprobar; `completa=0`: las que el vendedor todavía está completando |
 | `GET /api/admin/vehiculos/{id}` | `vehiculos.moderar` o `vehiculos.gestionar` | Detalle con fotos y quién lo publicó |
-| `PATCH /api/admin/vehiculos/{id}/estado` | `vehiculos.moderar` (moderador) | Aprobar (`{"estado":"disponible"}`) o rechazar con `motivo` |
+| `PATCH /api/admin/vehiculos/{id}/estado` | `vehiculos.moderar` (moderador) | Aprobar (`{"estado":"disponible"}`) o rechazar con `motivo`. Una incompleta no se aprueba: 409 `incompleta` con lo que falta (rechazarla sí se puede). La base también lo controla: una visible tiene que tener precio, kilometraje, combustible y transmisión |
 | `POST /api/admin/vehiculos` | `vehiculos.gestionar` (admin) | Alta → 201 |
 | `PUT /api/admin/vehiculos/{id}` | `vehiculos.gestionar` | Modificación |
 | `DELETE /api/admin/vehiculos/{id}` | `vehiculos.gestionar` | Baja lógica → 204 |
@@ -57,6 +66,10 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `PATCH /api/mecanico/inspecciones/{id}` | `verificaciones.realizar` | Solo desde `pedida`: `{"accion":"aceptar","fecha_turno":"ISO 8601"}` (desde ahora y hasta 60 días; hace falta el perfil, si no 409 `sin_taller`) o `{"accion":"rechazar","motivo":"..."}` (pago `reembolsado`). Otro estado → 409 |
 | `PUT /api/mecanico/inspecciones/{id}/informe` | `verificaciones.realizar` | Borrador del checklist `{items: [{codigo, resultado, nota}], conclusion?, resumen?}`, se puede a medias. Solo con la inspección `aceptada`; firmada → 409 `firmada` |
 | `POST /api/mecanico/inspecciones/{id}/firma` | `verificaciones.realizar` | Firma lo guardado: exige los 10 ítems y la conclusión (si no, 422 `informe_incompleto`). Guarda el nombre del mecánico y del taller, el momento y la huella SHA-256; pago `liberado` |
+| `GET /api/mi-solicitud-taller` | sesión | "Adherí tu taller": `{solicitud}` con su `estado` (`pendiente`, `aprobado` o `rechazado`) y el `motivo_rechazo`, o `{solicitud: null}` si nunca pidió sumarse |
+| `POST /api/mi-solicitud-taller` | sesión (rol `usuario`) | Pide sumar su taller a la red: `nombre`, `cuit` (`30-12345678-9`, con o sin guiones), `direccion`, `localidad`, `telefono`, `horarios`, `precio_inspeccion` y `condiciones: true` → 201. Queda `pendiente` y **no** aparece en el ranking. Ya pendiente o aprobada → 409; con otro rol (mecánico, admin, moderador) → 409 `rol`. Si estaba rechazada, la vuelve a mandar |
+| `GET /api/admin/solicitudes-taller?estado=pendiente` | `usuarios.editar` (admin) | Cola de solicitudes con el responsable, su email y su rol |
+| `PATCH /api/admin/solicitudes-taller/{id}` | `usuarios.editar` | `{id}` = usuario. `{aprobar: true}`: el taller entra al ranking y el usuario pasa a rol `mecanico`. `{aprobar: false, motivo}`: queda rechazada con el motivo (5 a 300 caracteres). Ya resuelta → 409 |
 | `GET /health` | público | Chequeo de vida (no toca la base) |
 
 Las rutas con sesión o con permiso que cambian datos (`POST`, `PUT`, `PATCH`, `DELETE`) exigen además el header `X-CSRF-Token` con el valor `csrf` que devolvió el login.
@@ -148,7 +161,7 @@ El código sólo usa funciones de PHP 8.2 o anteriores, así que la diferencia e
 ## Base de datos (Neon)
 
 1. Crear el proyecto en Neon. En la consola, abrir el **SQL Editor** de la rama `production`, pegar el contenido de `database/schema.sql` y ejecutarlo. Después hacer lo mismo con `database/seed.sql` (datos de prueba).
-   Si la base ya existía de una entrega anterior, en vez de `schema.sql` correr las migraciones en orden: `001-e4.sql`, `002-nombres.sql`, `003-chat.sql`, `004-sesion.sql`, `005-roles.sql`, `006-inspecciones.sql` y `008-separar-version.sql` (todas se pueden correr más de una vez). Solo en dev, para tener mecánicos de ejemplo: `007-demo-inspecciones-solo-dev.sql`.
+   Si la base ya existía de una entrega anterior, en vez de `schema.sql` correr las migraciones en orden: `001-e4.sql`, `002-nombres.sql`, `003-chat.sql`, `004-sesion.sql`, `005-roles.sql`, `006-inspecciones.sql`, `008-separar-version.sql`, `009-solicitud-taller.sql` y `010-publicar-por-partes.sql` (todas se pueden correr más de una vez). Solo en dev, para tener mecánicos de ejemplo: `007-demo-inspecciones-solo-dev.sql`.
    **Migraciones nuevas:** formato obligatorio `NNN-nombre.sql` con el número que sigue (`008-algo.sql`), idempotentes y con el mismo cambio en `schema.sql`. Reglas completas en [`database/README.md`](database/README.md); una prueba hace fallar el CI si el nombre no cumple.
 2. Botón **Connect** → desactivar **Connection pooling** → copiar host, base (`neondb`), usuario y contraseña. Esos valores van a `DB_HOST`, `DB_NAME`, `DB_USER` y `DB_PASS` (`DB_PORT` es 5432).
 3. Para desarrollar sin tocar producción: **Create child branch** (por ejemplo `dev`) y usar sus datos en el `.env` local.

@@ -26,12 +26,24 @@ final class PublicacionController
         Response::json(['items' => array_map([Vehiculo::class, 'paraApi'], $items)]);
     }
 
-    /** POST /api/mis-vehiculos (multipart/form-data: campos del vehículo + fotos[]) */
+    /** GET /api/mis-vehiculos/{id}: una publicación propia con todas sus fotos (para seguir completándola). */
+    public function detalle(int $id): void
+    {
+        $v = self::propio($id);
+        Response::json(['vehiculo' => Vehiculo::paraApi($v) + ['fotos' => Foto::rutasDe($id)]]);
+    }
+
+    /**
+     * POST /api/mis-vehiculos (multipart/form-data: campos del vehículo + fotos[]).
+     * Se publica por partes: con marca, modelo y año ya se crea; lo demás y las fotos se pueden mandar ahora o
+     * después (PUT y POST .../fotos). Nace 'pendiente' (lo fija el servidor) y el moderador recién la puede
+     * aprobar cuando está completa (ver Vehiculo::faltan).
+     */
     public function crear(): void
     {
         $in = Request::formulario();
-        [$datos, $errores] = Vehiculo::validar($in, true); // estado = 'pendiente', lo fija el servidor
-        [$fotos, $errorFotos] = Foto::validarSubidas($_FILES['fotos'] ?? null);
+        [$datos, $errores] = Vehiculo::validarPorPartes($in);
+        [$fotos, $errorFotos] = Foto::validarSubidas($_FILES['fotos'] ?? null, 0, false);
         if ($errorFotos !== null) {
             $errores['fotos'] = $errorFotos;
         }
@@ -57,7 +69,7 @@ final class PublicacionController
 
     /**
      * PUT /api/mis-vehiculos/{id} (JSON, sin fotos). Cualquier edición vuelve la publicación a 'pendiente'
-     * para que el admin la revise de nuevo. Los campos que no vienen se mantienen.
+     * para que el admin la revise de nuevo. Los campos que no vienen se mantienen: así se completa por partes.
      */
     public function actualizar(int $id): void
     {
@@ -65,11 +77,53 @@ final class PublicacionController
         if ($actual['estado'] === 'vendido') {
             Response::error(409, 'no_editable', 'Un vehículo vendido no se puede editar.');
         }
-        [$datos, $errores] = Vehiculo::validar(Request::json() + Vehiculo::paraApi($actual), true);
+        [$datos, $errores] = Vehiculo::validarPorPartes(Request::json() + Vehiculo::paraApi($actual));
         if ($errores) {
             Response::error(422, 'validacion', 'Revisá los datos ingresados.', $errores);
         }
         Vehiculo::actualizar($id, $datos);
+        Response::json(['vehiculo' => Vehiculo::paraApi(Vehiculo::find($id)) + ['fotos' => Foto::rutasDe($id)]]);
+    }
+
+    /**
+     * POST /api/mis-vehiculos/{id}/fotos (multipart/form-data: fotos[]). Agrega fotos a las que ya tiene (hasta
+     * Foto::MAX entre todas). Como cualquier cambio, la publicación vuelve a 'pendiente'. → {vehiculo} con fotos
+     */
+    public function agregarFotos(int $id): void
+    {
+        $actual = self::propio($id);
+        if ($actual['estado'] === 'vendido') {
+            Response::error(409, 'no_editable', 'Un vehículo vendido no se puede editar.');
+        }
+        [$fotos, $error] = Foto::validarSubidas($_FILES['fotos'] ?? null, Foto::cantidad($id));
+        if ($error !== null) {
+            Response::error(422, 'validacion', 'Revisá las fotos.', ['fotos' => $error]);
+        }
+
+        $pdo = Database::pdo();
+        $pdo->beginTransaction();
+        try {
+            Foto::guardar($id, $fotos);
+            Vehiculo::cambiarEstado($id, 'pendiente');
+            $pdo->commit();
+        } catch (Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+        Response::json(['vehiculo' => Vehiculo::paraApi(Vehiculo::find($id)) + ['fotos' => Foto::rutasDe($id)]], 201);
+    }
+
+    /** DELETE /api/mis-vehiculos/{id}/fotos/{foto}. La publicación vuelve a 'pendiente'. → {vehiculo} con fotos */
+    public function eliminarFoto(int $id, int $foto): void
+    {
+        $actual = self::propio($id);
+        if ($actual['estado'] === 'vendido') {
+            Response::error(409, 'no_editable', 'Un vehículo vendido no se puede editar.');
+        }
+        if (!Foto::eliminar($id, $foto)) {
+            Response::error(404, 'no_encontrado', 'La foto no existe.');
+        }
+        Vehiculo::cambiarEstado($id, 'pendiente');
         Response::json(['vehiculo' => Vehiculo::paraApi(Vehiculo::find($id)) + ['fotos' => Foto::rutasDe($id)]]);
     }
 

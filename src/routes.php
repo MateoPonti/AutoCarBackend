@@ -17,6 +17,7 @@ use AutoCar\Comparador\ComparadorController;
 use AutoCar\Inspecciones\AdminReclamoController;
 use AutoCar\Inspecciones\InspeccionController;
 use AutoCar\Inspecciones\MecanicoController;
+use AutoCar\Inspecciones\SolicitudTallerController;
 use AutoCar\MetaBusqueda\MetaBusquedaController;
 use AutoCar\Publicaciones\PublicacionController;
 use AutoCar\Core\Router;
@@ -34,9 +35,13 @@ $router->get('/api/fotos/{id}', [PublicacionController::class, 'foto']); // cont
 // Publicaciones del usuario logueado
 $router->get('/api/mis-vehiculos', [PublicacionController::class, 'index'], 'auth');
 $router->post('/api/mis-vehiculos', [PublicacionController::class, 'crear'], 'auth');
+$router->get('/api/mis-vehiculos/{id}', [PublicacionController::class, 'detalle'], 'auth');
 $router->put('/api/mis-vehiculos/{id}', [PublicacionController::class, 'actualizar'], 'auth');
 $router->patch('/api/mis-vehiculos/{id}/estado', [PublicacionController::class, 'cambiarEstado'], 'auth');
 $router->delete('/api/mis-vehiculos/{id}', [PublicacionController::class, 'eliminar'], 'auth');
+// Publicar por partes: las fotos se pueden agregar o sacar después de crear la publicación
+$router->post('/api/mis-vehiculos/{id}/fotos', [PublicacionController::class, 'agregarFotos'], 'auth');
+$router->delete('/api/mis-vehiculos/{id}/fotos/{foto}', [PublicacionController::class, 'eliminarFoto'], 'auth');
 
 // Chat entre interesado y vendedor (sólo los participantes ven cada conversación)
 $router->post('/api/vehiculos/{id}/conversacion', [ChatController::class, 'abrir'], 'auth');
@@ -75,6 +80,12 @@ $router->get('/api/mecanico/inspecciones', [MecanicoController::class, 'bandeja'
 $router->patch('/api/mecanico/inspecciones/{id}', [MecanicoController::class, 'cambiarEstado'], $mecanico);
 $router->put('/api/mecanico/inspecciones/{id}/informe', [MecanicoController::class, 'guardarInforme'], $mecanico);
 $router->post('/api/mecanico/inspecciones/{id}/firma', [MecanicoController::class, 'firmar'], $mecanico);
+// "Adherí tu taller": el usuario pide sumarse y un admin lo aprueba (pasa a rol mecanico) o lo rechaza.
+// Aprobar le cambia el rol al usuario, por eso pide el mismo permiso que editar usuarios.
+$router->get('/api/mi-solicitud-taller', [SolicitudTallerController::class, 'mia'], 'auth');
+$router->post('/api/mi-solicitud-taller', [SolicitudTallerController::class, 'enviar'], 'auth');
+$router->get('/api/admin/solicitudes-taller', [SolicitudTallerController::class, 'index'], 'permiso:usuarios.editar');
+$router->patch('/api/admin/solicitudes-taller/{id}', [SolicitudTallerController::class, 'resolver'], 'permiso:usuarios.editar');
 
 // Autenticación
 $router->post('/api/registro', [AuthController::class, 'registro']);

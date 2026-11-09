@@ -19,16 +19,22 @@ final class Foto
 
     /**
      * Valida el campo "fotos[]" de $_FILES.
+     * $yaTiene: fotos que la publicación ya tiene (al agregar después), para no pasar de MAX entre todas.
+     * $obligatorias = false: se puede no mandar ninguna (publicar por partes: las fotos se suben después).
      * @return array{0: array, 1: ?string} [fotos [[ruta temporal, mime], ...], mensaje de error o null]
      */
-    public static function validarSubidas(mixed $campo): array
+    public static function validarSubidas(mixed $campo, int $yaTiene = 0, bool $obligatorias = true): array
     {
         $archivos = self::normalizar($campo);
         if (!$archivos) {
-            return [[], 'Agregá al menos una foto.'];
+            return [[], $obligatorias ? 'Agregá al menos una foto.' : null];
         }
-        if (count($archivos) > self::MAX) {
-            return [[], 'Podés subir hasta ' . self::MAX . ' fotos.'];
+        if ($yaTiene + count($archivos) > self::MAX) {
+            $mensaje = 'Podés subir hasta ' . self::MAX . ' fotos.';
+            if ($yaTiene > 0) {
+                $mensaje .= " Ya tiene $yaTiene.";
+            }
+            return [[], $mensaje];
         }
 
         $finfo = new finfo(FILEINFO_MIME_TYPE);
@@ -66,15 +72,19 @@ final class Foto
         return $lista;
     }
 
-    /** Se llama dentro de la transacción que crea el vehículo. */
+    /** Se llama dentro de una transacción. Las fotos nuevas van después de las que ya tenía. */
     public static function guardar(int $vehiculoId, array $fotos): void
     {
+        $st = Database::pdo()->prepare('SELECT COALESCE(MAX(orden) + 1, 0) FROM vehiculo_foto WHERE vehiculo_id = :id');
+        $st->execute(['id' => $vehiculoId]);
+        $siguiente = (int)$st->fetchColumn();
+
         $st = Database::pdo()->prepare(
             'INSERT INTO vehiculo_foto (vehiculo_id, orden, mime, datos) VALUES (:vehiculo_id, :orden, :mime, :datos)'
         );
-        foreach ($fotos as $orden => [$ruta, $mime]) {
+        foreach ($fotos as $i => [$ruta, $mime]) {
             $st->bindValue(':vehiculo_id', $vehiculoId, PDO::PARAM_INT);
-            $st->bindValue(':orden', $orden, PDO::PARAM_INT);
+            $st->bindValue(':orden', $siguiente + $i, PDO::PARAM_INT);
             $st->bindValue(':mime', $mime);
             $st->bindValue(':datos', file_get_contents($ruta), PDO::PARAM_LOB); // LOB = binario (BYTEA)
             $st->execute();
@@ -87,6 +97,21 @@ final class Foto
         $st = Database::pdo()->prepare('SELECT id FROM vehiculo_foto WHERE vehiculo_id = :id ORDER BY orden, id');
         $st->execute(['id' => $vehiculoId]);
         return array_map(static fn($id): string => '/api/fotos/' . (int)$id, $st->fetchAll(PDO::FETCH_COLUMN));
+    }
+
+    public static function cantidad(int $vehiculoId): int
+    {
+        $st = Database::pdo()->prepare('SELECT COUNT(*) FROM vehiculo_foto WHERE vehiculo_id = :id');
+        $st->execute(['id' => $vehiculoId]);
+        return (int)$st->fetchColumn();
+    }
+
+    /** Borra una foto de ese vehículo. → false si la foto no es de ese vehículo. */
+    public static function eliminar(int $vehiculoId, int $fotoId): bool
+    {
+        $st = Database::pdo()->prepare('DELETE FROM vehiculo_foto WHERE id = :foto AND vehiculo_id = :vehiculo');
+        $st->execute(['foto' => $fotoId, 'vehiculo' => $vehiculoId]);
+        return $st->rowCount() === 1;
     }
 
     /** Foto con el estado y el dueño de su vehículo (para decidir quién puede verla). */

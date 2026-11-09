@@ -115,10 +115,13 @@ Los números son los del `PLAN.md`. Los controladores son `InspeccionController`
 | B6 | `GET/PATCH /api/mecanico/inspecciones...` | `Estados` (+ `validarTurno`, `validarMotivo`) | ✅ |
 | B7 | `PUT .../informe`, `POST .../firma` | `Checklist`, `Huella`, `Estados` | ✅ |
 | B8 | `POST /api/inspecciones/{id}/reclamo`, `GET/PATCH /api/admin/reclamos...` | `Reclamo`, `Estados`, `Precio` | ✅ |
+| Adhesión | `GET/POST /api/mi-solicitud-taller`, `GET/PATCH /api/admin/solicitudes-taller...` | `SolicitudTaller`, `Taller::validar` | ✅ |
 
 **Quién no puede intervenir (409):** el mecánico no se pide una inspección a sí mismo (`mecanico_propio`), el vendedor no pide la de su propio auto de AutoCar (`vehiculo_propio`), no se elige al mecánico que publicó el auto (`mecanico_vendedor`) y nadie resuelve un reclamo sobre una inspección propia (`interes_propio`). Tampoco se pide dos veces el mismo link mientras hay una en curso (`duplicada`).
 
-**Solo se eligen mecánicos de la red:** taller activo, cuenta activa y un rol con `verificaciones.realizar`. El ranking público no muestra el teléfono: el contacto pasa por AutoCar.
+**Solo se eligen mecánicos de la red:** taller **aprobado** y activo, cuenta activa y un rol con `verificaciones.realizar`.
+
+**Cómo se suma un mecánico ("Adherí tu taller").** Un usuario común manda los datos de su taller (`POST /api/mi-solicitud-taller`) y queda `pendiente`: no aparece en el ranking ni puede entrar al panel del mecánico. Un admin lo revisa en la cola (`GET /api/admin/solicitudes-taller`) y lo aprueba o lo rechaza con un motivo. Al aprobarlo, el usuario pasa a rol `mecanico` y su taller entra al ranking; si lo rechaza, el usuario ve el motivo y puede volver a mandarla corregida. Lo aprueba un admin (permiso `usuarios.editar`, porque le cambia el rol) y no el propio mecánico porque el valor de AutoCar es que **el que firma es confiable**: si cualquiera se pudiera anotar solo, el ranking no valdría nada. La solicitud es la misma fila de `taller`, con `estado`, `cuit`, `horarios`, `motivo_rechazo` y quién la resolvió (`009-solicitud-taller.sql`). El ranking público no muestra el teléfono: el contacto pasa por AutoCar.
 
 **Cómo se evitan los problemas de concurrencia.** Aceptar y rechazar hacen `UPDATE ... WHERE estado = 'pedida'`: si el comprador cancela al mismo tiempo, solo uno de los dos cambia la fila y el otro recibe 409. Guardar el informe y firmar bloquean la fila (`SELECT ... FOR UPDATE`) dentro de una transacción.
 

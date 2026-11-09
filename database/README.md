@@ -18,6 +18,8 @@
 | 6 | `006-inspecciones.sql` | Talleres, inspecciones, checklist y reclamos |
 | 7 | `007-demo-inspecciones-solo-dev.sql` | 5 mecánicos de ejemplo. **Solo en Neon dev, nunca en main** |
 | 8 | `008-separar-version.sql` | Pasa la versión a su campo en los autos de prueba ("Corolla XEi" → "Corolla" + "XEi"), para que el comparador los encuentre |
+| 9 | `009-solicitud-taller.sql` | "Adherí tu taller": CUIT, horarios y estado de la solicitud (pendiente, aprobado o rechazado) en `taller`. Correrla **antes** de desplegar el back que la usa |
+| 10 | `010-publicar-por-partes.sql` | Publicar por partes: precio, kilometraje, combustible y transmisión pueden quedar vacíos mientras la publicación está pendiente, nunca en una visible. Correrla **antes** de desplegar el back que la usa |
 
 Se copian y pegan enteras en el **SQL Editor de Neon**, primero en la branch `dev` y en `main` recién cuando se pasa `dev` → `main`.
 
