@@ -89,9 +89,7 @@ curl -X POST http://localhost:8000/api/login -c cookies.txt -H "Content-Type: ap
 curl http://localhost:8000/api/vehiculos?q=toyota&combustible=nafta
 
 # -b manda la cookie; CSRF = el valor "csrf" del login
-curl -X POST http://localhost:8000/api/admin/vehiculos -b cookies.txt -H "X-CSRF-Token: CSRF" \
-     -H "Content-Type: application/json" \
-     -d '{"marca":"Ford","modelo":"Focus","anio":2019,"precio":15000000,"kilometraje":60000,"combustible":"nafta","transmision":"manual"}'
+curl -X POST http://localhost:8000/api/mis-vehiculos -b cookies.txt -H "X-CSRF-Token: CSRF" \n     -F marca=Ford -F modelo=Focus -F anio=2019
 ```
 
 ### Cómo lo usa el front (Vercel)
