@@ -141,6 +141,22 @@ final class Vehiculo
         return $st->fetchAll();
     }
 
+    /**
+     * Favoritos de un usuario, el último guardado primero. Solo los visibles (disponibles o vendidos): si el dueño
+     * la saca o el moderador la da de baja, deja de aparecer, pero el favorito queda por si vuelve.
+     */
+    public static function favoritosDe(int $usuarioId): array
+    {
+        $st = Database::pdo()->prepare(
+            'SELECT vehiculo.*, ' . self::PRIMERA_FOTO . " FROM vehiculo
+               JOIN favorito fav ON fav.vehiculo_id = vehiculo.id AND fav.usuario_id = :usuario_id
+              WHERE vehiculo.estado IN ('disponible', 'vendido')
+              ORDER BY fav.created_at DESC, vehiculo.id DESC"
+        );
+        $st->execute(['usuario_id' => $usuarioId]);
+        return $st->fetchAll();
+    }
+
     /** El vehículo sólo si es de ese usuario y no está eliminado; si no, null (evita IDOR). */
     public static function deUsuario(int $id, int $usuarioId): ?array
     {

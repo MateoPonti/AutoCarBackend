@@ -14,6 +14,7 @@ use AutoCar\Auth\AuthController;
 use AutoCar\Catalogo\CatalogoController;
 use AutoCar\Chat\ChatController;
 use AutoCar\Comparador\ComparadorController;
+use AutoCar\Favoritos\FavoritoController;
 use AutoCar\Inspecciones\AdminReclamoController;
 use AutoCar\Inspecciones\InspeccionController;
 use AutoCar\Inspecciones\MecanicoController;
@@ -45,6 +46,11 @@ $router->delete('/api/mis-vehiculos/{id}/fotos/{foto}', [PublicacionController::
 
 // Chat entre interesado y vendedor (sólo los participantes ven cada conversación)
 $router->post('/api/vehiculos/{id}/conversacion', [ChatController::class, 'abrir'], 'auth');
+
+// Favoritos del usuario logueado
+$router->get('/api/favoritos', [FavoritoController::class, 'index'], 'auth');
+$router->put('/api/favoritos/{id}', [FavoritoController::class, 'agregar'], 'auth');
+$router->delete('/api/favoritos/{id}', [FavoritoController::class, 'sacar'], 'auth');
 $router->get('/api/conversaciones', [ChatController::class, 'index'], 'auth');
 $router->get('/api/conversaciones/{id}/mensajes', [ChatController::class, 'mensajes'], 'auth');
 $router->post('/api/conversaciones/{id}/mensajes', [ChatController::class, 'enviar'], 'auth');

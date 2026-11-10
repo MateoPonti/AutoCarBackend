@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace AutoCar\Catalogo;
 
+use AutoCar\Auth\Usuario;
 use AutoCar\Core\Response;
 use AutoCar\Publicaciones\Foto;
 
@@ -23,7 +24,15 @@ final class CatalogoController
         if ($v === null || !in_array($v['estado'], Vehiculo::VISIBLES, true)) {
             Response::error(404, 'no_encontrado', 'El vehículo no existe.');
         }
-        Response::json(['vehiculo' => Vehiculo::paraApi($v) + ['fotos' => Foto::rutasDe($id)]]);
+        $vendedor = Usuario::porId((int)$v['usuario_id']);
+        Response::json(['vehiculo' => Vehiculo::paraApi($v) + [
+            'fotos'    => Foto::rutasDe($id),
+            // Página pública: del vendedor solo el nombre y desde cuándo está (nunca el email)
+            'vendedor' => $vendedor === null ? null : [
+                'nombre' => $vendedor['nombre'],
+                'desde'  => date('c', (int)strtotime((string)$vendedor['created_at'])),
+            ],
+        ]]);
     }
 
     public function marcas(): void
