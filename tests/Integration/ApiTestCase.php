@@ -75,7 +75,8 @@ abstract class ApiTestCase extends TestCase
      * POST multipart/form-data, como el formulario de publicar: $campos de texto y $fotos PNG generadas en el momento.
      * @return array{status: int, json: mixed}
      */
-    protected function pedirFormulario(string $ruta, array $campos, int $fotos = 0): array
+    // $campoFoto = 'foto': adjunta una sola imagen en ese campo (foto de perfil) en vez de fotos[]
+    protected function pedirFormulario(string $ruta, array $campos, int $fotos = 0, string $campoFoto = 'fotos'): array
     {
         $h = ['Accept: application/json'];
         if ($this->cookie !== null) {
@@ -91,7 +92,7 @@ abstract class ApiTestCase extends TestCase
             $ruta_tmp = tempnam(sys_get_temp_dir(), 'foto');
             file_put_contents($ruta_tmp, $png);
             $archivos[] = $ruta_tmp;
-            $campos["fotos[$i]"] = new \CURLFile($ruta_tmp, 'image/png', "foto$i.png");
+            $campos[$campoFoto === 'fotos' ? "fotos[$i]" : $campoFoto] = new \CURLFile($ruta_tmp, 'image/png', "foto$i.png");
         }
 
         $c = curl_init(Entorno::url() . $ruta);

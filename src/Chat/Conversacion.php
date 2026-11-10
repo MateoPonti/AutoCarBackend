@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace AutoCar\Chat;
 
+use AutoCar\Auth\Usuario;
 use AutoCar\Core\Database;
 
 /**
@@ -54,6 +55,7 @@ final class Conversacion
                     v.marca, v.modelo, v.anio, v.estado AS vehiculo_estado,
                     (SELECT f.id FROM vehiculo_foto f WHERE f.vehiculo_id = v.id ORDER BY f.orden, f.id LIMIT 1) AS foto_id,
                     o.id AS otro_id, o.nombre AS otro_nombre,
+                    (SELECT extract(epoch FROM uf.updated_at)::bigint FROM usuario_foto uf WHERE uf.usuario_id = o.id) AS otro_foto_v,
                     (SELECT m.texto FROM mensaje m WHERE m.conversacion_id = c.id ORDER BY m.id DESC LIMIT 1) AS ultimo_texto,
                     (SELECT COUNT(*) FROM mensaje m WHERE m.conversacion_id = c.id AND m.usuario_id <> :yo1 AND NOT m.leido) AS no_leidos
                FROM conversacion c
@@ -79,7 +81,8 @@ final class Conversacion
                 'estado' => $c['vehiculo_estado'],
                 'foto'   => $c['foto_id'] !== null ? '/api/fotos/' . (int)$c['foto_id'] : null,
             ],
-            'con'            => ['id' => (int)$c['otro_id'], 'nombre' => $c['otro_nombre']],
+            'con'            => ['id' => (int)$c['otro_id'], 'nombre' => $c['otro_nombre'],
+                                 'foto' => Usuario::rutaFoto((int)$c['otro_id'], $c['otro_foto_v'])],
             'ultimo_mensaje' => $c['ultimo_texto'],
             'no_leidos'      => (int)$c['no_leidos'],
             'abierta'        => self::abierta($c),

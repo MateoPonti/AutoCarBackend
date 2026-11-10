@@ -1276,6 +1276,14 @@ CREATE TABLE IF NOT EXISTS vehiculo_foto (
 
 CREATE INDEX IF NOT EXISTS idx_fotos_vehiculo ON vehiculo_foto (vehiculo_id, orden);
 
+-- Foto de perfil, opcional (014-foto-de-perfil.sql). Como las fotos de las publicaciones: en la base, BYTEA
+CREATE TABLE IF NOT EXISTS usuario_foto (
+  usuario_id INTEGER     PRIMARY KEY REFERENCES usuario(id) ON DELETE CASCADE,
+  mime       VARCHAR(20) NOT NULL CHECK (mime IN ('image/jpeg', 'image/png', 'image/webp')),
+  datos      BYTEA       NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Favoritos: qué vehículos guardó cada usuario (012-favoritos.sql)
 CREATE TABLE IF NOT EXISTS favorito (
   usuario_id  INTEGER     NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,

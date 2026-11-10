@@ -11,6 +11,7 @@ use AutoCar\Admin\AdminMetricasController;
 use AutoCar\Admin\AdminUsuarioController;
 use AutoCar\Admin\AdminVehiculoController;
 use AutoCar\Auth\AuthController;
+use AutoCar\Auth\PerfilController;
 use AutoCar\Catalogo\CatalogoController;
 use AutoCar\Chat\ChatController;
 use AutoCar\Comparador\ComparadorController;
@@ -98,6 +99,11 @@ $router->post('/api/registro', [AuthController::class, 'registro']);
 $router->post('/api/login', [AuthController::class, 'login']);
 $router->post('/api/logout', [AuthController::class, 'logout']);
 $router->get('/api/me', [AuthController::class, 'me'], 'auth');
+// Mi perfil: nombre y foto (opcional). La foto se ve en el detalle de sus publicaciones y en el chat.
+$router->put('/api/me', [PerfilController::class, 'actualizar'], 'auth');
+$router->post('/api/me/foto', [PerfilController::class, 'subirFoto'], 'auth');
+$router->delete('/api/me/foto', [PerfilController::class, 'borrarFoto'], 'auth');
+$router->get('/api/usuarios/{id}/foto', [PerfilController::class, 'foto']);
 
 // Vehículos: el moderador y el admin revisan las publicaciones; solo el admin las borra. Nadie del panel publica ni edita:
 // toda publicación tiene un vendedor, entra por POST /api/mis-vehiculos y la corrige solo su dueño.
