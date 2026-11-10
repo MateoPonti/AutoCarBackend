@@ -24,6 +24,7 @@
 | 12 | `012-favoritos.sql` | Favoritos: tabla `favorito` (usuario + vehículo) para `GET/PUT/DELETE /api/favoritos`. Correrla **antes** de desplegar el back que la usa |
 | 13 | `013-marcas-y-modelos.sql` | Marcas y modelos que se pueden publicar (62 marcas y ~1.080 modelos de las corridas del scraper del 10/11) y clave foránea `vehiculo (marca, modelo)`: con curl ya no se publica "Pepita 21021". Correrla **antes** de desplegar el back que la usa |
 | 14 | `014-foto-de-perfil.sql` | Foto de perfil opcional: tabla `usuario_foto` (en la base, como las fotos de las publicaciones). Correrla **antes** de desplegar el back que la usa |
+| 15 | `015-contacto-y-reportes.sql` | Contacto (público, con email) y reportes de publicaciones o usuarios: tablas `contacto` y `reporte`. Correrla **antes** de desplegar el back que la usa |
 
 Se copian y pegan enteras en el **SQL Editor de Neon**, primero en el proyecto de Neon de dev y en el de main recién cuando se pasa `dev` → `main` (son dos proyectos separados).
 

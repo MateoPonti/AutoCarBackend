@@ -36,6 +36,10 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `PATCH /api/mis-vehiculos/{id}/estado` | sesión (dueño) | `{"estado":"vendido"}`, solo desde `disponible` |
 | `DELETE /api/mis-vehiculos/{id}` | sesión (dueño) | Baja lógica → 204 |
 | `POST /api/vehiculos/{id}/conversacion` | sesión | Abre (o recupera) el chat con el vendedor de ese vehículo → 201 si es nueva, 200 si ya existía: `{conversacion: {id}}`. Sobre la publicación propia → 409 `vehiculo_propio`; sin vendedor (cargado por el admin) → 409 `sin_vendedor` |
+| `POST /api/contacto` | público | `{email, mensaje}` (10 a 1000 caracteres) → 201. Hasta 3 por hora por email (429) |
+| `POST /api/reportes` | sesión | Reporta una publicación (`vehiculo_id`) o un usuario (`usuario_id`): `motivo` (`fraude`, `datos`, `vendido`, `trato`, `spam`, `otro`) y `detalle` opcional → 201 |
+| `GET /api/admin/contactos` · `PATCH /api/admin/contactos/{id}` | `usuarios.ver` (admin) | Mensajes de contacto (no leídos primero) · marcar leído → 204 |
+| `GET /api/admin/reportes` · `PATCH /api/admin/reportes/{id}` | `vehiculos.moderar` | Reportes (pendientes primero) · marcar resuelto → 204 |
 | `GET /api/favoritos` | sesión | Favoritos del usuario: `{items}` con las mismas fichas que el catálogo, el último guardado primero. Solo los publicados (disponibles o vendidos) |
 | `PUT /api/favoritos/{id}` | sesión | Guarda el vehículo en favoritos → 204 (guardarlo dos veces no da error). 404 si no está disponible; 409 `vehiculo_propio` si es una publicación propia |
 | `DELETE /api/favoritos/{id}` | sesión | Lo saca de favoritos → 204 |
