@@ -48,7 +48,7 @@ En vez de guardar una comparación ya calculada por cada publicación, se guarda
 
 - **1 lectura por ficha vista.** Con 50.000 lecturas gratis por día alcanza para 50.000 fichas.
 - **Funciona para publicaciones nuevas** sin esperar a la corrida del día siguiente.
-- **Pocas escrituras:** hay ~1.500 modelos y solo se reescriben los que cambiaron (cada documento tiene una huella). Lejos de las 20.000 escrituras diarias.
+- **Pocas escrituras:** Firestore cuenta documentos, no autos, y cada documento es un modelo con todos sus autos. En el comparador solo se reescriben los modelos que cambiaron (huella); en el metabuscador se reescriben todos los que vinieron en la corrida, porque `ultima_vez` cambia cada día. Igual son ~2.000 a 4.000 escrituras por día y por proyecto, lejos de las 20.000 del plan gratis.
 - **El metabuscador usa el mismo documento:** buscar "Gol Trend" es leer `volkswagen_gol_trend`.
 - Si mañana se suma un sitio, solo se agrega su recolector: el documento suma autos con otra `fuente`.
 
@@ -174,7 +174,9 @@ flowchart LR
 
 **Por qué así.** Cada pantalla necesita pocos documentos enteros: un reporte lee el modelo buscado, el índice y las corridas; el detalle de un auto lee un solo documento (el id del auto ya dice de qué modelo es: `kavak~renault_sandero~562339`). No hace falta cruzar tablas. Las búsquedas y los avisos van en documentos distintos porque los escriben procesos distintos (la API y el importador) y así nunca se pisan.
 
-**Escrituras.** El importador escribe solo los modelos que cambiaron. Con las corridas de prueba del 08/11 (6.081 autos) fueron 205 modelos; con todo MercadoLibre (~1.500 modelos por fuente y por día) queda por debajo de las 20.000 escrituras diarias del plan gratis. Una corrida que falla a mitad de camino se puede volver a importar: da el mismo resultado y los avisos no se repiten.
+**Escrituras.** El importador escribe los modelos que vinieron en la corrida (su `ultima_vez` cambia todos los días) y los que tenían autos de esa fuente, para retirar los ausentes. Con las corridas de prueba del 08/11 (6.081 autos) fueron 205 modelos; con las completas del 10/11 (Autocosmos: 4.750 autos, 441 modelos; MercadoLibre: ~80.000 autos, ~1.000 modelos) queda por debajo de las 20.000 escrituras diarias del plan gratis.
+
+**Memoria.** La corrida completa de MercadoLibre arma un JSON de ~66 MB y llega a ~210 MB de memoria: con los 128 MB que PHP trae por defecto se moría al guardar. `diario.bat` corre MercadoLibre, `armar-modelos.php` e `importar-autos.php` con `php -d memory_limit=1G`. Una corrida que falla a mitad de camino se puede volver a importar: da el mismo resultado y los avisos no se repiten.
 
 **Credencial.** Como la API escribe las búsquedas, la cuenta de servicio de Render tiene que ser de escritura (*Cloud Datastore User*), no de solo lectura.
 
