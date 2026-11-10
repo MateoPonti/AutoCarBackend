@@ -160,6 +160,7 @@ abstract class ApiTestCase extends TestCase
     {
         $email = $this->registrar();
         $d = self::vehiculo($cambios);
+        self::asegurarModelo($d['marca'], $d['modelo']);
         $st = Entorno::pdo()->prepare(
             "INSERT INTO vehiculo (usuario_id, marca, modelo, anio, precio, kilometraje, combustible, transmision, estado)
              VALUES ((SELECT id FROM usuario WHERE email = :e), :marca, :modelo, :anio, :precio, :km, :comb, :trans, 'disponible')
@@ -168,6 +169,14 @@ abstract class ApiTestCase extends TestCase
         $st->execute(['e' => $email, 'marca' => $d['marca'], 'modelo' => $d['modelo'], 'anio' => $d['anio'],
             'precio' => $d['precio'], 'km' => $d['kilometraje'], 'comb' => $d['combustible'], 'trans' => $d['transmision']]);
         return (int)$st->fetchColumn();
+    }
+
+    /** Suma una marca y un modelo a la lista (las pruebas usan marcas inventadas para no mezclarse con otras). */
+    protected static function asegurarModelo(string $marca, string $modelo): void
+    {
+        $pdo = Entorno::pdo();
+        $pdo->prepare('INSERT INTO marca (nombre) VALUES (:m) ON CONFLICT DO NOTHING')->execute(['m' => $marca]);
+        $pdo->prepare('INSERT INTO modelo (marca, nombre) VALUES (:m, :n) ON CONFLICT DO NOTHING')->execute(['m' => $marca, 'n' => $modelo]);
     }
 
     protected static function vehiculo(array $cambios = []): array
