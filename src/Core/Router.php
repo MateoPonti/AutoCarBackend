@@ -3,13 +3,9 @@ declare(strict_types=1);
 
 namespace AutoCar\Core;
 
-use AutoCar\Auth\Auth;
-
 /**
- * Router mínimo. Cada ruta puede llevar un "guard" que se aplica en el servidor:
- *   'auth'               → hace falta la cookie de sesión válida
- *   'permiso:a.b|c.d'    → sesión válida y al menos uno de esos permisos (según el rol, consultado en la base)
- * En ambos casos, POST/PUT/PATCH/DELETE además exigen el header X-CSRF-Token.
+ * Router mínimo: busca la ruta, pasa el pedido por el Middleware (guard de la ruta: 'auth' o 'permiso:...',
+ * y CSRF si cambia datos) y recién ahí llama al controlador. 404 si la ruta no existe, 405 si el método no.
  */
 final class Router
 {
@@ -40,15 +36,7 @@ final class Router
             if ($m !== $method) {
                 continue;
             }
-            if ($guard === 'auth') {
-                Auth::requireLogin();
-            } elseif ($guard !== null && str_starts_with($guard, 'permiso:')) {
-                Auth::requirePermiso(...explode('|', substr($guard, strlen('permiso:'))));
-            }
-            // Con sesión, todo lo que cambia datos exige el token CSRF (los GET no cambian nada)
-            if ($guard !== null && $method !== 'GET') {
-                Auth::requireCsrf();
-            }
+            Middleware::aplicar($guard, $method); // si no pasa, responde 401/403 y corta acá
             $params = array_map('intval', array_filter($match, 'is_string', ARRAY_FILTER_USE_KEY));
             [$clase, $accion] = $handler;
             (new $clase())->$accion(...$params);
