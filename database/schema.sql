@@ -1425,3 +1425,26 @@ CREATE INDEX IF NOT EXISTS idx_reclamo_estado ON reclamo (estado, created_at);
 
 -- Los autos de otras plataformas (MercadoLibre, Kavak, Autocosmos), su historial, las búsquedas guardadas y sus avisos
 -- NO están en esta base: van en Firestore (NoSQL). Ver docs/arquitectura-scraper.md y src/MetaBusqueda/Documentos.php.
+
+-- Mensajes al equipo: contacto y reportes (015-contacto-y-reportes.sql)
+CREATE TABLE IF NOT EXISTS contacto (
+  id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  email      VARCHAR(254)  NOT NULL,
+  mensaje    VARCHAR(1000) NOT NULL,
+  leido      BOOLEAN       NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_contacto_email ON contacto (email, created_at);
+
+CREATE TABLE IF NOT EXISTS reporte (
+  id          INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  autor_id    INTEGER      NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+  vehiculo_id INTEGER      REFERENCES vehiculo(id) ON DELETE CASCADE,
+  usuario_id  INTEGER      REFERENCES usuario(id) ON DELETE CASCADE,
+  motivo      VARCHAR(10)  NOT NULL CHECK (motivo IN ('fraude', 'datos', 'vendido', 'trato', 'spam', 'otro')),
+  detalle     VARCHAR(500),
+  estado      VARCHAR(10)  NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'resuelto')),
+  created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  -- Se reporta una publicación o un usuario, nunca los dos ni ninguno
+  CHECK ((vehiculo_id IS NULL) <> (usuario_id IS NULL))
+);

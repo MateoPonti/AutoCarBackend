@@ -22,6 +22,7 @@ use AutoCar\Inspecciones\MecanicoController;
 use AutoCar\Inspecciones\SolicitudTallerController;
 use AutoCar\MetaBusqueda\MetaBusquedaController;
 use AutoCar\Publicaciones\PublicacionController;
+use AutoCar\Soporte\SoporteController;
 use AutoCar\Core\Router;
 
 /** @var Router $router */
@@ -78,6 +79,14 @@ $router->get('/api/inspecciones/{id}', [InspeccionController::class, 'detalle'],
 $router->post('/api/inspecciones/{id}/cancelar', [InspeccionController::class, 'cancelar'], 'auth');
 $router->post('/api/inspecciones/{id}/reclamo', [InspeccionController::class, 'reclamar'], 'auth');
 // Reclamos: los resuelven el moderador y el admin
+// Mensajes al equipo: contacto (público) y reportes (con sesión); el admin y el moderador los ven en el panel
+$router->post('/api/contacto', [SoporteController::class, 'contactar']);
+$router->post('/api/reportes', [SoporteController::class, 'reportar'], 'auth');
+$router->get('/api/admin/contactos', [SoporteController::class, 'contactos'], 'permiso:usuarios.ver');
+$router->patch('/api/admin/contactos/{id}', [SoporteController::class, 'leerContacto'], 'permiso:usuarios.ver');
+$router->get('/api/admin/reportes', [SoporteController::class, 'reportes'], 'permiso:vehiculos.moderar');
+$router->patch('/api/admin/reportes/{id}', [SoporteController::class, 'resolverReporte'], 'permiso:vehiculos.moderar');
+
 $router->get('/api/admin/reclamos', [AdminReclamoController::class, 'index'], 'permiso:reclamos.resolver');
 $router->patch('/api/admin/reclamos/{id}', [AdminReclamoController::class, 'resolver'], 'permiso:reclamos.resolver');
 // Lado del mecánico: cada uno ve y toca solo sus inspecciones (las de otro dan 404)
