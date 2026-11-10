@@ -31,6 +31,7 @@ final class CatalogoController
             'vendedor' => $vendedor === null ? null : [
                 'nombre' => $vendedor['nombre'],
                 'desde'  => date('c', (int)strtotime((string)$vendedor['created_at'])),
+                'foto'   => Usuario::rutaFoto((int)$vendedor['id'], $vendedor['foto_v']),
             ],
         ]]);
     }

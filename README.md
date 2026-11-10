@@ -18,6 +18,10 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `POST /api/login` | público | `email`, `password` → `{csrf, expira_en, usuario}` y la cookie de sesión (`Set-Cookie`). La cuenta de un taller con la solicitud pendiente o rechazada → 403 `taller_pendiente` o `taller_rechazado` (con el motivo) |
 | `POST /api/logout` | público | Borra la cookie de sesión → 204 |
 | `GET /api/me` | sesión | `{usuario, csrf}` del usuario autenticado |
+| `PUT /api/me` | sesión | Cambia el nombre (`{nombre}`, 2 a 80 caracteres) → `{usuario}`. El email no se cambia |
+| `POST /api/me/foto` | sesión | Sube o reemplaza la foto de perfil (multipart, campo `foto`: JPG, PNG o WebP de hasta 2 MB) → `{usuario}` con `foto` |
+| `DELETE /api/me/foto` | sesión | Borra la foto de perfil → 204 |
+| `GET /api/usuarios/{id}/foto` | público | La foto de perfil (se ve en el detalle de sus publicaciones y en el chat). 404 si no tiene. `usuario.foto`, `vendedor.foto` y `con.foto` traen esta ruta con `?v=` (o `null`) |
 | `GET /api/vehiculos` | público | Listado. Filtros: `q`, `marca`, `combustible`, `precio_max`, `page` |
 | `GET /api/marcas-modelos` | público | Marcas y modelos que se pueden publicar: `{marcas: [{marca, modelos: [...]}]}`. Publicar o corregir con una marca o un modelo que no está en la lista → 422 (y la base tampoco lo acepta) |
 | `GET /api/vehiculos/{id}` | público | Detalle con fotos y `vendedor: {nombre, desde}` (sin el email: es una página pública) |

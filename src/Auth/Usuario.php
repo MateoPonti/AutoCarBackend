@@ -15,7 +15,9 @@ final class Usuario
     public const POR_PAGINA = 20;
 
     /** Columnas que devuelven las consultas: el rol se trae por nombre con un JOIN. */
-    private const CAMPOS = 'u.id, u.nombre, u.email, u.activo, u.created_at, r.nombre AS rol';
+    // foto_v: versión de la foto de perfil (cuándo se subió), para que el navegador no muestre una vieja del caché
+    private const CAMPOS = 'u.id, u.nombre, u.email, u.activo, u.created_at, r.nombre AS rol,
+        (SELECT extract(epoch FROM uf.updated_at)::bigint FROM usuario_foto uf WHERE uf.usuario_id = u.id) AS foto_v';
 
     public static function porEmail(string $email): ?array
     {
@@ -175,7 +177,45 @@ final class Usuario
     /** Datos que el front puede ver (nunca el hash). */
     public static function publico(array $u): array
     {
-        return ['id' => (int)$u['id'], 'nombre' => $u['nombre'], 'email' => $u['email'], 'rol' => $u['rol']];
+        return ['id' => (int)$u['id'], 'nombre' => $u['nombre'], 'email' => $u['email'], 'rol' => $u['rol'],
+            'foto' => self::rutaFoto((int)$u['id'], $u['foto_v'] ?? null)];
+    }
+
+    /** Ruta de la foto de perfil (relativa a la API, el front le antepone API_URL), o null si no subió ninguna. */
+    public static function rutaFoto(int $id, mixed $version): ?string
+    {
+        return $version === null ? null : "/api/usuarios/$id/foto?v=" . (int)$version;
+    }
+
+    /** La foto de perfil: mime y datos, o null si no tiene. */
+    public static function foto(int $id): ?array
+    {
+        $st = Database::pdo()->prepare('SELECT mime, datos FROM usuario_foto WHERE usuario_id = :id');
+        $st->execute(['id' => $id]);
+        $f = $st->fetch();
+        if (!$f) {
+            return null;
+        }
+        // BYTEA llega como stream desde pdo_pgsql
+        return ['mime' => $f['mime'], 'datos' => is_resource($f['datos']) ? stream_get_contents($f['datos']) : $f['datos']];
+    }
+
+    /** Guarda (o reemplaza) la foto de perfil. $tmp y $mime ya validados con Foto::validarSubidas(). */
+    public static function guardarFoto(int $id, string $tmp, string $mime): void
+    {
+        $st = Database::pdo()->prepare(
+            'INSERT INTO usuario_foto (usuario_id, mime, datos) VALUES (:id, :mime, :datos)
+             ON CONFLICT (usuario_id) DO UPDATE SET mime = EXCLUDED.mime, datos = EXCLUDED.datos, updated_at = now()'
+        );
+        $st->bindValue(':id', $id, \PDO::PARAM_INT);
+        $st->bindValue(':mime', $mime);
+        $st->bindValue(':datos', (string)file_get_contents($tmp), \PDO::PARAM_LOB);
+        $st->execute();
+    }
+
+    public static function borrarFoto(int $id): void
+    {
+        Database::pdo()->prepare('DELETE FROM usuario_foto WHERE usuario_id = :id')->execute(['id' => $id]);
     }
 
     /** Lo que ve el admin en el panel de usuarios. */
