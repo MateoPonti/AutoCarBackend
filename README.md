@@ -6,6 +6,7 @@ Compra y venta de vehículos. Entidad principal: **vehículos**. El front (Verce
 - **URL desplegada:** https://autocarbackend-1.onrender.com *(HTTPS)*
 - **Roles y permisos** (en tablas: `rol`, `permiso`, `rol_permiso`): `usuario` (publica y chatea), `moderador` (aprueba o rechaza publicaciones), `admin` (puede todo: usuarios, ABM del catálogo, moderación y métricas) y `mecanico` (verificaciones; endpoints pendientes). Las rutas piden **permisos**, no roles: un rol nuevo solo necesita filas en `rol_permiso`.
 - **Autenticación:** sesión de PHP (`$_SESSION`) guardada en la tabla `sesion`; el navegador solo tiene la cookie `autocar_sesion` con el id (`HttpOnly`, `Secure`, `SameSite=Strict`) + token CSRF en el header `X-CSRF-Token`.
+- **Middleware** (`src/Core/Middleware.php`): antes de ejecutar el controlador, controla el guard de la ruta (`auth` → sesión, 401; `permiso:...` → permiso del rol, 403) y el token CSRF en todo lo que cambia datos (403). Los guards se ven todos juntos en `src/routes.php`.
 - **Versión:** ver `VERSION` (versionado semántico). **Autores:** `autores.txt`.
 
 ## Endpoints
@@ -135,7 +136,7 @@ public/            única carpeta expuesta: index.php (front controller) y .htac
 composer.json      sin librerías de terceros: solo el autoload PSR-4: namespace AutoCar\ → src/ (AutoCar\Core\Router = src/Core/Router.php)
 src/bootstrap.php  autoload de Composer, errores, CORS y cabeceras
 src/routes.php     todas las rutas, con su guard (auth / permiso:...)
-src/Core/          Config, Database (PDO), Router, Request, Response, Cors, Logger
+src/Core/          Config, Database (PDO), Router, Middleware (guards de las rutas), Request, Response, Cors, Logger
 src/Auth/          Auth (sesión, cookie y CSRF), SesionDb (guarda $_SESSION en la base), Usuario, AuthController
 src/Catalogo/      Vehiculo (modelo + validación), CatalogoController (API pública)
 src/Admin/         AdminVehiculoController (ABM y moderación), AdminUsuarioController (usuarios), AdminMetricasController (métricas)
