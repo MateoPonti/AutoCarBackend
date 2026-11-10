@@ -39,33 +39,33 @@ final class VehiculosTest extends ApiTestCase
         self::assertSame(404, $this->pedir('GET', '/api/vehiculos/999999')['status']);
     }
 
-    public function testAdminHaceElAbmCompleto(): void
+    public function testElPanelNoPublicaNiEditaSoloModeraYDaDeBaja(): void
     {
+        $id = $this->vehiculoDisponible(['marca' => 'Renault', 'modelo' => 'Kwid']);
         $this->ingresarComoAdmin();
 
-        $alta = $this->pedir('POST', '/api/admin/vehiculos', self::vehiculo(['marca' => 'Renault', 'modelo' => 'Kwid']));
-        self::assertSame(201, $alta['status'], json_encode($alta['json']));
-        $id = $alta['json']['vehiculo']['id'];
-        self::assertSame('/api/vehiculos/' . $id, $alta['headers']['location']);
+        // Nadie del panel crea ni edita: toda publicación tiene un vendedor y la corrige su dueño
+        self::assertSame(405, $this->pedir('POST', '/api/admin/vehiculos', self::vehiculo())['status']);
+        self::assertSame(405, $this->pedir('PUT', "/api/admin/vehiculos/$id", self::vehiculo(['precio' => 17000000]))['status']);
+        self::assertSame(18500000.0, (float)$this->pedir('GET', "/api/vehiculos/$id")['json']['vehiculo']['precio']);
 
-        $detalle = $this->pedir('GET', "/api/vehiculos/$id");
-        self::assertSame(200, $detalle['status']);
-
-        $buscar = $this->pedir('GET', '/api/vehiculos?q=Kwid');
-        self::assertStringContainsString('Kwid', json_encode($buscar['json']));
-
-        $edicion = $this->pedir('PUT', "/api/admin/vehiculos/$id", self::vehiculo(['marca' => 'Renault', 'modelo' => 'Kwid', 'precio' => 17000000]));
-        self::assertSame(200, $edicion['status'], json_encode($edicion['json']));
-        self::assertSame(17000000.0, (float)$edicion['json']['vehiculo']['precio']);
-
+        // Sí modera (dar de baja una aprobada) y el admin la borra
+        $baja = $this->pedir('PATCH', "/api/admin/vehiculos/$id/estado", ['estado' => 'rechazado', 'motivo' => 'Fotos que no son del auto.']);
+        self::assertSame(200, $baja['status'], json_encode($baja['json']));
         self::assertSame(204, $this->pedir('DELETE', "/api/admin/vehiculos/$id")['status']);
         self::assertNotSame(200, $this->pedir('GET', "/api/vehiculos/$id")['status']);
     }
 
-    public function testAltaConDatosInvalidosDa422(): void
+    public function testLaBaseNoAceptaUnVehiculoSinVendedor(): void
     {
-        $this->ingresarComoAdmin();
-        $r = $this->pedir('POST', '/api/admin/vehiculos', self::vehiculo(['anio' => 1800, 'combustible' => 'vapor']));
+        $this->expectException(\PDOException::class);
+        Entorno::pdo()->exec("INSERT INTO vehiculo (marca, modelo, anio) VALUES ('Fiat', 'Uno', 2010)");
+    }
+
+    public function testPublicarConDatosInvalidosDa422(): void
+    {
+        $this->ingresarComoUsuario();
+        $r = $this->pedirFormulario('/api/mis-vehiculos', ['marca' => 'Fiat', 'modelo' => 'Uno', 'anio' => '1800', 'combustible' => 'vapor']);
         self::assertSame(422, $r['status']);
         self::assertArrayHasKey('anio', $r['json']['errores']);
         self::assertArrayHasKey('combustible', $r['json']['errores']);
@@ -74,26 +74,29 @@ final class VehiculosTest extends ApiTestCase
     public function testSinSesionLasRutasDeAdminDan401(): void
     {
         self::assertSame(401, $this->pedir('GET', '/api/admin/vehiculos')['status']);
-        self::assertSame(401, $this->pedir('POST', '/api/admin/vehiculos', self::vehiculo())['status']);
+        self::assertSame(401, $this->pedir('DELETE', '/api/admin/vehiculos/1')['status']);
     }
 
     public function testUnUsuarioComunNoPuedeAdministrar(): void
     {
+        $id = $this->vehiculoDisponible();
         $this->ingresarComoUsuario();
         self::assertSame(403, $this->pedir('GET', '/api/admin/vehiculos')['status']);
-        self::assertSame(403, $this->pedir('POST', '/api/admin/vehiculos', self::vehiculo())['status']);
+        self::assertSame(403, $this->pedir('DELETE', "/api/admin/vehiculos/$id")['status']);
         self::assertSame(403, $this->pedir('GET', '/api/admin/usuarios')['status']);
     }
 
     public function testSinTokenCsrfNoSeModificaNada(): void
     {
+        $id = $this->vehiculoDisponible();
         $this->ingresarComoAdmin();
-        $r = $this->pedir('POST', '/api/admin/vehiculos', self::vehiculo(), [], conCsrf: false);
+        $r = $this->pedir('DELETE', "/api/admin/vehiculos/$id", null, [], conCsrf: false);
         self::assertSame(403, $r['status']);
         self::assertSame('csrf', $r['json']['error']);
 
-        $r = $this->pedir('POST', '/api/admin/vehiculos', self::vehiculo(), ['X-CSRF-Token' => str_repeat('0', 64)], conCsrf: false);
+        $r = $this->pedir('DELETE', "/api/admin/vehiculos/$id", null, ['X-CSRF-Token' => str_repeat('0', 64)], conCsrf: false);
         self::assertSame(403, $r['status']);
+        self::assertSame(200, $this->pedir('GET', "/api/vehiculos/$id")['status'], 'sigue publicado');
     }
 
     public function testJsonInvalidoDa400(): void

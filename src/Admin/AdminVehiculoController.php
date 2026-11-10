@@ -11,8 +11,10 @@ use AutoCar\Core\Response;
 use AutoCar\Publicaciones\Foto;
 
 /**
- * ABM y moderación de vehículos. Cada ruta pide su permiso en routes.php (se verifica en el servidor):
- * vehiculos.moderar (moderador) para revisar publicaciones y vehiculos.gestionar (admin) para el ABM.
+ * Moderación y baja de vehículos. Cada ruta pide su permiso en routes.php (se verifica en el servidor):
+ * vehiculos.moderar (moderador) para revisar publicaciones y vehiculos.gestionar (admin) además para la baja.
+ * Acá no se crean ni se editan vehículos: toda publicación tiene un vendedor, entra por POST /api/mis-vehiculos
+ * y la corrige solo su dueño (si algo está mal, el moderador la rechaza con un motivo).
  */
 final class AdminVehiculoController
 {
@@ -38,30 +40,6 @@ final class AdminVehiculoController
             'fotos'      => Foto::rutasDe($id),
             'publicador' => $duenio !== null ? Usuario::publico($duenio) : null,
         ]]);
-    }
-
-    public function crear(): void
-    {
-        [$datos, $errores] = Vehiculo::validar(Request::json());
-        if ($errores) {
-            Response::error(422, 'validacion', 'Revisá los datos ingresados.', $errores);
-        }
-        $id = Vehiculo::crear($datos);
-        header('Location: /api/vehiculos/' . $id);
-        Response::json(['vehiculo' => Vehiculo::paraApi(Vehiculo::find($id))], 201);
-    }
-
-    public function actualizar(int $id): void
-    {
-        $actual = self::existente($id);
-        // El formulario del admin no manda los campos de la publicación (versión, localidad, canje...):
-        // los que no vienen se completan con los actuales para no borrarlos al guardar.
-        [$datos, $errores] = Vehiculo::validar(Request::json() + Vehiculo::paraApi($actual));
-        if ($errores) {
-            Response::error(422, 'validacion', 'Revisá los datos ingresados.', $errores);
-        }
-        Vehiculo::actualizar($id, $datos);
-        Response::json(['vehiculo' => Vehiculo::paraApi(Vehiculo::find($id))]);
     }
 
     /**

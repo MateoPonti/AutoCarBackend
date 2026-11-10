@@ -38,9 +38,7 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `GET /api/admin/vehiculos?estado=pendiente&completa=1` | `vehiculos.moderar` o `vehiculos.gestionar` | Listado / cola de moderación. `completa=1`: solo las que se pueden aprobar; `completa=0`: las que el vendedor todavía está completando |
 | `GET /api/admin/vehiculos/{id}` | `vehiculos.moderar` o `vehiculos.gestionar` | Detalle con fotos y quién lo publicó |
 | `PATCH /api/admin/vehiculos/{id}/estado` | `vehiculos.moderar` (moderador) | Aprobar (`{"estado":"disponible"}`) o rechazar con `motivo`. Una incompleta no se aprueba: 409 `incompleta` con lo que falta (rechazarla sí se puede). La base también lo controla: una visible tiene que tener precio, kilometraje, combustible y transmisión |
-| `POST /api/admin/vehiculos` | `vehiculos.gestionar` (admin) | Alta → 201 |
-| `PUT /api/admin/vehiculos/{id}` | `vehiculos.gestionar` | Modificación |
-| `DELETE /api/admin/vehiculos/{id}` | `vehiculos.gestionar` | Baja lógica → 204 |
+| `DELETE /api/admin/vehiculos/{id}` | `vehiculos.gestionar` (admin) | Baja lógica → 204. El panel no crea ni edita vehículos: toda publicación tiene un vendedor (la base lo exige), entra por `POST /api/mis-vehiculos` y la corrige solo su dueño. `POST /api/admin/vehiculos` y `PUT /api/admin/vehiculos/{id}` → 405 |
 | `GET /api/admin/usuarios?q=&rol=&activo=1\|0&page=` | `usuarios.ver` (admin) | Usuarios con rol, estado y cantidad de publicaciones |
 | `GET /api/admin/usuarios/{id}` | `usuarios.ver` | Detalle |
 | `PATCH /api/admin/usuarios/{id}` | `usuarios.editar` (admin) | `{nombre?, rol?, activo?}`. No se puede cambiar el propio rol ni darse de baja (409) |

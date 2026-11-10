@@ -24,13 +24,13 @@ CREATE TABLE IF NOT EXISTS rol_permiso (
 INSERT INTO rol (nombre, descripcion) VALUES
   ('usuario',   'Usuario registrado: publica vehículos y chatea con otros usuarios'),
   ('moderador', 'Revisa las publicaciones: las aprueba o las rechaza'),
-  ('admin',     'Puede todo: usuarios, catálogo, moderación y métricas'),
+  ('admin',     'Puede todo: usuarios, moderación, bajas y métricas'),
   ('mecanico',  'Mecánico de un taller adherido: verifica vehículos')
 ON CONFLICT (nombre) DO NOTHING;
 
 INSERT INTO permiso (nombre, descripcion) VALUES
   ('vehiculos.moderar',       'Ver la cola de publicaciones y aprobarlas o rechazarlas'),
-  ('vehiculos.gestionar',     'Alta, edición y baja de vehículos del catálogo'),
+  ('vehiculos.gestionar',     'Dar de baja vehículos del catálogo'),
   ('usuarios.ver',            'Ver la lista y los datos de los usuarios'),
   ('usuarios.editar',         'Editar usuarios: nombre, rol y baja lógica'),
   ('verificaciones.ver',      'Ver las verificaciones de vehículos asignadas al taller'),
@@ -68,13 +68,13 @@ CREATE TABLE IF NOT EXISTS usuario (
 
 CREATE INDEX IF NOT EXISTS idx_usuario_rol ON usuario (rol_id);
 
--- usuario_id: dueño de la publicación (NULL en los que carga el admin). Una publicación de un usuario
+-- usuario_id: el vendedor, dueño de la publicación (obligatorio: 011-vehiculo-con-vendedor.sql). Toda publicación
 -- nace 'pendiente' y el catálogo público sólo muestra las 'disponible'.
 -- Se publica por partes (010-publicar-por-partes.sql): con marca, modelo y año ya se crea, y el resto se completa
 -- después. Por eso precio, kilometraje, combustible y transmisión pueden estar vacíos, pero no en una visible.
 CREATE TABLE IF NOT EXISTS vehiculo (
   id           INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  usuario_id   INTEGER       REFERENCES usuario(id),
+  usuario_id   INTEGER       NOT NULL REFERENCES usuario(id),
   marca        VARCHAR(50)   NOT NULL,
   modelo       VARCHAR(60)   NOT NULL,
   version      VARCHAR(60),

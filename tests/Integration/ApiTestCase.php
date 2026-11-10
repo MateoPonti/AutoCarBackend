@@ -152,6 +152,24 @@ abstract class ApiTestCase extends TestCase
         return $email;
     }
 
+    /**
+     * Vehículo ya publicado (disponible) de un vendedor nuevo, cargado directo en la base: toda publicación
+     * tiene un vendedor y nadie del panel las crea. Devuelve el id.
+     */
+    protected function vehiculoDisponible(array $cambios = []): int
+    {
+        $email = $this->registrar();
+        $d = self::vehiculo($cambios);
+        $st = Entorno::pdo()->prepare(
+            "INSERT INTO vehiculo (usuario_id, marca, modelo, anio, precio, kilometraje, combustible, transmision, estado)
+             VALUES ((SELECT id FROM usuario WHERE email = :e), :marca, :modelo, :anio, :precio, :km, :comb, :trans, 'disponible')
+             RETURNING id"
+        );
+        $st->execute(['e' => $email, 'marca' => $d['marca'], 'modelo' => $d['modelo'], 'anio' => $d['anio'],
+            'precio' => $d['precio'], 'km' => $d['kilometraje'], 'comb' => $d['combustible'], 'trans' => $d['transmision']]);
+        return (int)$st->fetchColumn();
+    }
+
     protected static function vehiculo(array $cambios = []): array
     {
         return $cambios + [

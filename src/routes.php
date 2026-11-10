@@ -92,13 +92,12 @@ $router->post('/api/login', [AuthController::class, 'login']);
 $router->post('/api/logout', [AuthController::class, 'logout']);
 $router->get('/api/me', [AuthController::class, 'me'], 'auth');
 
-// Vehículos: el moderador revisa las publicaciones; el admin además hace el ABM del catálogo (tiene todos los permisos).
+// Vehículos: el moderador y el admin revisan las publicaciones; solo el admin las borra. Nadie del panel publica ni edita:
+// toda publicación tiene un vendedor, entra por POST /api/mis-vehiculos y la corrige solo su dueño.
 $verVehiculos = 'permiso:vehiculos.moderar|vehiculos.gestionar';
 $router->get('/api/admin/vehiculos', [AdminVehiculoController::class, 'index'], $verVehiculos);
 $router->get('/api/admin/vehiculos/{id}', [AdminVehiculoController::class, 'detalle'], $verVehiculos);
 $router->patch('/api/admin/vehiculos/{id}/estado', [AdminVehiculoController::class, 'moderar'], 'permiso:vehiculos.moderar');
-$router->post('/api/admin/vehiculos', [AdminVehiculoController::class, 'crear'], 'permiso:vehiculos.gestionar');
-$router->put('/api/admin/vehiculos/{id}', [AdminVehiculoController::class, 'actualizar'], 'permiso:vehiculos.gestionar');
 $router->delete('/api/admin/vehiculos/{id}', [AdminVehiculoController::class, 'eliminar'], 'permiso:vehiculos.gestionar');
 
 // Usuarios (admin): ver datos, editar nombre y rol, baja lógica

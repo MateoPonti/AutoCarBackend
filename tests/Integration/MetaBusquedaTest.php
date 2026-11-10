@@ -302,9 +302,8 @@ final class MetaBusquedaTest extends ApiTestCase
         $marca = self::unico('M');
         self::importar($fuente, '2026-11-02T06:00:00-03:00', self::primeraSemana($marca));
 
-        $this->ingresarComoAdmin();
-        $alta = $this->pedir('POST', '/api/admin/vehiculos', self::vehiculo(['marca' => $marca, 'modelo' => 'Sandero', 'anio' => 2017, 'precio' => 1000000, 'kilometraje' => 90000]));
-        self::assertSame(201, $alta['status'], json_encode($alta['json']));
+        $propio = $this->vehiculoDisponible(['marca' => $marca, 'modelo' => 'Sandero', 'anio' => 2017, 'precio' => 1000000, 'kilometraje' => 90000]);
+        $this->ingresarComoUsuario();
 
         $id = $this->crearBusqueda($marca);
         $j = $this->pedir('GET', "/api/meta-busquedas/$id")['json'];
@@ -312,7 +311,7 @@ final class MetaBusquedaTest extends ApiTestCase
 
         $portal = array_values(array_filter($j['resultados']['items'], fn($i) => $i['fuente'] === 'autocar'));
         self::assertCount(1, $portal);
-        self::assertSame($alta['json']['vehiculo']['id'], $portal[0]['id']);
+        self::assertSame($propio, $portal[0]['id']);
         self::assertNull($portal[0]['etiqueta']);
         self::assertEquals(13000000, $j['destacados']['mas_barato']['auto']['precio'], 'el del portal no compite en los destacados');
     }

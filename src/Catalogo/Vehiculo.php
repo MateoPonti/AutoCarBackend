@@ -161,8 +161,8 @@ final class Vehiculo
         $st->execute(['estado' => $estado, 'motivo' => $estado === 'rechazado' ? $motivo : null, 'id' => $id]);
     }
 
-    /** $usuarioId: dueño de la publicación; null cuando el vehículo lo carga el admin. */
-    public static function crear(array $d, ?int $usuarioId = null): int
+    /** $usuarioId: el vendedor, dueño de la publicación (obligatorio: la base tampoco acepta un vehículo sin vendedor). */
+    public static function crear(array $d, int $usuarioId): int
     {
         $st = Database::pdo()->prepare(
             'INSERT INTO vehiculo (usuario_id, marca, modelo, version, anio, precio, kilometraje, combustible, transmision,
