@@ -26,6 +26,7 @@
 | 14 | `014-foto-de-perfil.sql` | Foto de perfil opcional: tabla `usuario_foto` (en la base, como las fotos de las publicaciones). Correrla **antes** de desplegar el back que la usa |
 | 15 | `015-contacto-y-reportes.sql` | Contacto (público, con email) y reportes de publicaciones o usuarios: tablas `contacto` y `reporte`. Correrla **antes** de desplegar el back que la usa |
 | 16 | `016-roles-del-equipo.sql` | El admin deja de tener los permisos del mecánico (no tiene taller). El equipo no compra ni vende y nadie modera su propia publicación (eso va en el código). Correrla **antes** de desplegar el back que la usa |
+| 17 | `017-modelos-nuevos.sql` | Suma a la lista de Publicar 7 marcas y 46 modelos de la corrida completa de MercadoLibre del 10/11. Solo agrega |
 
 Se copian y pegan enteras en el **SQL Editor de Neon**, primero en el proyecto de Neon de dev y en el de main recién cuando se pasa `dev` → `main` (son dos proyectos separados).
 

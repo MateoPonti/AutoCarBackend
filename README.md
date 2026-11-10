@@ -58,7 +58,7 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `PATCH /api/admin/usuarios/{id}` | `usuarios.editar` (admin) | `{nombre?, rol?, activo?}`. No se puede cambiar el propio rol ni darse de baja (409) |
 | `DELETE /api/admin/usuarios/{id}` | `usuarios.editar` | Baja lógica (`activo = false`): no puede ingresar y su sesión deja de valer → 204 |
 | `GET /api/admin/roles` | `usuarios.ver` | Roles con sus permisos |
-| `GET /api/admin/metricas` | `metricas.ver` (admin) | Usuarios (activos, con actividad en 30 días, por rol), publicaciones (por estado, nuevas, precio promedio, valor en venta y vendido, marcas top), moderación y chat. Ganancias: no hay cobros todavía |
+| `GET /api/admin/metricas` | `metricas.ver` (admin) | Usuarios (activos, con actividad en 30 días, por rol), publicaciones (por estado, nuevas, precio promedio, valor en venta y vendido, marcas top), moderación y chat. Ganancias: no hay cobros todavía Incluye `ganancias` de las inspecciones (pago simulado): facturado, ganancia de AutoCar, pagado a mecánicos, fondo de garantía (acumulado, usado, disponible), retenido y reembolsado |
 | `GET /api/meta-busquedas` | sesión | Búsquedas guardadas del usuario, con autos que coinciden y avisos sin ver |
 | `POST /api/meta-busquedas` | sesión | Crea una búsqueda: `marca` y `modelo` obligatorios; `anio_desde`, `anio_hasta`, `precio_max`, `km_max` y `transmision` opcionales. Máximo 20 por usuario (409) → 201 |
 | `GET /api/meta-busquedas/{id}` | sesión (dueño) | Reporte: referencia de precio, novedades, destacados, resultados y otros modelos. Listado: `fuente`, `etiqueta`, `precio_max`, `km_max`, `orden` (`precio`, `km`, `nuevos`), `page` |
