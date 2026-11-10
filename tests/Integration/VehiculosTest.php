@@ -34,6 +34,15 @@ final class VehiculosTest extends ApiTestCase
         self::assertNotEmpty($r['json']['marcas']);
     }
 
+    public function testElDetalleMuestraElVendedorSinSuEmail(): void
+    {
+        $id = $this->vehiculoDisponible();
+        $v = $this->pedir('GET', "/api/vehiculos/$id")['json']['vehiculo'];
+        self::assertSame('Prueba', $v['vendedor']['nombre']);
+        self::assertArrayHasKey('desde', $v['vendedor']);
+        self::assertStringNotContainsString('@', json_encode($v['vendedor']));
+    }
+
     public function testVehiculoInexistenteDa404(): void
     {
         self::assertSame(404, $this->pedir('GET', '/api/vehiculos/999999')['status']);

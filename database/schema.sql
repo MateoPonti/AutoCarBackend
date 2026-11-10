@@ -118,6 +118,14 @@ CREATE TABLE IF NOT EXISTS vehiculo_foto (
 
 CREATE INDEX IF NOT EXISTS idx_fotos_vehiculo ON vehiculo_foto (vehiculo_id, orden);
 
+-- Favoritos: qué vehículos guardó cada usuario (012-favoritos.sql)
+CREATE TABLE IF NOT EXISTS favorito (
+  usuario_id  INTEGER     NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+  vehiculo_id INTEGER     NOT NULL REFERENCES vehiculo(id) ON DELETE CASCADE,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (usuario_id, vehiculo_id)
+);
+
 -- Chat entre un interesado y el vendedor, siempre sobre un vehículo. Una sola conversación por
 -- (vehículo, interesado). updated_at = último mensaje, para ordenar la bandeja.
 CREATE TABLE IF NOT EXISTS conversacion (

@@ -19,7 +19,7 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `POST /api/logout` | público | Borra la cookie de sesión → 204 |
 | `GET /api/me` | sesión | `{usuario, csrf}` del usuario autenticado |
 | `GET /api/vehiculos` | público | Listado. Filtros: `q`, `marca`, `combustible`, `precio_max`, `page` |
-| `GET /api/vehiculos/{id}` | público | Detalle |
+| `GET /api/vehiculos/{id}` | público | Detalle con fotos y `vendedor: {nombre, desde}` (sin el email: es una página pública) |
 | `GET /api/vehiculos/{id}/comparacion` | público | Precio frente a autos iguales de MercadoLibre, Kavak y Autocosmos: `buen_precio`, `en_precio`, `caro` o `sin_datos`, con mediana, ahorro y autos parecidos. Detalle en [docs/arquitectura-scraper.md](docs/arquitectura-scraper.md#5-cómo-decide-el-comparador). 503 si el almacén no responde |
 | `GET /api/marcas` | público | Marcas existentes (para armar el filtro) |
 | `GET /api/mis-vehiculos` | sesión | Las publicaciones propias (menos las eliminadas), con `estado`, `motivo_rechazo`, `completa` y `faltan` |
@@ -31,6 +31,9 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `PATCH /api/mis-vehiculos/{id}/estado` | sesión (dueño) | `{"estado":"vendido"}`, solo desde `disponible` |
 | `DELETE /api/mis-vehiculos/{id}` | sesión (dueño) | Baja lógica → 204 |
 | `POST /api/vehiculos/{id}/conversacion` | sesión | Abre (o recupera) el chat con el vendedor de ese vehículo → 201 si es nueva, 200 si ya existía: `{conversacion: {id}}`. Sobre la publicación propia → 409 `vehiculo_propio`; sin vendedor (cargado por el admin) → 409 `sin_vendedor` |
+| `GET /api/favoritos` | sesión | Favoritos del usuario: `{items}` con las mismas fichas que el catálogo, el último guardado primero. Solo los publicados (disponibles o vendidos) |
+| `PUT /api/favoritos/{id}` | sesión | Guarda el vehículo en favoritos → 204 (guardarlo dos veces no da error). 404 si no está disponible; 409 `vehiculo_propio` si es una publicación propia |
+| `DELETE /api/favoritos/{id}` | sesión | Lo saca de favoritos → 204 |
 | `GET /api/conversaciones` | sesión | Bandeja de chats del usuario, la de actividad más reciente primero |
 | `GET /api/conversaciones/{id}/mensajes?desde=N` | sesión (participante) | Mensajes con id mayor a `N` (sin `desde`, todos) → `{items, ultimo_id, abierta}`. Los que devuelve quedan leídos. El front guarda `ultimo_id` y pregunta cada tanto por los nuevos. De otro → 404 |
 | `POST /api/conversaciones/{id}/mensajes` | sesión (participante) | `{"texto": "..."}` (hasta 1000 caracteres) → 201 `{mensaje}`. Si la publicación se eliminó → 409 `conversacion_cerrada` |
