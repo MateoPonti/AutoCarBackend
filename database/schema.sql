@@ -50,9 +50,10 @@ JOIN rol r ON r.nombre = rp.rol
 JOIN permiso p ON p.nombre = rp.permiso
 ON CONFLICT DO NOTHING;
 
--- El admin tiene TODOS los permisos (también los que se agreguen después, al volver a correr esto)
+-- El admin tiene todos los permisos (también los que se agreguen después, al volver a correr esto) MENOS los del
+-- mecánico: no tiene un taller (016-roles-del-equipo.sql)
 INSERT INTO rol_permiso (rol_id, permiso_id)
-SELECT r.id, p.id FROM rol r CROSS JOIN permiso p WHERE r.nombre = 'admin'
+SELECT r.id, p.id FROM rol r CROSS JOIN permiso p WHERE r.nombre = 'admin' AND p.nombre NOT LIKE 'verificaciones.%'
 ON CONFLICT DO NOTHING;
 
 -- activo = false es la baja lógica (lo hace el admin): no puede ingresar y su sesión deja de valer.

@@ -7,6 +7,7 @@ Compra y venta de vehículos. Entidad principal: **vehículos**. El front (Verce
 - **Roles y permisos** (en tablas: `rol`, `permiso`, `rol_permiso`): `usuario` (publica y chatea), `moderador` (aprueba o rechaza publicaciones), `admin` (puede todo: usuarios, ABM del catálogo, moderación y métricas) y `mecanico` (verificaciones; endpoints pendientes). Las rutas piden **permisos**, no roles: un rol nuevo solo necesita filas en `rol_permiso`.
 - **Autenticación:** sesión de PHP (`$_SESSION`) guardada en la tabla `sesion`; el navegador solo tiene la cookie `autocar_sesion` con el id (`HttpOnly`, `Secure`, `SameSite=Strict`) + token CSRF en el header `X-CSRF-Token`.
 - **Middleware** (`src/Core/Middleware.php`): antes de ejecutar el controlador, controla el guard de la ruta (`auth` → sesión, 401; `permiso:...` → permiso del rol, 403) y el token CSRF en todo lo que cambia datos (403). Los guards se ven todos juntos en `src/routes.php`.
+- **Roles:** *usuario* compra y vende; *mecánico* (cuenta del taller) inspecciona; *moderador* revisa publicaciones, reportes y reclamos; *admin* lo del moderador más usuarios, talleres, contacto y métricas (todos los permisos menos los del mecánico). Las cuentas del equipo y las de los talleres **no compran ni venden**: las rutas de publicar, pedir mecánico, favoritos, chat y búsquedas guardadas llevan el guard `usuario` (403 `cuenta_del_equipo`). Nadie modera su propia publicación (409 `publicacion_propia`).
 - **Versión:** ver `VERSION` (versionado semántico). **Autores:** `autores.txt`.
 
 ## Endpoints

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace AutoCar\Admin;
 
+use AutoCar\Auth\Auth;
 use AutoCar\Auth\Usuario;
 use AutoCar\Catalogo\CatalogoController;
 use AutoCar\Catalogo\Vehiculo;
@@ -54,6 +55,10 @@ final class AdminVehiculoController
         $nuevo  = Request::texto($in, 'estado');
         $motivo = Request::texto($in, 'motivo');
 
+        // Conflicto de interés: nadie aprueba ni rechaza su propia publicación
+        if ((int)$actual['usuario_id'] === (int)Auth::id()) {
+            Response::error(409, 'publicacion_propia', 'No podés moderar tu propia publicación: la tiene que revisar otro moderador.');
+        }
         $errores = [];
         if (!in_array($nuevo, self::TRANSICIONES[$actual['estado']] ?? [], true)) {
             $errores['estado'] = "Una publicación en estado '{$actual['estado']}' no puede pasar a '{$nuevo}'.";

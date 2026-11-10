@@ -37,22 +37,24 @@ $router->get('/api/marcas-modelos', [CatalogoController::class, 'marcasModelos']
 $router->get('/api/fotos/{id}', [PublicacionController::class, 'foto']); // controla visibilidad adentro
 
 // Publicaciones del usuario logueado
+// Comprar y vender (guard 'usuario'): solo cuentas personales. Las del equipo (admin, moderador) y las de los
+// talleres no publican, no piden mecánico, no guardan favoritos ni abren chats: para eso, una cuenta personal.
 $router->get('/api/mis-vehiculos', [PublicacionController::class, 'index'], 'auth');
-$router->post('/api/mis-vehiculos', [PublicacionController::class, 'crear'], 'auth');
+$router->post('/api/mis-vehiculos', [PublicacionController::class, 'crear'], 'usuario');
 $router->get('/api/mis-vehiculos/{id}', [PublicacionController::class, 'detalle'], 'auth');
-$router->put('/api/mis-vehiculos/{id}', [PublicacionController::class, 'actualizar'], 'auth');
-$router->patch('/api/mis-vehiculos/{id}/estado', [PublicacionController::class, 'cambiarEstado'], 'auth');
+$router->put('/api/mis-vehiculos/{id}', [PublicacionController::class, 'actualizar'], 'usuario');
+$router->patch('/api/mis-vehiculos/{id}/estado', [PublicacionController::class, 'cambiarEstado'], 'usuario');
 $router->delete('/api/mis-vehiculos/{id}', [PublicacionController::class, 'eliminar'], 'auth');
 // Publicar por partes: las fotos se pueden agregar o sacar después de crear la publicación
-$router->post('/api/mis-vehiculos/{id}/fotos', [PublicacionController::class, 'agregarFotos'], 'auth');
+$router->post('/api/mis-vehiculos/{id}/fotos', [PublicacionController::class, 'agregarFotos'], 'usuario');
 $router->delete('/api/mis-vehiculos/{id}/fotos/{foto}', [PublicacionController::class, 'eliminarFoto'], 'auth');
 
 // Chat entre interesado y vendedor (sólo los participantes ven cada conversación)
-$router->post('/api/vehiculos/{id}/conversacion', [ChatController::class, 'abrir'], 'auth');
+$router->post('/api/vehiculos/{id}/conversacion', [ChatController::class, 'abrir'], 'usuario');
 
 // Favoritos del usuario logueado
 $router->get('/api/favoritos', [FavoritoController::class, 'index'], 'auth');
-$router->put('/api/favoritos/{id}', [FavoritoController::class, 'agregar'], 'auth');
+$router->put('/api/favoritos/{id}', [FavoritoController::class, 'agregar'], 'usuario');
 $router->delete('/api/favoritos/{id}', [FavoritoController::class, 'sacar'], 'auth');
 $router->get('/api/conversaciones', [ChatController::class, 'index'], 'auth');
 $router->get('/api/conversaciones/{id}/mensajes', [ChatController::class, 'mensajes'], 'auth');
@@ -60,7 +62,7 @@ $router->post('/api/conversaciones/{id}/mensajes', [ChatController::class, 'envi
 
 // Meta-búsqueda: cada usuario ve solo sus búsquedas (las rutas fijas no chocan con {id}, que acepta solo dígitos)
 $router->get('/api/meta-busquedas', [MetaBusquedaController::class, 'index'], 'auth');
-$router->post('/api/meta-busquedas', [MetaBusquedaController::class, 'crear'], 'auth');
+$router->post('/api/meta-busquedas', [MetaBusquedaController::class, 'crear'], 'usuario');
 $router->get('/api/meta-busquedas/marcas', [MetaBusquedaController::class, 'marcasYModelos'], 'auth');
 $router->get('/api/meta-busquedas/avisos', [MetaBusquedaController::class, 'avisos'], 'auth');
 $router->get('/api/meta-busquedas/{id}', [MetaBusquedaController::class, 'reporte'], 'auth');
@@ -73,7 +75,7 @@ $router->get('/api/autos-externos', [MetaBusquedaController::class, 'autoExterno
 $router->get('/api/mecanicos', [InspeccionController::class, 'mecanicos']);
 // Comprador: pide, ve las suyas, cancela antes de que la acepten y reclama hasta 15 días después de la firma.
 // El detalle lo ven el comprador, el mecánico asignado y quien resuelve reclamos.
-$router->post('/api/inspecciones', [InspeccionController::class, 'crear'], 'auth');
+$router->post('/api/inspecciones', [InspeccionController::class, 'crear'], 'usuario');
 $router->get('/api/mis-inspecciones', [InspeccionController::class, 'mias'], 'auth');
 $router->get('/api/inspecciones/{id}', [InspeccionController::class, 'detalle'], 'auth');
 $router->post('/api/inspecciones/{id}/cancelar', [InspeccionController::class, 'cancelar'], 'auth');

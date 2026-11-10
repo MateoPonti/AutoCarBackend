@@ -106,12 +106,13 @@ final class InspeccionesCompradorTest extends ApiTestCase
         self::assertSame(401, $this->pedir('GET', '/api/mis-inspecciones')['status']);
     }
 
-    public function testElMecanicoNoSePideUnaInspeccionASiMismo(): void
+    public function testLaCuentaDelTallerNoPideInspecciones(): void
     {
+        // La cuenta del taller es aparte de la personal: no compra (antes daba 409 mecanico_propio; ahora ni llega)
         [$yo] = $this->ingresarComoMecanico();
         $r = $this->pedirInspeccion($yo);
-        self::assertSame(409, $r['status']);
-        self::assertSame('mecanico_propio', $r['json']['error']);
+        self::assertSame(403, $r['status']);
+        self::assertSame('cuenta_del_equipo', $r['json']['error']);
     }
 
     public function testAutosDeAutoCar(): void
