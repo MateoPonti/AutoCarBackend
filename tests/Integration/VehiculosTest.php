@@ -71,6 +71,40 @@ final class VehiculosTest extends ApiTestCase
         Entorno::pdo()->exec("INSERT INTO vehiculo (marca, modelo, anio) VALUES ('Fiat', 'Uno', 2010)");
     }
 
+    public function testMarcasYModelosQueSePuedenPublicar(): void
+    {
+        $r = $this->pedir('GET', '/api/marcas-modelos');
+        self::assertSame(200, $r['status']);
+        $porMarca = array_column($r['json']['marcas'], 'modelos', 'marca');
+        self::assertContains('Gol Trend', $porMarca['Volkswagen'] ?? [], 'los modelos del seed están en la lista');
+    }
+
+    public function testSoloSePublicanMarcasYModelosDeLaLista(): void
+    {
+        $this->ingresarComoUsuario();
+        $marca = $this->pedirFormulario('/api/mis-vehiculos', ['marca' => 'Pepita', 'modelo' => '21021', 'anio' => '2020']);
+        self::assertSame(422, $marca['status']);
+        self::assertArrayHasKey('marca', $marca['json']['errores']);
+
+        $modelo = $this->pedirFormulario('/api/mis-vehiculos', ['marca' => 'Volkswagen', 'modelo' => '21021', 'anio' => '2020']);
+        self::assertSame(422, $modelo['status']);
+        self::assertArrayHasKey('modelo', $modelo['json']['errores']);
+
+        $bien = $this->pedirFormulario('/api/mis-vehiculos', ['marca' => 'Volkswagen', 'modelo' => 'Gol Trend', 'anio' => '2020']);
+        self::assertSame(201, $bien['status'], json_encode($bien['json']));
+
+        // Y al corregirla tampoco se puede cambiar a una que no está
+        $id = $bien['json']['vehiculo']['id'];
+        self::assertSame(422, $this->pedir('PUT', "/api/mis-vehiculos/$id", ['modelo' => 'Pepita'])['status']);
+    }
+
+    public function testLaBaseNoAceptaUnaMarcaQueNoEstaEnLaLista(): void
+    {
+        $this->expectException(\PDOException::class);
+        Entorno::pdo()->exec("INSERT INTO vehiculo (usuario_id, marca, modelo, anio)
+            VALUES ((SELECT min(id) FROM usuario), 'Pepita', '21021', 2020)");
+    }
+
     public function testPublicarConDatosInvalidosDa422(): void
     {
         $this->ingresarComoUsuario();

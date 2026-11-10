@@ -22,6 +22,7 @@
 | 10 | `010-publicar-por-partes.sql` | Publicar por partes: precio, kilometraje, combustible y transmisión pueden quedar vacíos mientras la publicación está pendiente, nunca en una visible. Correrla **antes** de desplegar el back que la usa |
 | 11 | `011-vehiculo-con-vendedor.sql` | Toda publicación tiene un vendedor: los autos sin dueño pasan a la cuenta demo `vendedor-demo@autocar.test` y `usuario_id` queda obligatorio. El panel ya no crea ni edita vehículos. Correrla **antes** de desplegar el back que la usa |
 | 12 | `012-favoritos.sql` | Favoritos: tabla `favorito` (usuario + vehículo) para `GET/PUT/DELETE /api/favoritos`. Correrla **antes** de desplegar el back que la usa |
+| 13 | `013-marcas-y-modelos.sql` | Marcas y modelos que se pueden publicar (62 marcas y ~1.080 modelos de las corridas del scraper del 10/11) y clave foránea `vehiculo (marca, modelo)`: con curl ya no se publica "Pepita 21021". Correrla **antes** de desplegar el back que la usa |
 
 Se copian y pegan enteras en el **SQL Editor de Neon**, primero en el proyecto de Neon de dev y en el de main recién cuando se pasa `dev` → `main` (son dos proyectos separados).
 

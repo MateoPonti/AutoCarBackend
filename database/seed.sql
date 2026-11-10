@@ -10,6 +10,15 @@ SELECT 'Vendedor demo', 'vendedor-demo@autocar.test',
        (SELECT id FROM rol WHERE nombre = 'usuario')
 ON CONFLICT (email) DO NOTHING;
 
+-- Marcas y modelos de estos autos, por si la lista de schema.sql no los tuviera (la base solo acepta los de la lista)
+INSERT INTO marca (nombre) VALUES ('Toyota'), ('Volkswagen'), ('Ford'), ('Renault'), ('Chevrolet'), ('Fiat'), ('Peugeot'), ('Nissan'), ('Honda')
+ON CONFLICT DO NOTHING;
+INSERT INTO modelo (marca, nombre) VALUES
+  ('Toyota', 'Corolla'), ('Volkswagen', 'Amarok'), ('Ford', 'Fiesta'), ('Renault', 'Kwid'), ('Chevrolet', 'Cruze'),
+  ('Toyota', 'Hilux'), ('Fiat', 'Cronos'), ('Peugeot', '208'), ('Toyota', 'Corolla Cross'), ('Nissan', 'Leaf'),
+  ('Honda', 'Fit'), ('Volkswagen', 'Gol Trend')
+ON CONFLICT DO NOTHING;
+
 INSERT INTO vehiculo (usuario_id, marca, modelo, version, anio, precio, kilometraje, combustible, transmision, estado, descripcion)
 SELECT (SELECT id FROM usuario WHERE email = 'vendedor-demo@autocar.test'), d.* FROM (VALUES
 ('Toyota',     'Corolla', 'XEi', 2021, 24500000, 48000,  'nafta',     'automatica', 'disponible', 'Único dueño, service oficial al día. Cubiertas nuevas.'),

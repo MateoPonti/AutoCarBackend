@@ -40,6 +40,12 @@ final class CatalogoController
         Response::json(['marcas' => Vehiculo::marcas()]);
     }
 
+    /** GET /api/marcas-modelos: las marcas y modelos que se pueden publicar, para armar el formulario. */
+    public function marcasModelos(): void
+    {
+        Response::json(['marcas' => MarcaModelo::lista()]);
+    }
+
     /** Respuesta paginada, compartida con el listado de administración. */
     public static function listado(array $filtros, bool $soloDisponibles, int $porPagina): array
     {
