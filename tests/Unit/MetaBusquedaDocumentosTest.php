@@ -192,8 +192,9 @@ final class MetaBusquedaDocumentosTest extends TestCase
         self::assertFalse($r['completo']);
         self::assertNotEmpty($r['advertencias']);
 
-        $r = $this->importar(self::SEMANA_3, array_merge($base, [['id_externo' => 'x', 'marca' => 'Renault']]));
-        self::assertFalse($r['completo'], 'un auto inválido hace que la corrida no sirva para retirar');
+        // Sin número de aviso no se sabe cuál es: la corrida no sirve para retirar (con número, sigue completa)
+        $r = $this->importar(self::SEMANA_3, array_merge($base, [['marca' => 'Renault']]));
+        self::assertFalse($r['completo'], 'un auto inválido sin número de aviso hace que la corrida no sirva para retirar');
         self::assertSame(8, $r['autos']);
     }
 
