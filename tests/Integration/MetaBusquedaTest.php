@@ -290,9 +290,16 @@ final class MetaBusquedaTest extends ApiTestCase
 
         self::assertCount(1, Entorno::documentos()->leer("recolecciones/$fuente")['corridas']);
 
+        // Inválido con número de aviso (por ejemplo, km absurdos): no se carga, pero la corrida sigue completa
         $conMalo = array_merge($base, [['id_externo' => 'x', 'marca' => $marca]]);
-        $r = self::importar($fuente, '2026-11-09T06:00:00-03:00', $conMalo);
-        self::assertFalse($r['completo'], 'un auto inválido hace que la corrida no sirva para retirar');
+        $r = self::importar($fuente, '2026-11-08T06:00:00-03:00', $conMalo);
+        self::assertTrue($r['completo'], 'un inválido con número de aviso no arruina la corrida');
+        self::assertNotEmpty($r['advertencias']);
+
+        // Inválido SIN número de aviso: no se sabe cuál es, la corrida no sirve para retirar
+        $sinId = array_merge($base, [['marca' => $marca]]);
+        $r = self::importar($fuente, '2026-11-09T06:00:00-03:00', $sinId);
+        self::assertFalse($r['completo'], 'un auto sin número de aviso hace que la corrida no sirva para retirar');
         self::assertSame(8, $r['autos']);
     }
 

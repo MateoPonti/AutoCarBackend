@@ -46,11 +46,23 @@ final class Importador
         $porModelo = [];
         $cantidad = 0;
         $invalidos = 0;
+        // Un auto con datos inválidos (por ejemplo 9.999.999 km, mal cargado por el vendedor) no se carga. Si trae su
+        // número de aviso, igual se sabe que sigue publicado: queda protegido para no darlo por retirado y la corrida
+        // sigue completa. Solo uno sin número de aviso deja la corrida incompleta (no se sabe cuál es).
+        $protegidos = [];
+        $sinId = 0;
         foreach ($datos['autos'] as $auto) {
             $limpio = is_array($auto) ? self::validarAuto($auto) : null;
             $clave = $limpio !== null ? Catalogo::claveDe($limpio['marca'], $limpio['modelo']) : '';
             if ($limpio === null || preg_match('/^[a-z0-9][a-z0-9_]*$/', $clave) !== 1) {
                 $invalidos++;
+                $idMalo = is_array($auto) ? ($auto['id_externo'] ?? null) : null;
+                $idMalo = is_int($idMalo) ? (string)$idMalo : (is_string($idMalo) ? trim($idMalo) : '');
+                if ($idMalo !== '') {
+                    $protegidos[$idMalo] = true;
+                } else {
+                    $sinId++;
+                }
                 continue;
             }
             if (!isset($porModelo[$clave][$limpio['id_externo']])) {
@@ -61,9 +73,12 @@ final class Importador
 
         $advertencias = [];
         $completo = ($datos['completo'] ?? false) === true;
-        if ($invalidos > 0) {
+        if ($sinId > 0) {
             $completo = false;
-            $advertencias[] = "$invalidos autos con datos inválidos: la corrida queda marcada como incompleta.";
+            $advertencias[] = "$sinId autos inválidos sin número de aviso: la corrida queda marcada como incompleta.";
+        }
+        if ($invalidos > $sinId) {
+            $advertencias[] = ($invalidos - $sinId) . ' autos con datos inválidos: no se cargan, pero tampoco se dan por retirados.';
         }
 
         $recolecciones = $this->docs->leer("recolecciones/$fuente") ?? ['fuente' => $fuente, 'corridas' => []];
@@ -106,7 +121,7 @@ final class Importador
                 Catalogo::registrar($modelo, $fuente, $a, $fecha, $completo);
             }
             if ($completo) {
-                $retirados += Catalogo::retirarAusentes($modelo, $fuente, $fecha);
+                $retirados += Catalogo::retirarAusentes($modelo, $fuente, $fecha, $protegidos);
                 if ($anterior !== null) {
                     $novedades = Novedades::comparar(
                         Catalogo::fotos($modelo, $fuente, $fecha),
