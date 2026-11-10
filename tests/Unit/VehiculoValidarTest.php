@@ -150,10 +150,11 @@ final class VehiculoValidarTest extends TestCase
         self::assertSame([], Vehiculo::faltan($completa));
     }
 
-    public function testElAdminNoNecesitaCondicionLocalidadNiFotos(): void
+    public function testParaAprobarSiempreHaceFaltaTodo(): void
     {
-        $fila = ['usuario_id' => null, 'precio' => '9000000', 'kilometraje' => '1000', 'combustible' => 'nafta',
+        // Ya no hay autos "del admin" que se aprueben sin estado general, localidad ni fotos
+        $fila = ['usuario_id' => 1, 'precio' => '9000000', 'kilometraje' => '1000', 'combustible' => 'nafta',
             'transmision' => 'manual', 'condicion' => null, 'localidad' => null, 'fotos_cantidad' => 0];
-        self::assertSame([], Vehiculo::faltan($fila));
+        self::assertSame(['estado general', 'localidad', 'fotos'], Vehiculo::faltan($fila));
     }
 }
