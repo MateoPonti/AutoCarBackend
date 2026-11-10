@@ -102,21 +102,19 @@ final class Vehiculo
 
     /**
      * Lo que le falta a una publicación para que el moderador la pueda aprobar: los datos de PARA_COMPLETAR y al
-     * menos una foto. Los vehículos que carga el admin (sin dueño) no pasan por moderación y no piden condición,
-     * localidad ni fotos. Función pura: recibe la fila con fotos_cantidad.
+     * menos una foto. Una sola regla para todas: desde la 011 toda publicación tiene un vendedor y nadie del panel
+     * carga autos. Función pura: recibe la fila con fotos_cantidad.
      * @return string[] los nombres de lo que falta, vacío si está completa
      */
     public static function faltan(array $v): array
     {
-        $deUsuario = ($v['usuario_id'] ?? null) !== null;
         $faltan = [];
         foreach (self::PARA_COMPLETAR as $campo => $nombre) {
-            $opcionalParaElAdmin = in_array($campo, ['condicion', 'localidad'], true);
-            if (($v[$campo] ?? null) === null && ($deUsuario || !$opcionalParaElAdmin)) {
+            if (($v[$campo] ?? null) === null) {
                 $faltan[] = $nombre;
             }
         }
-        if ($deUsuario && (int)($v['fotos_cantidad'] ?? 0) === 0) {
+        if ((int)($v['fotos_cantidad'] ?? 0) === 0) {
             $faltan[] = 'fotos';
         }
         return $faltan;
@@ -312,8 +310,8 @@ final class Vehiculo
      * Si cambia una, cambiar la otra.
      */
     private const COMPLETA_SQL = "(precio IS NOT NULL AND kilometraje IS NOT NULL AND combustible IS NOT NULL
-        AND transmision IS NOT NULL AND (usuario_id IS NULL OR (condicion IS NOT NULL AND localidad IS NOT NULL
-        AND EXISTS (SELECT 1 FROM vehiculo_foto f WHERE f.vehiculo_id = vehiculo.id))))";
+        AND transmision IS NOT NULL AND condicion IS NOT NULL AND localidad IS NOT NULL
+        AND EXISTS (SELECT 1 FROM vehiculo_foto f WHERE f.vehiculo_id = vehiculo.id))";
 
     /**
      * Valida una publicación que se carga por partes: marca, modelo y año son obligatorios; los datos de
