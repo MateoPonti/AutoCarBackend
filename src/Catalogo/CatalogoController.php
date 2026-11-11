@@ -50,7 +50,7 @@ final class CatalogoController
     /** Respuesta paginada, compartida con el listado de administración. */
     public static function listado(array $filtros, bool $soloDisponibles, int $porPagina): array
     {
-        $pagina = max(1, (int)($_GET['page'] ?? 1));
+        $pagina = min(10000, max(1, (int)($_GET['page'] ?? 1))); // tope: una página enorme desbordaría el OFFSET
         $r = Vehiculo::buscar($filtros, $pagina, $porPagina, $soloDisponibles);
         return [
             'items'      => array_map([Vehiculo::class, 'paraApi'], $r['items']),

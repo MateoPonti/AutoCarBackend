@@ -43,6 +43,11 @@ set_exception_handler(static function (Throwable $e): void {
     while (ob_get_level() > 0) {
         ob_end_clean();
     }
+    // Clase 22 de PostgreSQL = "dato inválido" (número fuera de rango, texto que no es UTF-8, un byte nulo...):
+    // la culpa es de lo que mandó el cliente, así que es un 400 y no un 500
+    if ($e instanceof PDOException && str_starts_with((string)$e->getCode(), '22')) {
+        Response::error(400, 'dato_invalido', 'Alguno de los datos enviados no es válido.');
+    }
     Response::error(500, 'servidor', 'Ocurrió un error inesperado. Probá de nuevo en unos minutos.');
 });
 
