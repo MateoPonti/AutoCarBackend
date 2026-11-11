@@ -21,13 +21,22 @@ final class Importador
     private const PISO_RESPECTO_ANTERIOR = 0.8;
     private const CORRIDAS_GUARDADAS = 30;
 
-    public function __construct(private Documentos $docs)
+    /** @var array<string, int>|null clave de cada marca del catálogo ("mercedes benz"), para buscarla rápido */
+    private ?array $clavesConocidas;
+
+    /**
+     * @param list<string>|null $marcasConocidas las de la tabla marca de Neon. Un auto con otra marca no se carga y se
+     *                                           avisa (ver marcaConocida). null: se cargan todas.
+     */
+    public function __construct(private Documentos $docs, ?array $marcasConocidas = null)
     {
+        $this->clavesConocidas = $marcasConocidas === null ? null
+            : array_flip(array_map([Clave::class, 'marca'], $marcasConocidas));
     }
 
     /**
      * @param array<string, mixed> $datos
-     * @return array{fuente: string, fecha: string, autos: int, completo: bool, modelos_escritos: int, retirados: int, avisos: int, advertencias: list<string>}
+     * @return array{fuente: string, fecha: string, autos: int, completo: bool, modelos_escritos: int, retirados: int, avisos: int, apartados: int, advertencias: list<string>}
      */
     public function importar(array $datos): array
     {
@@ -52,6 +61,7 @@ final class Importador
         // sigue completa. Solo uno sin número de aviso deja la corrida incompleta (no se sabe cuál es).
         $protegidos = [];
         $sinId = 0;
+        $apartadas = []; // marca como la escribió el sitio → cantidad de autos
         foreach ($datos['autos'] as $auto) {
             $limpio = is_array($auto) ? self::validarAuto($auto) : null;
             $clave = $limpio !== null ? Catalogo::claveDe($limpio['marca'], $limpio['modelo']) : '';
@@ -64,6 +74,12 @@ final class Importador
                 } else {
                     $sinId++;
                 }
+                continue;
+            }
+            // Marca que no está en el catálogo: no se carga y se avisa. Como sigue publicado, no se da por retirado.
+            if (!$this->marcaConocida($limpio['marca'])) {
+                $protegidos[$limpio['id_externo']] = true;
+                $apartadas[$limpio['marca']] = ($apartadas[$limpio['marca']] ?? 0) + 1;
                 continue;
             }
             if (!isset($porModelo[$clave][$limpio['id_externo']])) {
@@ -80,6 +96,11 @@ final class Importador
         }
         if ($invalidos > $sinId) {
             $advertencias[] = ($invalidos - $sinId) . ' autos con datos inválidos: no se cargan, pero tampoco se dan por retirados.';
+        }
+        if ($apartadas !== []) {
+            $detalle = implode(', ', array_map(static fn($m, $n) => "$m: $n", array_keys($apartadas), $apartadas));
+            $advertencias[] = array_sum($apartadas) . " autos con marcas que no están en el catálogo ($detalle): no se cargaron. "
+                . 'Para verlos: php bin/importar-autos.php --revisar-marcas archivo.json';
         }
 
         $recolecciones = $this->docs->leer("recolecciones/$fuente") ?? ['fuente' => $fuente, 'corridas' => []];
@@ -165,8 +186,18 @@ final class Importador
             'modelos_escritos' => $escritos,
             'retirados'        => $retirados,
             'avisos'           => $avisos,
+            'apartados'        => array_sum($apartadas),
             'advertencias'     => $advertencias,
         ];
+    }
+
+    /**
+     * Si la marca está en el catálogo, sin contar mayúsculas, acentos, signos ni apodos ("VW" = "Volkswagen").
+     * Sin lista de marcas se aceptan todas.
+     */
+    public function marcaConocida(string $marca): bool
+    {
+        return $this->clavesConocidas === null || isset($this->clavesConocidas[Clave::marca($marca)]);
     }
 
     /** @param array<string, mixed> $a */

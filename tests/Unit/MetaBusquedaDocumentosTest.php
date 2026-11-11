@@ -211,6 +211,32 @@ final class MetaBusquedaDocumentosTest extends TestCase
         self::assertGreaterThan($antes, $this->docs->escrituras);
     }
 
+    public function testUnaMarcaQueNoEstaEnElCatalogoNoSeCargaYSeAvisa(): void
+    {
+        $importador = new Importador($this->docs, ['Renault', 'Peugeot', 'Volkswagen']);
+        $autos = [...self::primeraSemana(), self::coche('p1', ['marca' => 'Peugot', 'modelo' => '208']),
+            self::coche('p2', ['marca' => 'Peugot', 'modelo' => '208']), self::coche('v1', ['marca' => 'VW', 'modelo' => 'Gol'])];
+        $r = $importador->importar(['fuente' => 'kavak', 'fecha' => self::SEMANA_1, 'completo' => true, 'autos' => $autos]);
+
+        self::assertSame(9, $r['autos'], 'los Renault y el VW (apodo de Volkswagen) entran');
+        self::assertSame(2, $r['apartados']);
+        self::assertNull(Catalogo::leer($this->docs, 'peugot_208'));
+        self::assertStringContainsString('Peugot: 2', implode(' ', $r['advertencias']));
+        self::assertTrue($importador->marcaConocida('RENAULT'));
+        self::assertFalse($importador->marcaConocida('Peugot'));
+
+        // El Peugot sigue publicado: aunque no se cargue, una corrida completa sin él tampoco retira nada de más
+        $r = $importador->importar(['fuente' => 'kavak', 'fecha' => self::SEMANA_2, 'completo' => true, 'autos' => $autos]);
+        self::assertSame(0, $r['retirados']);
+    }
+
+    public function testSinListaDeMarcasNoSeApartaNinguna(): void
+    {
+        $r = $this->importar(self::SEMANA_1, [self::coche('p1', ['marca' => 'Peugot', 'modelo' => '208'])]);
+        self::assertSame(0, $r['apartados']);
+        self::assertNotNull(Catalogo::leer($this->docs, 'peugot_208'));
+    }
+
     public function testDosFuentesDelMismoModeloVanAlMismoDocumento(): void
     {
         $this->importar(self::SEMANA_1, self::primeraSemana());
