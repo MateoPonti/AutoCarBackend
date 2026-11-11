@@ -15,13 +15,23 @@ Programas que corren en la PC del grupo (no en Render) y bajan los autos usados 
 
 ## Corrida diaria en GitHub Actions
 
-El workflow **Scraper** (`.github/workflows/scraper.yml`) hace lo mismo que `diario.bat` **todos los días a las 06:00 de Argentina** (09:00 UTC): las tres fuentes, `armar-modelos` y `importar-autos --hoy`. Como GitHub solo programa los workflows desde `main`, **carga el Firestore de prod**. La PC, con su `.env`, carga el de dev.
+El workflow **Scraper** (`.github/workflows/scraper.yml`) hace lo mismo que `diario.bat` **todos los días a las 06:00 de Argentina** (09:00 UTC): Autocosmos y MercadoLibre, `armar-modelos` y `importar-autos --hoy`. Como GitHub solo programa los workflows desde `main`, **carga el Firestore de prod**. La PC, con su `.env`, carga el de dev.
 
 - **Secretos por Environment** (*Settings → Environments*): `prod`, limitado a `main`, y `dev`, limitado a `dev`. Cada uno tiene el secreto `FIRESTORE_CREDENCIALES_JSON` (el contenido del `.json` de la cuenta de servicio de escritura de ese proyecto de Firebase) y la variable `MARCAS_URL` (`/api/marcas-modelos` del back de ese entorno). El workflow elige el Environment según la rama: correrlo a mano desde `dev` carga Firestore dev y nunca puede tocar prod. Sin el secreto no se carga nada y el workflow queda en rojo.
 - **Si algo falla:** una fuente que falla no frena a las otras; si se cortó a mitad de camino, lo que juntó entra como corrida incompleta (actualiza precios, pero no retira autos ni manda avisos). Si ninguna fuente trajo nada, no se carga nada. Si la carga a Firestore se corta, la corrida no queda registrada y se puede volver a cargar. Los autos mal cargados y las marcas fuera del catálogo salen como aviso amarillo; un error real deja el workflow en rojo.
 - Las corridas quedan 7 días como artefacto. A mano: **Actions → Scraper → Run workflow** (también necesita que el archivo esté en `main`).
 - El horario es aproximado (GitHub lo puede demorar) y en un repo público GitHub apaga los `schedule` después de 60 días sin actividad: se reactiva desde **Actions**.
-- Riesgo: que un sitio bloquee los servidores de GitHub (al scraper viejo de Kavak con Playwright, ya borrado, le pasó el 09/11). Si pasa, la PC sigue siendo el respaldo.
+- **Kavak no corre en Actions:** responde 403 a los servidores de GitHub (bloquea las IP de centros de datos; le pasó al scraper viejo con Playwright el 09/11 y a `recolectar.php` el 11/11). Desde la PC anda. Para cargarlo en prod, en Git Bash desde `Backend/`:
+
+  ```bash
+  php recolectores/kavak/recolectar.php            # ~15 min (Crawl-delay de 20 s)
+  FIRESTORE_CREDENCIALES=<.json de prod> MERCADO_ALMACEN=firestore \
+  MARCAS_URL=https://autocarbackend-1.onrender.com/api/marcas-modelos \
+  php -d memory_limit=1G bin/importar-autos.php storage/mercado/kavak/AAAA-MM-DD.json
+  ```
+
+  No correrlo mientras el workflow está cargando (los dos escriben el índice). En prod, Kavak entra al metabuscador pero no al comparador: `armar-modelos` en Actions solo ve las corridas de ese día.
+- Si otro sitio bloquea los servidores de GitHub, pasa lo mismo: se corre desde la PC.
 
 ## Formato común
 
