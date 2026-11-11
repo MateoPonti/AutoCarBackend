@@ -29,6 +29,7 @@
 | 17 | `017-modelos-nuevos.sql` | Suma a la lista de Publicar 7 marcas y 46 modelos de la corrida completa de MercadoLibre del 10/11. Solo agrega |
 | 18 | `018-inspeccion-no-realizada.sql` | Estado `no_realizada` de una inspección: el mecánico fue y no la pudo hacer (por ejemplo, el vendedor no dejó revisar el auto); se le devuelve todo al comprador. Correrla **antes** de desplegar el back que la usa |
 | 19 | `019-marca-unica.sql` | Una marca no se repite con otra escritura ("DS" y "Ds"): índice único sobre el nombre en minúsculas. No hace falta desplegar nada antes ni después |
+| 20 | `020-seguridad.sql` | Arreglos de seguridad de la Entrega 4: un solo pedido de inspección en curso por comprador y aviso (columna `url_clave` e índice único, aunque lleguen varios a la vez) y tabla `login_intento` para el límite de 5 intentos de ingreso cada 15 minutos. Correrla **antes** de desplegar el back que la usa |
 
 Se copian y pegan enteras en el **SQL Editor de Neon**, primero en el proyecto de Neon de dev y en el de main recién cuando se pasa `dev` → `main` (son dos proyectos separados).
 

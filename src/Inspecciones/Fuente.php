@@ -52,6 +52,25 @@ final class Fuente
         return ['fuente' => 'otro', 'vehiculo_id' => null];
     }
 
+    /**
+     * Clave del aviso: la misma para dos links que llevan al mismo auto, para que un comprador no tenga dos
+     * pedidos en curso del mismo aviso (índice único de la 020). Sin esquema, sin "www.", sin ?parámetros ni #ancla
+     * y sin la barra final; en MercadoLibre alcanza con el número del aviso (MLA-123...) y en AutoCar con el id.
+     * Si cambia, cambiar también el UPDATE de database/020-seguridad.sql.
+     */
+    public static function clave(string $url, string $fuente, ?int $vehiculoId): string
+    {
+        if ($fuente === 'autocar' && $vehiculoId !== null) {
+            return 'autocar:' . $vehiculoId;
+        }
+        if ($fuente === 'mercadolibre' && preg_match('/MLA-?(\d+)/i', $url, $m)) {
+            return 'mercadolibre:MLA' . $m[1];
+        }
+        $sinParametros = (string)preg_replace('/[?#].*$/s', '', trim($url));
+        $sinEsquema = (string)preg_replace('#^https?://(www\.)?#i', '', $sinParametros);
+        return rtrim(mb_strtolower($sinEsquema), '/');
+    }
+
     /** Hosts de una lista de orígenes separada por comas, como FRONT_URL. */
     public static function hosts(string $origenes): array
     {

@@ -1430,6 +1430,7 @@ CREATE TABLE IF NOT EXISTS inspeccion (
   mecanico_id      INTEGER       NOT NULL REFERENCES usuario(id),
   vehiculo_id      INTEGER       REFERENCES vehiculo(id),
   url              VARCHAR(500)  NOT NULL,
+  url_clave        VARCHAR(500),             -- el mismo aviso con cualquier link (Fuente::clave, 020)
   fuente           VARCHAR(12)   NOT NULL CHECK (fuente IN ('mercadolibre', 'kavak', 'autocosmos', 'autocar', 'otro')),
   titulo           VARCHAR(150),
   anio             SMALLINT      CHECK (anio BETWEEN 1950 AND 2100),
@@ -1460,6 +1461,9 @@ CREATE TABLE IF NOT EXISTS inspeccion (
 
 CREATE INDEX IF NOT EXISTS idx_inspeccion_comprador ON inspeccion (comprador_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_inspeccion_mecanico ON inspeccion (mecanico_id, estado);
+-- Un solo pedido en curso por comprador y aviso, aunque lleguen varios a la vez (020-seguridad.sql)
+CREATE UNIQUE INDEX IF NOT EXISTS inspeccion_una_en_curso
+  ON inspeccion (comprador_id, url_clave) WHERE estado IN ('pedida', 'aceptada');
 
 -- Un renglón por ítem del checklist (los códigos están en Inspecciones\Checklist).
 CREATE TABLE IF NOT EXISTS inspeccion_item (
@@ -1511,3 +1515,11 @@ CREATE TABLE IF NOT EXISTS reporte (
   -- Se reporta una publicación o un usuario, nunca los dos ni ninguno
   CHECK ((vehiculo_id IS NULL) <> (usuario_id IS NULL))
 );
+
+-- Intentos de ingreso por email, para el límite de 5 cada 15 minutos (020-seguridad.sql, Auth\IntentosLogin)
+CREATE TABLE IF NOT EXISTS login_intento (
+  id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  email      VARCHAR(254) NOT NULL,
+  created_at TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_login_intento_email ON login_intento (email, created_at);

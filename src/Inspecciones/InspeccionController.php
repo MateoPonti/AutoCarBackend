@@ -9,6 +9,7 @@ use AutoCar\Core\Database;
 use AutoCar\Core\Request;
 use AutoCar\Core\Response;
 use DateTimeImmutable;
+use PDOException;
 
 /**
  * Lado del comprador (y lo público): ranking de mecánicos (B3), pedir (B4), mis inspecciones, detalle y
@@ -16,6 +17,8 @@ use DateTimeImmutable;
  */
 final class InspeccionController
 {
+    private const DUPLICADA = 'Ya tenés una inspección en curso para ese auto.';
+
     /** GET /api/mecanicos?localidad= (público) → {items: [mecánico con puntaje], localidades} */
     public function mecanicos(): void
     {
@@ -56,8 +59,8 @@ final class InspeccionController
         if ($conflicto !== null) {
             Response::error(409, ...$conflicto);
         }
-        if (Inspeccion::enCursoPorUrl($yo, $datos['url']) !== null) {
-            Response::error(409, 'duplicada', 'Ya tenés una inspección en curso para ese auto.');
+        if (Inspeccion::enCursoPorUrl($yo, Fuente::clave($datos['url'], $datos['fuente'], $datos['vehiculo_id'])) !== null) {
+            Response::error(409, 'duplicada', self::DUPLICADA);
         }
 
         if ($vehiculo !== null) { // lo que no completó el comprador sale de la publicación
@@ -68,7 +71,15 @@ final class InspeccionController
             $datos['localidad'] ??= $vehiculo['localidad'];
         }
 
-        $id = Inspeccion::crear($yo, $datos, Precio::desglose((float)$taller['precio_inspeccion']));
+        // Dos pedidos a la vez pasan juntos el chequeo de arriba: el índice único de la base deja entrar solo uno
+        try {
+            $id = Inspeccion::crear($yo, $datos, Precio::desglose((float)$taller['precio_inspeccion']));
+        } catch (PDOException $e) {
+            if ($e->getCode() !== '23505') { // 23505 = unique_violation
+                throw $e;
+            }
+            Response::error(409, 'duplicada', self::DUPLICADA);
+        }
         header('Location: /api/inspecciones/' . $id);
         Response::json(['inspeccion' => Inspeccion::paraApi(Inspeccion::porId($id), [])], 201);
     }
