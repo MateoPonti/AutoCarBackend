@@ -166,13 +166,22 @@ final class Vehiculo
         return $st->fetch() ?: null;
     }
 
-    /** $motivo sólo se guarda al rechazar; cualquier otro cambio de estado lo borra. */
-    public static function cambiarEstado(int $id, string $estado, ?string $motivo = null): void
+    /**
+     * $motivo sólo se guarda al rechazar; cualquier otro cambio de estado lo borra.
+     * $desde: el estado que se leyó antes de decidir. Si mientras tanto otro lo cambió (dos moderadores a la vez),
+     * no se toca nada y devuelve false, así la segunda decisión no pisa a la primera.
+     */
+    public static function cambiarEstado(int $id, string $estado, ?string $motivo = null, ?string $desde = null): bool
     {
-        $st = Database::pdo()->prepare(
-            'UPDATE vehiculo SET estado = :estado, motivo_rechazo = :motivo, updated_at = now() WHERE id = :id'
-        );
-        $st->execute(['estado' => $estado, 'motivo' => $estado === 'rechazado' ? $motivo : null, 'id' => $id]);
+        $sql = 'UPDATE vehiculo SET estado = :estado, motivo_rechazo = :motivo, updated_at = now() WHERE id = :id';
+        $params = ['estado' => $estado, 'motivo' => $estado === 'rechazado' ? $motivo : null, 'id' => $id];
+        if ($desde !== null) {
+            $sql .= ' AND estado = :desde';
+            $params['desde'] = $desde;
+        }
+        $st = Database::pdo()->prepare($sql);
+        $st->execute($params);
+        return $st->rowCount() === 1;
     }
 
     /** $usuarioId: el vendedor, dueño de la publicación (obligatorio: la base tampoco acepta un vehículo sin vendedor). */
