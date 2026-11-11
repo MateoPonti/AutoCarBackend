@@ -9,13 +9,16 @@ rem defecto se queda sin memoria al guardar y se pierde la corrida. Por eso esos
 
 cd /d "%~dp0.."
 if not exist storage\logs mkdir storage\logs
-set LOG=storage\logs\scraper-%date:~-4%%date:~3,2%%date:~0,2%.log
+rem La fecha sale de PHP (AAAAMMDD) y no de %date%: el formato de %date% depende de Windows ("mie 11/11/2026")
+rem y el 11/11 dejo un espacio en el nombre del log, que cada comando recibio como parametro ("1mi.log" = 1 pagina).
+for /f %%f in ('php -r "echo date('Ymd');"') do set HOY=%%f
+set "LOG=storage\logs\scraper-%HOY%.log"
 
-echo ==== %date% %time% >> %LOG%
-php recolectores\kavak\recolectar.php >> %LOG% 2>&1
-php recolectores\autocosmos\recolectar.php >> %LOG% 2>&1
-php -d memory_limit=1G recolectores\mercadolibre\recolectar.php >> %LOG% 2>&1
-php -d memory_limit=1G bin\armar-modelos.php >> %LOG% 2>&1
+echo ==== %date% %time% >> "%LOG%"
+php recolectores\kavak\recolectar.php >> "%LOG%" 2>&1
+php recolectores\autocosmos\recolectar.php >> "%LOG%" 2>&1
+php -d memory_limit=1G recolectores\mercadolibre\recolectar.php >> "%LOG%" 2>&1
+php -d memory_limit=1G bin\armar-modelos.php >> "%LOG%" 2>&1
 rem Metabuscador: carga la corrida de hoy de cada fuente (historial, retirados y avisos) en MERCADO_ALMACEN
-php -d memory_limit=1G bin\importar-autos.php --hoy >> %LOG% 2>&1
-echo ==== fin %date% %time% >> %LOG%
+php -d memory_limit=1G bin\importar-autos.php --hoy >> "%LOG%" 2>&1
+echo ==== fin %date% %time% >> "%LOG%"
