@@ -77,8 +77,11 @@ stateDiagram-v2
   pedida --> rechazada: el mecánico la rechaza (pago reembolsado)
   pedida --> cancelada: el comprador la cancela (pago reembolsado)
   aceptada --> firmada: checklist completo + conclusión (pago liberado)
+  aceptada --> no_realizada: fue y no la pudo hacer, con motivo (pago reembolsado)
   firmada --> [*]
 ```
+
+- **La inspección es voluntaria para el vendedor.** Ninguna ley obliga a dejar revisar un usado. Si el vendedor no deja revisar el auto (o no está, o no es el auto del aviso), el mecánico la marca `no_realizada` con el motivo (`PATCH /api/mecanico/inspecciones/{id}` con `{"accion":"no_realizada","motivo":"..."}`, migración `018`): al comprador se le devuelve todo y ve el motivo en `motivo_rechazo`. Para el comprador, que el vendedor se niegue ya es información.
 
 - Una inspección **firmada no cambia más**: cualquier intento tiene que dar 409.
 - Después de la firma, el comprador tiene **15 días** para reclamar, una sola vez. Si el reclamo procede, el pago pasa a `reembolsado` y la compensación tiene un tope de 3 veces el precio.
