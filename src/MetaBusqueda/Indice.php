@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace AutoCar\MetaBusqueda;
 
+use AutoCar\Comparador\Clave;
+
 /**
  * Documento "indices/mercado": el resumen de cada modelo (Catalogo::resumen). Con una sola lectura la API arma la lista
  * de marcas y elige qué modelos mirar para "otros modelos", y el importador sabe qué modelos tienen autos de una fuente.
@@ -16,7 +18,9 @@ final class Indice
     public static function leer(Documentos $docs): array
     {
         $doc = $docs->leer(self::RUTA);
-        return json_decode((string)($doc['modelos_json'] ?? '{}'), true) ?: [];
+        $modelos = json_decode((string)($doc['modelos_json'] ?? '{}'), true) ?: [];
+        // Así "Ds" y "DS" salen como una sola marca en la lista, aunque el índice se haya armado antes de unificarlas
+        return array_map(static fn(array $m): array => ['marca' => Clave::nombreMarca((string)$m['marca'])] + $m, $modelos);
     }
 
     /** @param array<string, array<string, mixed>> $modelos */

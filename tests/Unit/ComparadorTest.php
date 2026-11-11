@@ -33,6 +33,20 @@ final class ComparadorTest extends TestCase
         self::assertNotSame(Clave::de('Volkswagen', 'Gol'), Clave::de('Volkswagen', 'Gol Trend'));
     }
 
+    public function testCadaMarcaSeMuestraConUnSoloNombre(): void
+    {
+        foreach (['DS', 'Ds', 'D.S.', 'ds'] as $escrita) {
+            self::assertSame('DS', Clave::nombreMarca($escrita));
+        }
+        self::assertSame('Citroën', Clave::nombreMarca('Citroen'));
+        self::assertSame('Kia', Clave::nombreMarca('KIA'));
+        self::assertSame('Mercedes-Benz', Clave::nombreMarca('Mercedes Benz'));
+        self::assertSame('Mercedes-Benz', Clave::nombreMarca('Mercedes'));
+        self::assertSame('Volkswagen', Clave::nombreMarca('VW'));
+        self::assertSame('Leapmotor', Clave::nombreMarca('leapmotor'));
+        self::assertSame('Alfa Romeo', Clave::nombreMarca('Alfa Romeo'));
+    }
+
     public function testBuenPrecioEnPrecioYCaro(): void
     {
         $mercado = self::modelo([16e6, 16e6, 16e6, 16e6, 16e6]);
