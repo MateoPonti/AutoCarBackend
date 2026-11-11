@@ -191,7 +191,7 @@ flowchart LR
 | Archivo | Qué hace | ¿Va a Render? |
 |---|---|---|
 | `recolectores/mercadolibre/` | `Extractor.php` (lee la página, sin red) y `recolectar.php` | No |
-| `recolectores/kavak/` | `ExtractorHtml.php` + `recolectar.php` (curl, nuevo) y `scraper.php` (Playwright, de Taro, queda como alternativa). `Normalizador.php` lo usan los dos | No |
+| `recolectores/kavak/` | `ExtractorHtml.php` + `recolectar.php` (curl) y `Normalizador.php` (de Taro). El `scraper.php` con Playwright se borró el 11/11 | No |
 | `recolectores/autocosmos/` | `Extractor.php` (microdatos schema.org) y `recolectar.php` | No |
 | `recolectores/comun/` | `Http` (curl con pausa y reintentos), `JsonEmbebido`, `Salida` (JSON del día + dólar) | No |
 | `recolectores/diario.bat` | La corrida diaria para el Programador de tareas de Windows | No |

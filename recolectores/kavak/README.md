@@ -1,36 +1,24 @@
 # Recolector de Kavak
 
-Recorre el listado de autos usados de [Kavak Argentina](https://www.kavak.com/ar/usados) con un navegador Chromium sin ventana (Playwright) y guarda los autos en `autos.json`, en el formato común de los recolectores. Después, `bin/importar-autos.php` los carga en Firestore para la Meta-búsqueda (ver el [README principal](../../README.md#meta-búsqueda)).
+Recorre el listado de autos usados de [Kavak Argentina](https://www.kavak.com/ar/usados) con curl (el HTML ya trae las tarjetas, no hace falta navegador) y guarda la corrida del día en `storage/mercado/kavak/AAAA-MM-DD.json`, en el formato común de los recolectores. Después `bin/armar-modelos.php` la usa para el comparador y `bin/importar-autos.php` la carga en el metabuscador. Cómo se programa la corrida diaria (PC y GitHub Actions): [recolectores/README.md](../README.md).
 
 - **No se despliega en Render.** La carpeta está excluida de la imagen en `.dockerignore`.
-- **Tiene sus propias dependencias.** Usa su `composer.json` y su `vendor/`, así la API sigue sin librerías de terceros.
+- Antes había un `scraper.php` de Taro con Playwright (navegador Chromium). Se borró el 11/11: hacía lo mismo, necesitaba sus propias dependencias y en GitHub Actions fallaba por timeout. Su `Normalizador.php` se sigue usando.
 
 ## Archivos
 
 | Archivo | Para qué sirve |
 |---|---|
-| `scraper.php` | Recorre el listado y genera `autos.json` |
-| `Normalizador.php` | Interpreta cada tarjeta. No usa navegador ni red, y tiene pruebas en `tests/Unit` |
-| `composer.json` y `composer.lock` | Dependencia `playwright-php/playwright`, fijada para PHP 8.3 (la versión del `Dockerfile`) |
-| `.gitignore` | Deja afuera del repo `vendor/` y `autos.json` |
-
-## Ejecución programada
-
-Desde el 11/11 el workflow **Scraper** (`.github/workflows/scraper.yml`) ya no usa este `scraper.php`: corre **todos los días a las 06:00 de Argentina** los recolectores con curl de las tres fuentes (`kavak/recolectar.php`, `autocosmos/recolectar.php` y `mercadolibre/recolectar.php`), igual que `diario.bat`. Ver [recolectores/README.md](../README.md). `scraper.php` queda como alternativa si Kavak vuelve a cargar los autos solo con JavaScript.
+| `recolectar.php` | Recorre las páginas (20 s entre una y otra, lo pide Kavak) y guarda la corrida |
+| `ExtractorHtml.php` | Saca las tarjetas del HTML con DOM. No usa red: se prueba con HTML guardado en `tests/Unit/RecolectoresTest.php` |
+| `Normalizador.php` | Interpreta cada tarjeta (marca, modelo, año, km, precios, reservado). Pruebas en `tests/Unit` |
 
 ## Ejecutarlo en local
 
-Requiere PHP 8.3 o superior, Composer y Node.js 20 o superior.
-
 ```
-cd recolectores/kavak
-composer install
-php vendor/bin/playwright-install chromium    # solo la primera vez: descarga el navegador
-php scraper.php                               # todas las páginas (unos 16 minutos)
-php scraper.php 2                             # solo las primeras 2 páginas (corrida incompleta)
+php recolectores/kavak/recolectar.php      # todas las páginas (unos 15 minutos)
+php recolectores/kavak/recolectar.php 2    # solo las primeras 2 páginas (corrida incompleta)
 ```
-
-Cada corrida **reemplaza** `autos.json`. Los autos no se repiten: si el listado cambia durante la corrida, un mismo `id_externo` se guarda una sola vez.
 
 ## Formato común
 
@@ -85,5 +73,5 @@ Kavak muestra hasta dos precios en la tarjeta, y su significado depende del text
 
 ## Uso responsable
 
-- El `robots.txt` de Kavak no bloquea `/ar/usados` y pide 20 segundos entre pedidos (`Crawl-delay: 20`). El scraper espera ese tiempo entre páginas: conviene no quitar esa pausa.
-- Los selectores dependen del HTML de Kavak (`data-testid="card-product-..."`). Si lo cambian, hay que actualizarlos en `scraper.php`.
+- El `robots.txt` de Kavak no bloquea `/ar/usados` y pide 20 segundos entre pedidos (`Crawl-delay: 20`). El recolector espera ese tiempo entre páginas: conviene no quitar esa pausa.
+- Los selectores dependen del HTML de Kavak (`data-testid="card-product-..."`). Si lo cambian, hay que actualizarlos en `ExtractorHtml.php`.
