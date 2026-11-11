@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace AutoCar\Admin;
 
+use AutoCar\Auth\Auth;
 use AutoCar\Auth\Usuario;
 use AutoCar\Catalogo\CatalogoController;
 use AutoCar\Catalogo\Vehiculo;
@@ -11,8 +12,10 @@ use AutoCar\Core\Response;
 use AutoCar\Publicaciones\Foto;
 
 /**
- * ABM y moderación de vehículos. Cada ruta pide su permiso en routes.php (se verifica en el servidor):
- * vehiculos.moderar (moderador) para revisar publicaciones y vehiculos.gestionar (admin) para el ABM.
+ * Moderación y baja de vehículos. Cada ruta pide su permiso en routes.php (se verifica en el servidor):
+ * vehiculos.moderar (moderador) para revisar publicaciones y vehiculos.gestionar (admin) además para la baja.
+ * Acá no se crean ni se editan vehículos: toda publicación tiene un vendedor, entra por POST /api/mis-vehiculos
+ * y la corrige solo su dueño (si algo está mal, el moderador la rechaza con un motivo).
  */
 final class AdminVehiculoController
 {
@@ -40,30 +43,6 @@ final class AdminVehiculoController
         ]]);
     }
 
-    public function crear(): void
-    {
-        [$datos, $errores] = Vehiculo::validar(Request::json());
-        if ($errores) {
-            Response::error(422, 'validacion', 'Revisá los datos ingresados.', $errores);
-        }
-        $id = Vehiculo::crear($datos);
-        header('Location: /api/vehiculos/' . $id);
-        Response::json(['vehiculo' => Vehiculo::paraApi(Vehiculo::find($id))], 201);
-    }
-
-    public function actualizar(int $id): void
-    {
-        $actual = self::existente($id);
-        // El formulario del admin no manda los campos de la publicación (versión, localidad, canje...):
-        // los que no vienen se completan con los actuales para no borrarlos al guardar.
-        [$datos, $errores] = Vehiculo::validar(Request::json() + Vehiculo::paraApi($actual));
-        if ($errores) {
-            Response::error(422, 'validacion', 'Revisá los datos ingresados.', $errores);
-        }
-        Vehiculo::actualizar($id, $datos);
-        Response::json(['vehiculo' => Vehiculo::paraApi(Vehiculo::find($id))]);
-    }
-
     /**
      * PATCH /api/admin/vehiculos/{id}/estado
      *   {"estado": "disponible"}                         → aprobar
@@ -76,6 +55,10 @@ final class AdminVehiculoController
         $nuevo  = Request::texto($in, 'estado');
         $motivo = Request::texto($in, 'motivo');
 
+        // Conflicto de interés: nadie aprueba ni rechaza su propia publicación
+        if ((int)$actual['usuario_id'] === (int)Auth::id()) {
+            Response::error(409, 'publicacion_propia', 'No podés moderar tu propia publicación: la tiene que revisar otro moderador.');
+        }
         $errores = [];
         if (!in_array($nuevo, self::TRANSICIONES[$actual['estado']] ?? [], true)) {
             $errores['estado'] = "Una publicación en estado '{$actual['estado']}' no puede pasar a '{$nuevo}'.";
@@ -93,7 +76,10 @@ final class AdminVehiculoController
             Response::error(409, 'incompleta', 'Todavía no se puede aprobar: le falta ' . implode(', ', $faltan) . '.');
         }
 
-        Vehiculo::cambiarEstado($id, $nuevo, $motivo);
+        // Si otro moderador la cambió mientras tanto, gana el primero y este pedido da 409
+        if (!Vehiculo::cambiarEstado($id, $nuevo, $motivo, $actual['estado'])) {
+            Response::error(409, 'estado_cambiado', 'Otro moderador acaba de revisar esta publicación. Recargá para ver cómo quedó.');
+        }
         Response::json(['vehiculo' => Vehiculo::paraApi(Vehiculo::find($id))]);
     }
 

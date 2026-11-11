@@ -43,7 +43,7 @@ final class Catalogo
         foreach ($lista as $a) {
             $autos[self::idAuto($a['fuente'], $a['id_externo'])] = $a;
         }
-        return ['clave' => $clave, 'marca' => (string)$doc['marca'], 'modelo' => (string)$doc['modelo'], 'autos' => $autos];
+        return ['clave' => $clave, 'marca' => Clave::nombreMarca((string)$doc['marca']), 'modelo' => (string)$doc['modelo'], 'autos' => $autos];
     }
 
     /** @return array<string, array<string, mixed>> ruta → campos, listo para Documentos::escribir */
@@ -106,15 +106,17 @@ final class Catalogo
     /**
      * Después de una corrida completa: los autos de esa fuente que no aparecieron pasan a "retirado".
      * Los retirados hace mucho se borran para que el documento no crezca sin fin.
+     * $protegidos: id_externo de los que vinieron con datos inválidos (siguen publicados: no se retiran).
      *
+     * @param array<string, true> $protegidos
      * @return int cuántos se retiraron
      */
-    public static function retirarAusentes(array &$modelo, string $fuente, string $fecha): int
+    public static function retirarAusentes(array &$modelo, string $fuente, string $fecha, array $protegidos = []): int
     {
         $retirados = 0;
         $limite = strtotime($fecha) - self::DIAS_RETIRADO * 86400;
         foreach ($modelo['autos'] as $id => $a) {
-            if ($a['fuente'] !== $fuente || $a['ultima_vez'] === $fecha) {
+            if ($a['fuente'] !== $fuente || $a['ultima_vez'] === $fecha || isset($protegidos[(string)$a['id_externo']])) {
                 continue;
             }
             if ($a['estado'] !== 'retirado') {

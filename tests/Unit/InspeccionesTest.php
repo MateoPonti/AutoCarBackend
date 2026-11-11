@@ -28,6 +28,19 @@ final class InspeccionesTest extends TestCase
         self::assertSame('otro', Fuente::detectar('https://www.otrositio.com/auto/1')['fuente']);
     }
 
+    public function testLaClaveDelAvisoEsLaMismaConCualquierLink(): void
+    {
+        $ml = Fuente::clave('https://auto.mercadolibre.com.ar/MLA-123-toyota-corolla-_JM', 'mercadolibre', null);
+        self::assertSame('mercadolibre:MLA123', $ml);
+        self::assertSame($ml, Fuente::clave('https://articulo.mercadolibre.com.ar/MLA123?tracking=x', 'mercadolibre', null));
+        self::assertSame(
+            Fuente::clave('https://www.kavak.com/ar/usado/corolla-2020/', 'kavak', null),
+            Fuente::clave('HTTPS://kavak.com/ar/usado/corolla-2020?utm_source=x#fotos', 'kavak', null),
+        );
+        self::assertSame('autocar:7', Fuente::clave('https://front.test/vehiculo.html?id=7&x=1', 'autocar', 7));
+        self::assertNotSame(Fuente::clave('https://kavak.com/ar/a', 'kavak', null), Fuente::clave('https://kavak.com/ar/b', 'kavak', null));
+    }
+
     public function testUnDominioParecidoNoEngana(): void
     {
         self::assertSame('otro', Fuente::detectar('https://mercadolibre.com.ar.estafa.com/MLA-1')['fuente']);

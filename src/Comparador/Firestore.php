@@ -55,24 +55,58 @@ final class Firestore implements Documentos
         return self::desdeCampos($r['fields'] ?? []);
     }
 
+    /** Firestore acepta hasta 500 escrituras y 10 MiB por commit: se manda con margen. */
+    public const ESCRITURAS_POR_COMMIT = 400;
+    public const BYTES_POR_COMMIT = 8 * 1024 * 1024;
+
     /**
-     * Escribe (reemplaza) varios documentos. Firestore acepta hasta 500 escrituras por commit.
+     * Escribe (reemplaza) varios documentos, en commits que Firestore acepte (ver tandas()).
      *
      * @param array<string, array<string, mixed>> $documentos ruta → campos
      */
     public function escribir(array $documentos): void
     {
         $nombre = 'projects/' . $this->credencial['project_id'] . '/databases/(default)/documents/';
-        foreach (array_chunk($documentos, 400, true) as $tanda) {
-            $writes = [];
-            foreach ($tanda as $ruta => $campos) {
-                $writes[] = ['update' => ['name' => $nombre . $ruta, 'fields' => self::aCampos($campos)]];
-            }
-            [$codigo] = $this->pedir('POST', $this->base() . ':commit', ['writes' => $writes]);
+        $writes = [];
+        foreach ($documentos as $ruta => $campos) {
+            $writes[] = ['update' => ['name' => $nombre . $ruta, 'fields' => self::aCampos($campos)]];
+        }
+        foreach (self::tandas($writes) as $tanda) {
+            // Un commit de varios MB tarda más que una lectura: 120 s en vez de 30
+            [$codigo, , $error] = $this->pedir('POST', $this->base() . ':commit', ['writes' => $tanda], 120);
             if ($codigo !== 200) {
-                throw new RuntimeException("Firestore commit respondió $codigo");
+                throw new RuntimeException("Firestore commit respondió $codigo" . ($error !== '' ? " ($error)" : ''));
             }
         }
+    }
+
+    /**
+     * Separa las escrituras en tandas de hasta ESCRITURAS_POR_COMMIT y BYTES_POR_COMMIT (lo que pesa en JSON).
+     * Con la corrida completa de MercadoLibre un documento de modelo pesa hasta ~700 KB: 400 juntos pasaban
+     * los 10 MiB y el commit se cortaba (10/11). Función pura, para probarla sin red.
+     *
+     * @param list<array<string, mixed>> $writes
+     * @return list<list<array<string, mixed>>>
+     */
+    public static function tandas(array $writes, int $maxBytes = self::BYTES_POR_COMMIT, int $maxEscrituras = self::ESCRITURAS_POR_COMMIT): array
+    {
+        $tandas = [];
+        $actual = [];
+        $bytes = 0;
+        foreach ($writes as $w) {
+            $peso = strlen((string)json_encode($w, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            if ($actual !== [] && ($bytes + $peso > $maxBytes || count($actual) >= $maxEscrituras)) {
+                $tandas[] = $actual;
+                $actual = [];
+                $bytes = 0;
+            }
+            $actual[] = $w;
+            $bytes += $peso;
+        }
+        if ($actual !== []) {
+            $tandas[] = $actual;
+        }
+        return $tandas;
     }
 
     /** Todos los documentos de una colección, de a 300 por pedido. */
@@ -193,11 +227,11 @@ final class Firestore implements Documentos
         return 'https://firestore.googleapis.com/v1/projects/' . rawurlencode($this->credencial['project_id']) . '/databases/(default)/documents';
     }
 
-    /** @return array{int, array<string, mixed>} */
-    private function pedir(string $metodo, string $url, ?array $cuerpo = null): array
+    /** @return array{int, array<string, mixed>, string} código HTTP (0 si no hubo respuesta), cuerpo y error de curl */
+    private function pedir(string $metodo, string $url, ?array $cuerpo = null, int $timeout = 30): array
     {
         $ch = curl_init($url);
-        $opciones = self::opcionesCurl() + [
+        $opciones = [CURLOPT_TIMEOUT => $timeout] + self::opcionesCurl() + [
             CURLOPT_CUSTOMREQUEST => $metodo,
             CURLOPT_HTTPHEADER    => ['Authorization: Bearer ' . $this->token(), 'Content-Type: application/json'],
         ];
@@ -207,9 +241,10 @@ final class Firestore implements Documentos
         curl_setopt_array($ch, $opciones);
         $respuesta = (string)curl_exec($ch);
         $codigo = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+        $error = curl_error($ch);
         curl_close($ch);
         $datos = json_decode($respuesta, true);
-        return [$codigo, is_array($datos) ? $datos : []];
+        return [$codigo, is_array($datos) ? $datos : [], $error];
     }
 
     private static function opcionesCurl(): array

@@ -18,6 +18,29 @@ final class InspeccionesCompradorTest extends ApiTestCase
         return $this->pedir('POST', '/api/inspecciones', $extra + ['url' => self::ML, 'mecanico_id' => $mecanicoId]);
     }
 
+    public function testLasGananciasDelAdminSumanLaInspeccionFirmada(): void
+    {
+        $ganancias = function (): array {
+            $this->ingresarComoAdmin();
+            return $this->pedir('GET', '/api/admin/metricas')['json']['ganancias'];
+        };
+        $antes = $ganancias();
+        self::assertTrue($antes['simulado']);
+
+        [$mecanicoId, $mecanico] = $this->ingresarComoMecanico();
+        $this->ingresarComoUsuario();
+        $pedido = $this->pedirInspeccion($mecanicoId)['json']['inspeccion'];
+        $this->ingresar($mecanico);
+        $this->aceptarYFirmar($pedido['id']);
+
+        $despues = $ganancias();
+        $fila = Entorno::pdo()->query("SELECT precio, monto_autocar, monto_fondo, monto_mecanico FROM inspeccion WHERE id = {$pedido['id']}")->fetch();
+        self::assertEqualsWithDelta((float)$fila['precio'], $despues['facturado'] - $antes['facturado'], 0.01);
+        self::assertEqualsWithDelta($fila['monto_autocar'] - $fila['monto_fondo'], $despues['autocar'] - $antes['autocar'], 0.01);
+        self::assertEqualsWithDelta((float)$fila['monto_mecanico'], $despues['mecanicos'] - $antes['mecanicos'], 0.01);
+        self::assertEqualsWithDelta((float)$fila['monto_fondo'], $despues['fondo']['acumulado'] - $antes['fondo']['acumulado'], 0.01);
+    }
+
     public function testRecorridoDeLaDemo(): void
     {
         $localidad = 'Pueblo ' . bin2hex(random_bytes(3)); // propia, para no mezclarse con otras pruebas
@@ -106,12 +129,13 @@ final class InspeccionesCompradorTest extends ApiTestCase
         self::assertSame(401, $this->pedir('GET', '/api/mis-inspecciones')['status']);
     }
 
-    public function testElMecanicoNoSePideUnaInspeccionASiMismo(): void
+    public function testLaCuentaDelTallerNoPideInspecciones(): void
     {
+        // La cuenta del taller es aparte de la personal: no compra (antes daba 409 mecanico_propio; ahora ni llega)
         [$yo] = $this->ingresarComoMecanico();
         $r = $this->pedirInspeccion($yo);
-        self::assertSame(409, $r['status']);
-        self::assertSame('mecanico_propio', $r['json']['error']);
+        self::assertSame(403, $r['status']);
+        self::assertSame('cuenta_del_equipo', $r['json']['error']);
     }
 
     public function testAutosDeAutoCar(): void

@@ -33,6 +33,30 @@ final class ComparadorTest extends TestCase
         self::assertNotSame(Clave::de('Volkswagen', 'Gol'), Clave::de('Volkswagen', 'Gol Trend'));
     }
 
+    public function testLaMarcaPegadaAlNumeroOConPuntosDaLaMismaClave(): void
+    {
+        foreach ([['DS', '3'], ['DS', 'DS3'], ['Ds', 'Ds__3'], ['D.S.', '3'], ['ds', 'ds.3']] as [$marca, $modelo]) {
+            self::assertSame('ds_3', Clave::de($marca, $modelo));
+        }
+        self::assertSame('ds_3_crossback', Clave::de('DS', 'DS3 Crossback'));
+        self::assertSame('ram_1500', Clave::de('RAM', 'RAM1500'));
+        self::assertSame('ram_rampage', Clave::de('Ram', 'Rampage')); // sin número no se toca
+    }
+
+    public function testCadaMarcaSeMuestraConUnSoloNombre(): void
+    {
+        foreach (['DS', 'Ds', 'D.S.', 'ds'] as $escrita) {
+            self::assertSame('DS', Clave::nombreMarca($escrita));
+        }
+        self::assertSame('Citroën', Clave::nombreMarca('Citroen'));
+        self::assertSame('Kia', Clave::nombreMarca('KIA'));
+        self::assertSame('Mercedes-Benz', Clave::nombreMarca('Mercedes Benz'));
+        self::assertSame('Mercedes-Benz', Clave::nombreMarca('Mercedes'));
+        self::assertSame('Volkswagen', Clave::nombreMarca('VW'));
+        self::assertSame('Leapmotor', Clave::nombreMarca('leapmotor'));
+        self::assertSame('Alfa Romeo', Clave::nombreMarca('Alfa Romeo'));
+    }
+
     public function testBuenPrecioEnPrecioYCaro(): void
     {
         $mercado = self::modelo([16e6, 16e6, 16e6, 16e6, 16e6]);

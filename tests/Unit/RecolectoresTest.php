@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace AutoCar\Tests\Unit;
 
 use AutoCar\Recolectores\Autocosmos\Extractor as Autocosmos;
+use AutoCar\Recolectores\Comun\Http;
 use AutoCar\Recolectores\Comun\JsonEmbebido;
 use AutoCar\Recolectores\Kavak\ExtractorHtml;
 use AutoCar\Recolectores\Kavak\Normalizador;
@@ -21,6 +22,16 @@ final class RecolectoresTest extends TestCase
         . '{"type":"price","id":"price","price":{"current_price":{"value":16900000,"currency":"ARS"}}},'
         . '{"type":"attributes_list","id":"attributes_list","attributes_list":{"separator":"|","texts":["2018","110.000 Km"]}},'
         . '{"type":"location","id":"location","location":{"text":"Zárate - Buenos Aires Interior"}}]}}';
+
+    public function testQueErroresDeRedSeReintentan(): void
+    {
+        self::assertTrue(Http::transitorio(200, 'Operation timed out after 45010 milliseconds with 26280 bytes received'));
+        self::assertTrue(Http::transitorio(0, 'Could not resolve host'));
+        self::assertTrue(Http::transitorio(429, ''));
+        self::assertTrue(Http::transitorio(503, ''));
+        self::assertFalse(Http::transitorio(403, ''), 'un bloqueo no se reintenta');
+        self::assertFalse(Http::transitorio(404, ''));
+    }
 
     public function testJsonEmbebidoRespetaLasLlavesDentroDeStrings(): void
     {

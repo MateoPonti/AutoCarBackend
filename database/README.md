@@ -20,8 +20,18 @@
 | 8 | `008-separar-version.sql` | Pasa la versión a su campo en los autos de prueba ("Corolla XEi" → "Corolla" + "XEi"), para que el comparador los encuentre |
 | 9 | `009-solicitud-taller.sql` | "Adherí tu taller": CUIT, horarios y estado de la solicitud (pendiente, aprobado o rechazado) en `taller`. Correrla **antes** de desplegar el back que la usa |
 | 10 | `010-publicar-por-partes.sql` | Publicar por partes: precio, kilometraje, combustible y transmisión pueden quedar vacíos mientras la publicación está pendiente, nunca en una visible. Correrla **antes** de desplegar el back que la usa |
+| 11 | `011-vehiculo-con-vendedor.sql` | Toda publicación tiene un vendedor: los autos sin dueño pasan a la cuenta demo `vendedor-demo@autocar.test` y `usuario_id` queda obligatorio. El panel ya no crea ni edita vehículos. Correrla **antes** de desplegar el back que la usa |
+| 12 | `012-favoritos.sql` | Favoritos: tabla `favorito` (usuario + vehículo) para `GET/PUT/DELETE /api/favoritos`. Correrla **antes** de desplegar el back que la usa |
+| 13 | `013-marcas-y-modelos.sql` | Marcas y modelos que se pueden publicar (62 marcas y ~1.080 modelos de las corridas del scraper del 10/11) y clave foránea `vehiculo (marca, modelo)`: con curl ya no se publica "Pepita 21021". Correrla **antes** de desplegar el back que la usa |
+| 14 | `014-foto-de-perfil.sql` | Foto de perfil opcional: tabla `usuario_foto` (en la base, como las fotos de las publicaciones). Correrla **antes** de desplegar el back que la usa |
+| 15 | `015-contacto-y-reportes.sql` | Contacto (público, con email) y reportes de publicaciones o usuarios: tablas `contacto` y `reporte`. Correrla **antes** de desplegar el back que la usa |
+| 16 | `016-roles-del-equipo.sql` | El admin deja de tener los permisos del mecánico (no tiene taller). El equipo no compra ni vende y nadie modera su propia publicación (eso va en el código). Correrla **antes** de desplegar el back que la usa |
+| 17 | `017-modelos-nuevos.sql` | Suma a la lista de Publicar 7 marcas y 46 modelos de la corrida completa de MercadoLibre del 10/11. Solo agrega |
+| 18 | `018-inspeccion-no-realizada.sql` | Estado `no_realizada` de una inspección: el mecánico fue y no la pudo hacer (por ejemplo, el vendedor no dejó revisar el auto); se le devuelve todo al comprador. Correrla **antes** de desplegar el back que la usa |
+| 19 | `019-marca-unica.sql` | Una marca no se repite con otra escritura ("DS" y "Ds"): índice único sobre el nombre en minúsculas. No hace falta desplegar nada antes ni después |
+| 20 | `020-seguridad.sql` | Arreglos de seguridad de la Entrega 4: un solo pedido de inspección en curso por comprador y aviso (columna `url_clave` e índice único, aunque lleguen varios a la vez) y tabla `login_intento` para el límite de 5 intentos de ingreso cada 15 minutos. Correrla **antes** de desplegar el back que la usa |
 
-Se copian y pegan enteras en el **SQL Editor de Neon**, primero en la branch `dev` y en `main` recién cuando se pasa `dev` → `main`.
+Se copian y pegan enteras en el **SQL Editor de Neon**, primero en el proyecto de Neon de dev y en el de main recién cuando se pasa `dev` → `main` (son dos proyectos separados).
 
 ## Reglas para una migración nueva
 

@@ -37,7 +37,7 @@ final class Modelos
                 }
                 $clave = Clave::de((string)$a['marca'], (string)$a['modelo']);
                 $modelos[$clave] ??= [
-                    'clave' => $clave, 'marca' => (string)$a['marca'], 'modelo' => (string)$a['modelo'],
+                    'clave' => $clave, 'marca' => Clave::nombreMarca((string)$a['marca']), 'modelo' => (string)$a['modelo'],
                     'fecha' => $fecha, 'dolar' => $dolar, 'fuentes' => [], 'autos' => [],
                 ];
                 $modelos[$clave]['fuentes'][$fuente] = $fuente;

@@ -9,7 +9,7 @@ use DOMXPath;
 
 /**
  * Lee las tarjetas del HTML que devuelve Kavak sin navegador (desde noviembre de 2026 vienen en el HTML).
- * Arma el mismo arreglo que el JavaScript de scraper.php, así Normalizador sirve para los dos caminos.
+ * Arma el arreglo de cada tarjeta que espera Normalizador (el mismo que armaba el scraper con Playwright, ya borrado).
  */
 final class ExtractorHtml
 {

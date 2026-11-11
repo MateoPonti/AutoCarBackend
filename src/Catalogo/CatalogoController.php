@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace AutoCar\Catalogo;
 
+use AutoCar\Auth\Usuario;
 use AutoCar\Core\Response;
 use AutoCar\Publicaciones\Foto;
 
@@ -23,7 +24,16 @@ final class CatalogoController
         if ($v === null || !in_array($v['estado'], Vehiculo::VISIBLES, true)) {
             Response::error(404, 'no_encontrado', 'El vehículo no existe.');
         }
-        Response::json(['vehiculo' => Vehiculo::paraApi($v) + ['fotos' => Foto::rutasDe($id)]]);
+        $vendedor = Usuario::porId((int)$v['usuario_id']);
+        Response::json(['vehiculo' => Vehiculo::paraApi($v) + [
+            'fotos'    => Foto::rutasDe($id),
+            // Página pública: del vendedor solo el nombre y desde cuándo está (nunca el email)
+            'vendedor' => $vendedor === null ? null : [
+                'nombre' => $vendedor['nombre'],
+                'desde'  => date('c', (int)strtotime((string)$vendedor['created_at'])),
+                'foto'   => Usuario::rutaFoto((int)$vendedor['id'], $vendedor['foto_v']),
+            ],
+        ]]);
     }
 
     public function marcas(): void
@@ -31,10 +41,16 @@ final class CatalogoController
         Response::json(['marcas' => Vehiculo::marcas()]);
     }
 
+    /** GET /api/marcas-modelos: las marcas y modelos que se pueden publicar, para armar el formulario. */
+    public function marcasModelos(): void
+    {
+        Response::json(['marcas' => MarcaModelo::lista()]);
+    }
+
     /** Respuesta paginada, compartida con el listado de administración. */
     public static function listado(array $filtros, bool $soloDisponibles, int $porPagina): array
     {
-        $pagina = max(1, (int)($_GET['page'] ?? 1));
+        $pagina = min(10000, max(1, (int)($_GET['page'] ?? 1))); // tope: una página enorme desbordaría el OFFSET
         $r = Vehiculo::buscar($filtros, $pagina, $porPagina, $soloDisponibles);
         return [
             'items'      => array_map([Vehiculo::class, 'paraApi'], $r['items']),

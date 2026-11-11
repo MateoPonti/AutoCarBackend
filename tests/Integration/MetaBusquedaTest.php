@@ -290,9 +290,16 @@ final class MetaBusquedaTest extends ApiTestCase
 
         self::assertCount(1, Entorno::documentos()->leer("recolecciones/$fuente")['corridas']);
 
+        // Inválido con número de aviso (por ejemplo, km absurdos): no se carga, pero la corrida sigue completa
         $conMalo = array_merge($base, [['id_externo' => 'x', 'marca' => $marca]]);
-        $r = self::importar($fuente, '2026-11-09T06:00:00-03:00', $conMalo);
-        self::assertFalse($r['completo'], 'un auto inválido hace que la corrida no sirva para retirar');
+        $r = self::importar($fuente, '2026-11-08T06:00:00-03:00', $conMalo);
+        self::assertTrue($r['completo'], 'un inválido con número de aviso no arruina la corrida');
+        self::assertNotEmpty($r['advertencias']);
+
+        // Inválido SIN número de aviso: no se sabe cuál es, la corrida no sirve para retirar
+        $sinId = array_merge($base, [['marca' => $marca]]);
+        $r = self::importar($fuente, '2026-11-09T06:00:00-03:00', $sinId);
+        self::assertFalse($r['completo'], 'un auto sin número de aviso hace que la corrida no sirva para retirar');
         self::assertSame(8, $r['autos']);
     }
 
@@ -302,9 +309,8 @@ final class MetaBusquedaTest extends ApiTestCase
         $marca = self::unico('M');
         self::importar($fuente, '2026-11-02T06:00:00-03:00', self::primeraSemana($marca));
 
-        $this->ingresarComoAdmin();
-        $alta = $this->pedir('POST', '/api/admin/vehiculos', self::vehiculo(['marca' => $marca, 'modelo' => 'Sandero', 'anio' => 2017, 'precio' => 1000000, 'kilometraje' => 90000]));
-        self::assertSame(201, $alta['status'], json_encode($alta['json']));
+        $propio = $this->vehiculoDisponible(['marca' => $marca, 'modelo' => 'Sandero', 'anio' => 2017, 'precio' => 1000000, 'kilometraje' => 90000]);
+        $this->ingresarComoUsuario();
 
         $id = $this->crearBusqueda($marca);
         $j = $this->pedir('GET', "/api/meta-busquedas/$id")['json'];
@@ -312,7 +318,7 @@ final class MetaBusquedaTest extends ApiTestCase
 
         $portal = array_values(array_filter($j['resultados']['items'], fn($i) => $i['fuente'] === 'autocar'));
         self::assertCount(1, $portal);
-        self::assertSame($alta['json']['vehiculo']['id'], $portal[0]['id']);
+        self::assertSame($propio, $portal[0]['id']);
         self::assertNull($portal[0]['etiqueta']);
         self::assertEquals(13000000, $j['destacados']['mas_barato']['auto']['precio'], 'el del portal no compite en los destacados');
     }

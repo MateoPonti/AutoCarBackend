@@ -79,6 +79,6 @@ final class ConfigYRequestTest extends TestCase
     {
         $fila = ['id' => '3', 'nombre' => 'Ana', 'email' => 'ana@x.com', 'rol' => 'admin', 'password_hash' => '$2y$...'];
         $publico = Usuario::publico($fila);
-        self::assertSame(['id' => 3, 'nombre' => 'Ana', 'email' => 'ana@x.com', 'rol' => 'admin'], $publico);
+        self::assertSame(['id' => 3, 'nombre' => 'Ana', 'email' => 'ana@x.com', 'rol' => 'admin', 'foto' => null], $publico);
     }
 }

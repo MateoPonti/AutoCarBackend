@@ -48,7 +48,7 @@ En vez de guardar una comparación ya calculada por cada publicación, se guarda
 
 - **1 lectura por ficha vista.** Con 50.000 lecturas gratis por día alcanza para 50.000 fichas.
 - **Funciona para publicaciones nuevas** sin esperar a la corrida del día siguiente.
-- **Pocas escrituras:** hay ~1.500 modelos y solo se reescriben los que cambiaron (cada documento tiene una huella). Lejos de las 20.000 escrituras diarias.
+- **Pocas escrituras:** Firestore cuenta documentos, no autos, y cada documento es un modelo con todos sus autos. En el comparador solo se reescriben los modelos que cambiaron (huella); en el metabuscador se reescriben todos los que vinieron en la corrida, porque `ultima_vez` cambia cada día. Igual son ~2.000 a 4.000 escrituras por día y por proyecto, lejos de las 20.000 del plan gratis.
 - **El metabuscador usa el mismo documento:** buscar "Gol Trend" es leer `volkswagen_gol_trend`.
 - Si mañana se suma un sitio, solo se agrega su recolector: el documento suma autos con otra `fuente`.
 
@@ -174,7 +174,13 @@ flowchart LR
 
 **Por qué así.** Cada pantalla necesita pocos documentos enteros: un reporte lee el modelo buscado, el índice y las corridas; el detalle de un auto lee un solo documento (el id del auto ya dice de qué modelo es: `kavak~renault_sandero~562339`). No hace falta cruzar tablas. Las búsquedas y los avisos van en documentos distintos porque los escriben procesos distintos (la API y el importador) y así nunca se pisan.
 
-**Escrituras.** El importador escribe solo los modelos que cambiaron. Con las corridas de prueba del 08/11 (6.081 autos) fueron 205 modelos; con todo MercadoLibre (~1.500 modelos por fuente y por día) queda por debajo de las 20.000 escrituras diarias del plan gratis. Una corrida que falla a mitad de camino se puede volver a importar: da el mismo resultado y los avisos no se repiten.
+**Marcas y modelos con un solo nombre.** No hay una tabla de equivalencias: el id de cada documento es la clave del modelo (`Clave::de`), que no cuenta mayúsculas, acentos ni signos ("Ds__3", "DS - 3" y "ds.3" → `ds_3`), saca la marca del modelo aunque venga pegada a un número ("DS3" → `ds_3`, "RAM1500" → `ram_1500`; "Rampage" no se toca) y resuelve apodos (`Clave::MARCAS`: "VW", "Mercedes", "D.S."). Lo que se muestra pasa por `Clave::nombreMarca` ("Ds", "KIA" → "DS", "Kia"), con los mismos nombres que la tabla `marca` de Neon. Lo que ninguna regla puede saber ("Clase C" = "C 200"?) quedaría para una lista hecha a mano.
+
+**Marcas que no están en el catálogo.** El importador compara cada marca con el catálogo (`MARCAS_URL` = `GET /api/marcas-modelos` del back del mismo entorno). Si no está ("Peugot", una marca nueva), el auto no se carga, se avisa en la salida y no se da por retirado. `php bin/importar-autos.php --revisar-marcas archivo.json` lista solo esos autos con su link, sin importar nada: si es una marca real se agrega a `marca` con una migración (entran en la carga siguiente); si es un error del sitio, se suma como apodo.
+
+**Escrituras.** El importador escribe los modelos que vinieron en la corrida (su `ultima_vez` cambia todos los días) y los que tenían autos de esa fuente, para retirar los ausentes. Con las corridas de prueba del 08/11 (6.081 autos) fueron 205 modelos; con las completas del 10/11 (Autocosmos: 4.750 autos, 441 modelos; MercadoLibre: ~80.000 autos, ~1.000 modelos) queda por debajo de las 20.000 escrituras diarias del plan gratis.
+
+**Memoria.** La corrida completa de MercadoLibre arma un JSON de ~66 MB y llega a ~210 MB de memoria: con los 128 MB que PHP trae por defecto se moría al guardar. `diario.bat` corre MercadoLibre, `armar-modelos.php` e `importar-autos.php` con `php -d memory_limit=1G`. Una corrida que falla a mitad de camino se puede volver a importar: da el mismo resultado y los avisos no se repiten.
 
 **Credencial.** Como la API escribe las búsquedas, la cuenta de servicio de Render tiene que ser de escritura (*Cloud Datastore User*), no de solo lectura.
 
@@ -185,7 +191,7 @@ flowchart LR
 | Archivo | Qué hace | ¿Va a Render? |
 |---|---|---|
 | `recolectores/mercadolibre/` | `Extractor.php` (lee la página, sin red) y `recolectar.php` | No |
-| `recolectores/kavak/` | `ExtractorHtml.php` + `recolectar.php` (curl, nuevo) y `scraper.php` (Playwright, de Taro, queda como alternativa). `Normalizador.php` lo usan los dos | No |
+| `recolectores/kavak/` | `ExtractorHtml.php` + `recolectar.php` (curl) y `Normalizador.php` (de Taro). El `scraper.php` con Playwright se borró el 11/11 | No |
 | `recolectores/autocosmos/` | `Extractor.php` (microdatos schema.org) y `recolectar.php` | No |
 | `recolectores/comun/` | `Http` (curl con pausa y reintentos), `JsonEmbebido`, `Salida` (JSON del día + dólar) | No |
 | `recolectores/diario.bat` | La corrida diaria para el Programador de tareas de Windows | No |
@@ -225,11 +231,12 @@ MercadoLibre solo Volkswagen con tope de 3 páginas por búsqueda (140 pedidos, 
 | Polo 2020, 60.000 km, $ 28 M | `caro`: 15,1 % arriba de 21 autos |
 | Fiat Cronos 2022, 60.000 km, $ 21 M | `buen_precio`: 8,7 % abajo de 5 autos (Autocosmos y Kavak) |
 
-## 8. Pendiente
+## 8. Pendiente (al 11/11)
 
-1. **Crear el proyecto de Firebase** (Firestore en modo producción, plan Spark) y dos cuentas de servicio: una de escritura (rol *Cloud Datastore User*, el `.json` queda en la PC) y una de solo lectura (*Cloud Datastore Viewer*, su contenido va en `FIRESTORE_CREDENCIALES_JSON` de Render). Después: `COMPARADOR_ALMACEN=firestore` y `php bin/armar-modelos.php --almacen=firestore`. El cliente de Firestore está escrito y probado sin red (firma del token y conversión de datos), falta probarlo contra el proyecto real.
-2. **Programar la corrida diaria** en la PC: `schtasks /create /tn "AutoCar scraper" /sc daily /st 09:00 /tr "C:\...\Backend\recolectores\diario.bat"`.
-3. **Primera corrida completa de MercadoLibre** (~2 h 15 min) y al día siguiente `php bin/medir-cambios.php mercadolibre`, para tener el dato real de cuánto cambia por día.
-4. **Front:** el bloque de la ficha que consume `/api/vehiculos/{id}/comparacion`.
-5. **Respaldo con GitHub Actions** (si la PC no corrió): GitHub solo ejecuta los `schedule` desde `main`, así que para que corra solo el workflow tiene que estar en `main`. Decidir si se sube solo el workflow o se deja manual.
+1. ~~**Crear el proyecto de Firebase**~~: hecho el 10/11. Dos proyectos: `autocar-dev` (cargado con las corridas completas del 10/11: MercadoLibre 86.395 autos, Autocosmos 4.750, Kavak 1.330; comparador con 1.068 modelos) y `autocar-9897d` (prod, se carga en el pase `dev` → `main`). Render usa una cuenta de **escritura** (*Cloud Datastore User*), porque el metabuscador guarda las búsquedas.
+2. **Programar la corrida diaria** en la PC: `schtasks /create /tn "AutoCar scraper" /sc daily /st 09:00 /tr "C:\...\Backend\recolectores\diario.bat"`. El `.env` de la PC necesita `MARCAS_URL` (sección 6).
+3. ~~**Primera corrida completa de MercadoLibre**~~: hecha el 10/11 (~2 h 30 min, 86.427 autos). Falta la del día siguiente y `php bin/medir-cambios.php mercadolibre`, para tener el dato real de cuánto cambia por día.
+4. ~~**Front:** el bloque de la ficha que consume `/api/vehiculos/{id}/comparacion`~~: hecho (front #50 y #52).
+5. **GitHub Actions todos los días a las 06:00** (11/11): el workflow Scraper corre las tres fuentes y carga Firestore de **prod** (GitHub solo programa desde `main`; empieza a correr con el pase). Secretos por Environment (`prod` solo desde `main`, `dev` solo desde `dev`), cargados el 11/11. Detalle en `recolectores/README.md`.
 6. ~~Pasar el metabuscador de Taro a NoSQL~~: hecho el 08/11 (sección 6). Queda unificar `modelos/{clave}` del comparador con `mercado/{clave}`, que hoy guardan casi los mismos autos dos veces.
+7. **Modelos con distinto nombre dentro de una marca** ("4" y "DS4", "Clase C" y "C 200"): la clave no los puede igualar. Haría falta una lista de equivalencias hecha a mano.

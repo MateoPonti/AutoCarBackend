@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace AutoCar\Publicaciones;
 
 use AutoCar\Auth\Auth;
+use AutoCar\Catalogo\MarcaModelo;
 use AutoCar\Catalogo\Vehiculo;
 use AutoCar\Core\Database;
 use AutoCar\Core\Request;
@@ -43,6 +44,7 @@ final class PublicacionController
     {
         $in = Request::formulario();
         [$datos, $errores] = Vehiculo::validarPorPartes($in);
+        $errores += self::marcaYModelo($datos, $errores);
         [$fotos, $errorFotos] = Foto::validarSubidas($_FILES['fotos'] ?? null, 0, false);
         if ($errorFotos !== null) {
             $errores['fotos'] = $errorFotos;
@@ -78,6 +80,7 @@ final class PublicacionController
             Response::error(409, 'no_editable', 'Un vehículo vendido no se puede editar.');
         }
         [$datos, $errores] = Vehiculo::validarPorPartes(Request::json() + Vehiculo::paraApi($actual));
+        $errores += self::marcaYModelo($datos, $errores);
         if ($errores) {
             Response::error(422, 'validacion', 'Revisá los datos ingresados.', $errores);
         }
@@ -136,7 +139,9 @@ final class PublicacionController
             Response::error(422, 'validacion', 'Revisá los datos ingresados.',
                 ['estado' => 'Sólo podés marcar como vendida una publicación disponible.']);
         }
-        Vehiculo::cambiarEstado($id, $nuevo);
+        if (!Vehiculo::cambiarEstado($id, $nuevo, null, $actual['estado'])) {
+            Response::error(409, 'estado_cambiado', 'La publicación cambió mientras tanto. Recargá para ver cómo quedó.');
+        }
         Response::json(['vehiculo' => Vehiculo::paraApi(Vehiculo::find($id))]);
     }
 
@@ -170,6 +175,15 @@ final class PublicacionController
             Response::error(404, 'no_encontrado', 'La foto no existe.');
         }
         Response::archivo($f['datos'], $f['mime'], $publica);
+    }
+
+    /** Marca y modelo tienen que estar en la lista (tablas marca y modelo); solo se consulta si ya tienen formato válido. */
+    private static function marcaYModelo(array $datos, array $errores): array
+    {
+        if (isset($errores['marca']) || isset($errores['modelo'])) {
+            return [];
+        }
+        return MarcaModelo::errores($datos['marca'], $datos['modelo']);
     }
 
     private static function puedeVerPrivada(int $duenioId): bool

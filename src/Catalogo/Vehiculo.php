@@ -91,6 +91,10 @@ final class Vehiculo
      * Publicar por partes: con marca, modelo y año ya se crea la publicación; estos datos se pueden completar después.
      * Mientras falte alguno, el moderador no la puede aprobar (ver faltan()). Clave = campo, valor = cómo se lo nombra.
      */
+    /** Todos los campos que se leen al publicar o editar (para rechazar los que llegan como arreglo). */
+    private const CAMPOS = ['marca', 'modelo', 'anio', 'precio', 'kilometraje', 'combustible', 'transmision', 'estado',
+        'version', 'condicion', 'localidad', 'acepta_canje', 'busca_canje', 'descripcion', 'imagen_url'];
+
     public const PARA_COMPLETAR = [
         'precio'      => 'precio',
         'kilometraje' => 'kilometraje',
@@ -102,21 +106,19 @@ final class Vehiculo
 
     /**
      * Lo que le falta a una publicación para que el moderador la pueda aprobar: los datos de PARA_COMPLETAR y al
-     * menos una foto. Los vehículos que carga el admin (sin dueño) no pasan por moderación y no piden condición,
-     * localidad ni fotos. Función pura: recibe la fila con fotos_cantidad.
+     * menos una foto. Una sola regla para todas: desde la 011 toda publicación tiene un vendedor y nadie del panel
+     * carga autos. Función pura: recibe la fila con fotos_cantidad.
      * @return string[] los nombres de lo que falta, vacío si está completa
      */
     public static function faltan(array $v): array
     {
-        $deUsuario = ($v['usuario_id'] ?? null) !== null;
         $faltan = [];
         foreach (self::PARA_COMPLETAR as $campo => $nombre) {
-            $opcionalParaElAdmin = in_array($campo, ['condicion', 'localidad'], true);
-            if (($v[$campo] ?? null) === null && ($deUsuario || !$opcionalParaElAdmin)) {
+            if (($v[$campo] ?? null) === null) {
                 $faltan[] = $nombre;
             }
         }
-        if ($deUsuario && (int)($v['fotos_cantidad'] ?? 0) === 0) {
+        if ((int)($v['fotos_cantidad'] ?? 0) === 0) {
             $faltan[] = 'fotos';
         }
         return $faltan;
@@ -141,6 +143,22 @@ final class Vehiculo
         return $st->fetchAll();
     }
 
+    /**
+     * Favoritos de un usuario, el último guardado primero. Solo los visibles (disponibles o vendidos): si el dueño
+     * la saca o el moderador la da de baja, deja de aparecer, pero el favorito queda por si vuelve.
+     */
+    public static function favoritosDe(int $usuarioId): array
+    {
+        $st = Database::pdo()->prepare(
+            'SELECT vehiculo.*, ' . self::PRIMERA_FOTO . " FROM vehiculo
+               JOIN favorito fav ON fav.vehiculo_id = vehiculo.id AND fav.usuario_id = :usuario_id
+              WHERE vehiculo.estado IN ('disponible', 'vendido')
+              ORDER BY fav.created_at DESC, vehiculo.id DESC"
+        );
+        $st->execute(['usuario_id' => $usuarioId]);
+        return $st->fetchAll();
+    }
+
     /** El vehículo sólo si es de ese usuario y no está eliminado; si no, null (evita IDOR). */
     public static function deUsuario(int $id, int $usuarioId): ?array
     {
@@ -152,17 +170,26 @@ final class Vehiculo
         return $st->fetch() ?: null;
     }
 
-    /** $motivo sólo se guarda al rechazar; cualquier otro cambio de estado lo borra. */
-    public static function cambiarEstado(int $id, string $estado, ?string $motivo = null): void
+    /**
+     * $motivo sólo se guarda al rechazar; cualquier otro cambio de estado lo borra.
+     * $desde: el estado que se leyó antes de decidir. Si mientras tanto otro lo cambió (dos moderadores a la vez),
+     * no se toca nada y devuelve false, así la segunda decisión no pisa a la primera.
+     */
+    public static function cambiarEstado(int $id, string $estado, ?string $motivo = null, ?string $desde = null): bool
     {
-        $st = Database::pdo()->prepare(
-            'UPDATE vehiculo SET estado = :estado, motivo_rechazo = :motivo, updated_at = now() WHERE id = :id'
-        );
-        $st->execute(['estado' => $estado, 'motivo' => $estado === 'rechazado' ? $motivo : null, 'id' => $id]);
+        $sql = 'UPDATE vehiculo SET estado = :estado, motivo_rechazo = :motivo, updated_at = now() WHERE id = :id';
+        $params = ['estado' => $estado, 'motivo' => $estado === 'rechazado' ? $motivo : null, 'id' => $id];
+        if ($desde !== null) {
+            $sql .= ' AND estado = :desde';
+            $params['desde'] = $desde;
+        }
+        $st = Database::pdo()->prepare($sql);
+        $st->execute($params);
+        return $st->rowCount() === 1;
     }
 
-    /** $usuarioId: dueño de la publicación; null cuando el vehículo lo carga el admin. */
-    public static function crear(array $d, ?int $usuarioId = null): int
+    /** $usuarioId: el vendedor, dueño de la publicación (obligatorio: la base tampoco acepta un vehículo sin vendedor). */
+    public static function crear(array $d, int $usuarioId): int
     {
         $st = Database::pdo()->prepare(
             'INSERT INTO vehiculo (usuario_id, marca, modelo, version, anio, precio, kilometraje, combustible, transmision,
@@ -279,6 +306,8 @@ final class Vehiculo
             $errores['imagen_url'] = 'Ingresá una URL http(s) válida (hasta 255 caracteres) o dejalo vacío.';
         }
 
+        $errores = Request::noSimples($in, self::CAMPOS) + $errores; // el aviso de tipo pisa al de "obligatorio"
+
         $datos = [
             'marca' => $marca, 'modelo' => $modelo, 'anio' => (int)$anio, 'precio' => $precioTxt,
             'kilometraje' => (int)$km, 'combustible' => $comb, 'transmision' => $trans,
@@ -296,8 +325,8 @@ final class Vehiculo
      * Si cambia una, cambiar la otra.
      */
     private const COMPLETA_SQL = "(precio IS NOT NULL AND kilometraje IS NOT NULL AND combustible IS NOT NULL
-        AND transmision IS NOT NULL AND (usuario_id IS NULL OR (condicion IS NOT NULL AND localidad IS NOT NULL
-        AND EXISTS (SELECT 1 FROM vehiculo_foto f WHERE f.vehiculo_id = vehiculo.id))))";
+        AND transmision IS NOT NULL AND condicion IS NOT NULL AND localidad IS NOT NULL
+        AND EXISTS (SELECT 1 FROM vehiculo_foto f WHERE f.vehiculo_id = vehiculo.id))";
 
     /**
      * Valida una publicación que se carga por partes: marca, modelo y año son obligatorios; los datos de
@@ -308,8 +337,10 @@ final class Vehiculo
     public static function validarPorPartes(array $in): array
     {
         [$datos, $errores] = self::validar($in, true);
+        // Un arreglo no es "vacío": es un dato inválido, y no tiene que borrar lo que ya estaba cargado
+        $noSimples = Request::noSimples($in, self::CAMPOS);
         foreach (array_keys(self::PARA_COMPLETAR) as $campo) {
-            if (Request::texto($in, $campo) === '') {
+            if (!isset($noSimples[$campo]) && Request::texto($in, $campo) === '') {
                 unset($errores[$campo]);
                 $datos[$campo] = null;
             }

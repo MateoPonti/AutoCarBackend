@@ -9,24 +9,27 @@ use DateTimeImmutable;
  * Ciclo de vida de una inspección y del pago simulado.
  *   pedida → aceptada → firmada
  *   pedida → rechazada (el mecánico) o cancelada (el comprador): se le devuelve todo al comprador.
+ *   aceptada → no_realizada (el mecánico fue y no la pudo hacer, por ejemplo porque el vendedor no dejó revisar el auto):
+ *   también se le devuelve todo al comprador.
  * Firmada no cambia más. Después de firmar, el comprador tiene 15 días para reclamar (una sola vez).
  */
 final class Estados
 {
-    public const ESTADOS = ['pedida', 'aceptada', 'rechazada', 'cancelada', 'firmada'];
+    public const ESTADOS = ['pedida', 'aceptada', 'rechazada', 'cancelada', 'firmada', 'no_realizada'];
     public const PAGOS   = ['retenido', 'liberado', 'reembolsado'];
     public const DIAS_RECLAMO = 15;
 
     private const TRANSICIONES = [
         'pedida'   => ['aceptada', 'rechazada', 'cancelada'],
-        'aceptada' => ['firmada'],
+        'aceptada' => ['firmada', 'no_realizada'],
     ];
 
     // estado nuevo => cómo queda el pago
     private const PAGO_SEGUN_ESTADO = [
-        'rechazada' => 'reembolsado',
-        'cancelada' => 'reembolsado',
-        'firmada'   => 'liberado',
+        'rechazada'    => 'reembolsado',
+        'cancelada'    => 'reembolsado',
+        'no_realizada' => 'reembolsado',
+        'firmada'      => 'liberado',
     ];
 
     public static function puedePasar(string $desde, string $hacia): bool

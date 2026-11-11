@@ -276,7 +276,7 @@ final class Reporte
     {
         $total = count($items);
         $paginas = max(1, (int)ceil($total / self::POR_PAGINA));
-        $pagina = max(1, is_string($get['page'] ?? null) ? (int)$get['page'] : 1);
+        $pagina = min(10000, max(1, is_string($get['page'] ?? null) ? (int)$get['page'] : 1));
         return [
             'items'      => array_slice($items, ($pagina - 1) * self::POR_PAGINA, self::POR_PAGINA),
             'total'      => $total,

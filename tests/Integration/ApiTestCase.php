@@ -75,7 +75,8 @@ abstract class ApiTestCase extends TestCase
      * POST multipart/form-data, como el formulario de publicar: $campos de texto y $fotos PNG generadas en el momento.
      * @return array{status: int, json: mixed}
      */
-    protected function pedirFormulario(string $ruta, array $campos, int $fotos = 0): array
+    // $campoFoto = 'foto': adjunta una sola imagen en ese campo (foto de perfil) en vez de fotos[]
+    protected function pedirFormulario(string $ruta, array $campos, int $fotos = 0, string $campoFoto = 'fotos'): array
     {
         $h = ['Accept: application/json'];
         if ($this->cookie !== null) {
@@ -91,7 +92,7 @@ abstract class ApiTestCase extends TestCase
             $ruta_tmp = tempnam(sys_get_temp_dir(), 'foto');
             file_put_contents($ruta_tmp, $png);
             $archivos[] = $ruta_tmp;
-            $campos["fotos[$i]"] = new \CURLFile($ruta_tmp, 'image/png', "foto$i.png");
+            $campos[$campoFoto === 'fotos' ? "fotos[$i]" : $campoFoto] = new \CURLFile($ruta_tmp, 'image/png', "foto$i.png");
         }
 
         $c = curl_init(Entorno::url() . $ruta);
@@ -150,6 +151,33 @@ abstract class ApiTestCase extends TestCase
         $email = $this->registrar();
         self::assertSame(200, $this->ingresar($email)['status']);
         return $email;
+    }
+
+    /**
+     * Vehículo ya publicado (disponible) de un vendedor nuevo, cargado directo en la base: toda publicación
+     * tiene un vendedor y nadie del panel las crea. Devuelve el id.
+     */
+    protected function vehiculoDisponible(array $cambios = []): int
+    {
+        $email = $this->registrar();
+        $d = self::vehiculo($cambios);
+        self::asegurarModelo($d['marca'], $d['modelo']);
+        $st = Entorno::pdo()->prepare(
+            "INSERT INTO vehiculo (usuario_id, marca, modelo, anio, precio, kilometraje, combustible, transmision, estado)
+             VALUES ((SELECT id FROM usuario WHERE email = :e), :marca, :modelo, :anio, :precio, :km, :comb, :trans, 'disponible')
+             RETURNING id"
+        );
+        $st->execute(['e' => $email, 'marca' => $d['marca'], 'modelo' => $d['modelo'], 'anio' => $d['anio'],
+            'precio' => $d['precio'], 'km' => $d['kilometraje'], 'comb' => $d['combustible'], 'trans' => $d['transmision']]);
+        return (int)$st->fetchColumn();
+    }
+
+    /** Suma una marca y un modelo a la lista (las pruebas usan marcas inventadas para no mezclarse con otras). */
+    protected static function asegurarModelo(string $marca, string $modelo): void
+    {
+        $pdo = Entorno::pdo();
+        $pdo->prepare('INSERT INTO marca (nombre) VALUES (:m) ON CONFLICT DO NOTHING')->execute(['m' => $marca]);
+        $pdo->prepare('INSERT INTO modelo (marca, nombre) VALUES (:m, :n) ON CONFLICT DO NOTHING')->execute(['m' => $marca, 'n' => $modelo]);
     }
 
     protected static function vehiculo(array $cambios = []): array
