@@ -20,23 +20,37 @@ final class Importador
     /** Con menos que este porcentaje de la corrida anterior, se desconfía de la corrida. */
     private const PISO_RESPECTO_ANTERIOR = 0.8;
     private const CORRIDAS_GUARDADAS = 30;
+    /** Cuántas marcas y modelos que faltan en el catálogo se anotan por corrida (los de más autos). */
+    private const FALTANTES_GUARDADOS = 100;
 
     /** @var array<string, int>|null clave de cada marca del catálogo ("mercedes benz"), para buscarla rápido */
     private ?array $clavesConocidas;
+    /** @var array<string, true>|null clave de cada modelo del catálogo ("toyota_corolla") */
+    private ?array $modelosConocidos = null;
 
     /**
      * @param list<string>|null $marcasConocidas las de la tabla marca de Neon. Un auto con otra marca no se carga y se
      *                                           avisa (ver marcaConocida). null: se cargan todas.
+     * @param list<array{marca: string, modelos: list<string>}>|null $catalogo marcas y modelos de Neon (lo mismo que
+     *        GET /api/marcas-modelos). Un auto con un modelo que no está se carga igual, pero se anota en la corrida.
      */
-    public function __construct(private Documentos $docs, ?array $marcasConocidas = null)
+    public function __construct(private Documentos $docs, ?array $marcasConocidas = null, ?array $catalogo = null)
     {
         $this->clavesConocidas = $marcasConocidas === null ? null
             : array_flip(array_map([Clave::class, 'marca'], $marcasConocidas));
+        if ($catalogo !== null) {
+            $this->modelosConocidos = [];
+            foreach ($catalogo as $m) {
+                foreach ($m['modelos'] as $modelo) {
+                    $this->modelosConocidos[Catalogo::claveDe($m['marca'], $modelo)] = true;
+                }
+            }
+        }
     }
 
     /**
      * @param array<string, mixed> $datos
-     * @return array{fuente: string, fecha: string, autos: int, completo: bool, modelos_escritos: int, retirados: int, avisos: int, apartados: int, advertencias: list<string>}
+     * @return array{fuente: string, fecha: string, autos: int, completo: bool, modelos_escritos: int, retirados: int, avisos: int, apartados: int, modelos_faltantes: int, advertencias: list<string>}
      */
     public function importar(array $datos): array
     {
@@ -62,6 +76,7 @@ final class Importador
         $protegidos = [];
         $sinId = 0;
         $apartadas = []; // marca como la escribió el sitio → cantidad de autos
+        $modelosFaltantes = []; // "Marca Modelo" que no está en el catálogo → cantidad de autos (se cargan igual)
         foreach ($datos['autos'] as $auto) {
             $limpio = is_array($auto) ? self::validarAuto($auto) : null;
             $clave = $limpio !== null ? Catalogo::claveDe($limpio['marca'], $limpio['modelo']) : '';
@@ -84,6 +99,10 @@ final class Importador
             }
             if (!isset($porModelo[$clave][$limpio['id_externo']])) {
                 $cantidad++;
+                if ($this->modelosConocidos !== null && !isset($this->modelosConocidos[$clave])) {
+                    $nombre = Clave::nombreMarca($limpio['marca']) . ' ' . $limpio['modelo'];
+                    $modelosFaltantes[$nombre] = ($modelosFaltantes[$nombre] ?? 0) + 1;
+                }
             }
             $porModelo[$clave][$limpio['id_externo']] = $limpio;
         }
@@ -174,7 +193,9 @@ final class Importador
         $this->docs->escribir(Indice::documento($indice));
         $avisos = $this->generarAvisos($cambios, $fecha);
 
-        $recolecciones['corridas'][] = ['fecha' => $fecha, 'completo' => $completo, 'autos' => $cantidad];
+        // Lo que falta en el catálogo de Neon, para decidir qué marca o modelo agregar (o qué nombre unir en Clave)
+        $recolecciones['corridas'][] = ['fecha' => $fecha, 'completo' => $completo, 'autos' => $cantidad,
+            'marcas_faltantes' => self::faltantes($apartadas), 'modelos_faltantes' => self::faltantes($modelosFaltantes)];
         $recolecciones['corridas'] = array_slice($recolecciones['corridas'], -self::CORRIDAS_GUARDADAS);
         $this->docs->escribir(["recolecciones/$fuente" => $recolecciones]);
 
@@ -187,8 +208,24 @@ final class Importador
             'retirados'        => $retirados,
             'avisos'           => $avisos,
             'apartados'        => array_sum($apartadas),
+            'modelos_faltantes' => array_sum($modelosFaltantes),
             'advertencias'     => $advertencias,
         ];
+    }
+
+    /**
+     * Nombre → cantidad de autos, como lista ordenada de mayor a menor y cortada (el documento tiene tope de tamaño).
+     * @param array<string, int> $porNombre
+     * @return list<array{nombre: string, autos: int}>
+     */
+    private static function faltantes(array $porNombre): array
+    {
+        arsort($porNombre);
+        $lista = [];
+        foreach (array_slice($porNombre, 0, self::FALTANTES_GUARDADOS, true) as $nombre => $autos) {
+            $lista[] = ['nombre' => (string)$nombre, 'autos' => $autos];
+        }
+        return $lista;
     }
 
     /**

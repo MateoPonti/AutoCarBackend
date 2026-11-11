@@ -230,6 +230,21 @@ final class MetaBusquedaDocumentosTest extends TestCase
         self::assertSame(0, $r['retirados']);
     }
 
+    public function testLaCorridaAnotaLasMarcasYLosModelosQueFaltanEnElCatalogo(): void
+    {
+        $catalogo = [['marca' => 'Renault', 'modelos' => ['Sandero']], ['marca' => 'Volkswagen', 'modelos' => ['Gol']]];
+        $importador = new Importador($this->docs, ['Renault', 'Volkswagen'], $catalogo);
+        $autos = [...self::primeraSemana(), self::coche('p1', ['marca' => 'Peugot', 'modelo' => '208']),
+            self::coche('v1', ['marca' => 'VW', 'modelo' => 'gol']), self::coche('o2', ['modelo' => 'Logan'])];
+        $r = $importador->importar(['fuente' => 'kavak', 'fecha' => self::SEMANA_1, 'completo' => true, 'autos' => $autos]);
+
+        self::assertSame(2, $r['modelos_faltantes'], 'los dos Logan');
+        self::assertNotNull(Catalogo::leer($this->docs, 'renault_logan'), 'un modelo que falta se carga igual');
+        $corrida = $this->docs->leer('recolecciones/kavak')['corridas'][0];
+        self::assertSame([['nombre' => 'Peugot', 'autos' => 1]], $corrida['marcas_faltantes']);
+        self::assertSame([['nombre' => 'Renault Logan', 'autos' => 2]], $corrida['modelos_faltantes'], 'el VW gol es el Gol');
+    }
+
     public function testSinListaDeMarcasNoSeApartaNinguna(): void
     {
         $r = $this->importar(self::SEMANA_1, [self::coche('p1', ['marca' => 'Peugot', 'modelo' => '208'])]);
