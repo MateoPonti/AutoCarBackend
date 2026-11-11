@@ -64,7 +64,6 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `GET /api/meta-busquedas/{id}` | sesión (dueño) | Reporte: referencia de precio, novedades, destacados, resultados y otros modelos. Listado: `fuente`, `etiqueta`, `precio_max`, `km_max`, `orden` (`precio`, `km`, `nuevos`), `page` |
 | `PUT /api/meta-busquedas/{id}` | sesión (dueño) | Modifica los criterios |
 | `DELETE /api/meta-busquedas/{id}` | sesión (dueño) | Borra la búsqueda y sus avisos → 204 |
-| `GET /api/meta-busquedas/marcas` | sesión | Marcas y modelos con sus nombres exactos, para armar el formulario |
 | `GET /api/meta-busquedas/avisos?sin_ver=1` | sesión | Últimos 100 avisos del usuario: auto nuevo, baja de precio, reservado o retirado |
 | `POST /api/meta-busquedas/{id}/avisos/vistos` | sesión (dueño) | Marca como vistos los avisos de esa búsqueda → 204 |
 | `GET /api/autos-externos?id=` | sesión | Detalle de un auto de otra plataforma: ficha, etiqueta de precio, comparables, historial y link al original. El `id` es texto (`fuente~modelo~id`, ej. `kavak~renault_sandero~562339`), el mismo que viene en los resultados |

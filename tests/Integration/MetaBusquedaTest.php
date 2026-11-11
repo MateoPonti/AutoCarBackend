@@ -365,16 +365,9 @@ final class MetaBusquedaTest extends ApiTestCase
         self::assertSame('barato', $j['destacados']['mas_barato']['auto']['etiqueta']['valor']);
     }
 
-    public function testMarcasYAutoInexistente(): void
+    public function testAutoInexistente(): void
     {
-        $fuente = self::unico('f');
-        $marca = self::unico('M');
-        self::importar($fuente, '2026-11-02T06:00:00-03:00', self::primeraSemana($marca));
         $this->ingresarComoUsuario();
-
-        $marcas = $this->pedir('GET', '/api/meta-busquedas/marcas')['json']['marcas'];
-        $mia = array_values(array_filter($marcas, fn($m) => $m['marca'] === $marca))[0];
-        self::assertSame(['Logan', 'Sandero'], $mia['modelos']);
         self::assertSame(404, $this->pedir('GET', '/api/autos-externos?id=kavak~no_existe~1')['status']);
         self::assertSame(404, $this->pedir('GET', '/api/autos-externos?id=../../x')['status']);
         self::assertSame(404, $this->pedir('GET', '/api/autos-externos')['status']);

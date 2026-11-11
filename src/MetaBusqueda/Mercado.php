@@ -134,26 +134,6 @@ final class Mercado
     }
 
     /**
-     * Marcas y sus modelos con autos activos: el formulario necesita los nombres exactos.
-     *
-     * @return list<array{marca: string, modelos: list<string>}>
-     */
-    public function marcasYModelos(): array
-    {
-        $marcas = [];
-        foreach ($this->indice() as $m) {
-            $marcas[$m['marca']][] = $m['modelo'];
-        }
-        ksort($marcas, SORT_STRING | SORT_FLAG_CASE);
-        $salida = [];
-        foreach ($marcas as $marca => $modelos) {
-            sort($modelos, SORT_STRING | SORT_FLAG_CASE);
-            $salida[] = ['marca' => (string)$marca, 'modelos' => array_values(array_unique($modelos))];
-        }
-        return $salida;
-    }
-
-    /**
      * Vehículos disponibles publicados en AutoCar, con las mismas claves que un auto externo.
      * Se traen todos los disponibles y se filtran acá con la misma clave de modelo que los externos ("VW" = "Volkswagen").
      *
