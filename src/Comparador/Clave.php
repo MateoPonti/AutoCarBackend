@@ -47,8 +47,7 @@ final class Clave
 
     public static function de(string $marca, string $modelo): string
     {
-        $m = self::limpiar($marca);
-        $m = self::MARCAS[$m] ?? $m;
+        $m = self::marca($marca);
         $modelo = self::limpiar($modelo);
         // Algunos sitios repiten la marca en el modelo ("Volkswagen Gol Trend")
         if (str_starts_with($modelo, $m . ' ')) {
@@ -67,9 +66,15 @@ final class Clave
      */
     public static function nombreMarca(string $marca): string
     {
-        $m = self::limpiar($marca);
-        $m = self::MARCAS[$m] ?? $m;
+        $m = self::marca($marca);
         return self::NOMBRES[$m] ?? ucwords($m);
+    }
+
+    /** Clave de una marca, con los apodos resueltos: "MB", "Mercedes" y "Mercedes-Benz" → "mercedes benz". */
+    public static function marca(string $marca): string
+    {
+        $m = self::limpiar($marca);
+        return self::MARCAS[$m] ?? $m;
     }
 
     /** Minúsculas, sin acentos y con un solo espacio entre palabras. */

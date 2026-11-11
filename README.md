@@ -269,6 +269,14 @@ php bin/importar-autos.php --hoy        # la corrida de hoy de cada fuente
 
 Una corrida se marca como incompleta si el recolector lo indica, si tiene algún auto inválido o si trae menos del 80% de los autos de la anterior. Esas corridas se guardan, pero no se usan para calcular ni retiran autos ni generan avisos. Una fecha igual o anterior a la última se rechaza.
 
+**Marcas que no están en el catálogo.** El importador compara la marca de cada auto con el catálogo (`MARCAS_URL`, la API pública `GET /api/marcas-modelos` del back del mismo entorno; sin esa variable, la tabla `marca` de la base). No cuenta mayúsculas, acentos, signos ni apodos ("VW" = Volkswagen). Si la marca no está, el auto no se carga, se avisa en la salida y, como sigue publicado, no se da por retirado. Para ver solo esos autos sin importar nada:
+
+```
+php bin/importar-autos.php --revisar-marcas storage/mercado/mercadolibre/2026-11-10.json
+```
+
+Si es una marca nueva, se agrega a la tabla `marca` con una migración y sus autos entran en la carga siguiente. Si es una del catálogo mal escrita por el sitio, se suma como apodo en `Clave::MARCAS`.
+
 **Cómo se calcula.** Los valores son un punto de partida para ajustar con datos reales, y están como constantes en `src/MetaBusqueda`.
 
 | Dato | Regla |
