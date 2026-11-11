@@ -19,6 +19,7 @@ final class Clave
         'land rover'       => 'land rover',
         'alfa'             => 'alfa romeo',
         'great wall motor' => 'great wall',
+        'd s'              => 'ds', // "D.S."
     ];
 
     /** Marcas que no se escriben con mayúscula inicial y nada más; mismos nombres que la tabla marca de Neon. */
@@ -27,7 +28,6 @@ final class Clave
         'bmw'           => 'BMW',
         'byd'           => 'BYD',
         'citroen'       => 'Citroën',
-        'd s'           => 'DS',
         'dfsk'          => 'DFSK',
         'ds'            => 'DS',
         'gac'           => 'GAC',
@@ -53,6 +53,10 @@ final class Clave
         // Algunos sitios repiten la marca en el modelo ("Volkswagen Gol Trend")
         if (str_starts_with($modelo, $m . ' ')) {
             $modelo = substr($modelo, strlen($m) + 1);
+        }
+        // ...o pegada a un número ("DS3" es el DS 3, "RAM1500" la RAM 1500). Solo con número: "Rampage" no es "page".
+        if (preg_match('/^' . preg_quote($m, '/') . '(\d.*)$/', $modelo, $pegado)) {
+            $modelo = $pegado[1];
         }
         return str_replace(' ', '_', "$m $modelo");
     }
