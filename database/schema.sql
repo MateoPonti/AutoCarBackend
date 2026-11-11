@@ -74,6 +74,8 @@ CREATE INDEX IF NOT EXISTS idx_usuario_rol ON usuario (rol_id);
 CREATE TABLE IF NOT EXISTS marca (
   nombre VARCHAR(50) PRIMARY KEY
 );
+-- "DS" y "Ds" serían la misma marca: no se repite con otra escritura
+CREATE UNIQUE INDEX IF NOT EXISTS marca_nombre_unico ON marca (lower(nombre));
 
 CREATE TABLE IF NOT EXISTS modelo (
   marca  VARCHAR(50) NOT NULL REFERENCES marca(nombre) ON UPDATE CASCADE,
