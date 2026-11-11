@@ -1434,8 +1434,8 @@ CREATE TABLE IF NOT EXISTS inspeccion (
   kilometraje      INTEGER       CHECK (kilometraje >= 0),
   precio_publicado NUMERIC(13,2) CHECK (precio_publicado > 0),
   localidad        VARCHAR(100),
-  estado           VARCHAR(10)   NOT NULL DEFAULT 'pedida'
-                   CHECK (estado IN ('pedida', 'aceptada', 'rechazada', 'cancelada', 'firmada')),
+  estado           VARCHAR(12)   NOT NULL DEFAULT 'pedida'
+                   CHECK (estado IN ('pedida', 'aceptada', 'rechazada', 'cancelada', 'firmada', 'no_realizada')),
   fecha_turno      TIMESTAMPTZ,
   motivo_rechazo   VARCHAR(300),
   precio           NUMERIC(11,2) NOT NULL CHECK (precio > 0),
