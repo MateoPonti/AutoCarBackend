@@ -13,29 +13,10 @@ Recorre el listado de autos usados de [Kavak Argentina](https://www.kavak.com/ar
 | `Normalizador.php` | Interpreta cada tarjeta. No usa navegador ni red, y tiene pruebas en `tests/Unit` |
 | `composer.json` y `composer.lock` | Dependencia `playwright-php/playwright`, fijada para PHP 8.3 (la versión del `Dockerfile`) |
 | `.gitignore` | Deja afuera del repo `vendor/` y `autos.json` |
-| `../../.github/workflows/scraper.yml` | La ejecución programada |
 
 ## Ejecución programada
 
-El workflow **Scraper** de GitHub Actions corre **una vez por semana, los lunes a las 06:00 de Argentina** (09:00 UTC), y recorre **todas las páginas** del listado. En noviembre de 2026 eran 42 páginas y 1.247 autos, unos 16 minutos por la pausa entre páginas.
-
-Después sube `autos.json` como artefacto (se guarda 30 días) y lo importa en Firestore, si el repo tiene el secreto `FIRESTORE_CREDENCIALES_JSON` (el contenido del .json de una cuenta de servicio de escritura) en **Settings → Secrets and variables → Actions**. Sin ese secreto, la importación se saltea.
-
-Para correrlo a mano: **Actions** → **Scraper** → **Run workflow**. Se puede indicar la cantidad de páginas; si queda vacío, recorre todas.
-
-Para que corra **todos los días**, cambiar el `cron` en `.github/workflows/scraper.yml`:
-
-```yaml
-- cron: '0 9 * * *'
-```
-
-Limitaciones de GitHub Actions:
-
-- **Solo corre desde `main`.** GitHub ejecuta los `schedule` únicamente desde la rama por defecto: hasta que este workflow llegue a `main` no corre solo. "Run workflow" también necesita que el archivo esté en `main`.
-- **El horario es aproximado.** La corrida puede demorarse si GitHub tiene mucha carga.
-- **Se puede desactivar solo.** En repos públicos, GitHub desactiva los `schedule` tras 60 días sin actividad en el repo. Se vuelve a activar desde la pestaña **Actions**.
-
-Si falla la corrida, por ejemplo porque Kavak cambió su HTML o bloquea el pedido, el workflow queda en rojo. Si ya había juntado autos, el archivo se guarda con lo obtenido y marcado como incompleto. Si falla en la primera página, no genera archivo.
+Desde el 11/11 el workflow **Scraper** (`.github/workflows/scraper.yml`) ya no usa este `scraper.php`: corre **todos los días a las 06:00 de Argentina** los recolectores con curl de las tres fuentes (`kavak/recolectar.php`, `autocosmos/recolectar.php` y `mercadolibre/recolectar.php`), igual que `diario.bat`. Ver [recolectores/README.md](../README.md). `scraper.php` queda como alternativa si Kavak vuelve a cargar los autos solo con JavaScript.
 
 ## Ejecutarlo en local
 

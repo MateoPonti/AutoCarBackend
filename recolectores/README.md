@@ -13,6 +13,16 @@ Programas que corren en la PC del grupo (no en Render) y bajan los autos usados 
 - Cada extractor (`Extractor.php`, `ExtractorHtml.php`) se prueba sin red en `tests/Unit/RecolectoresTest.php`.
 - `diario.bat` corre todo y arma los modelos. Para programarlo: ver el comentario del archivo.
 
+## Corrida diaria en GitHub Actions
+
+El workflow **Scraper** (`.github/workflows/scraper.yml`) hace lo mismo que `diario.bat` **todos los días a las 06:00 de Argentina** (09:00 UTC): las tres fuentes, `armar-modelos` y `importar-autos --hoy`. Como GitHub solo programa los workflows desde `main`, **carga el Firestore de prod**. La PC, con su `.env`, carga el de dev.
+
+- **Necesita** en *Settings → Secrets and variables → Actions* el secreto `FIRESTORE_CREDENCIALES_JSON` (el contenido del `.json` de la cuenta de servicio de escritura de prod). Sin él no se carga nada y el workflow queda en rojo. Las marcas del catálogo salen de `MARCAS_URL` (por defecto el back de prod; se puede pisar con una variable del repo).
+- **Si algo falla:** una fuente que falla no frena a las otras; si se cortó a mitad de camino, lo que juntó entra como corrida incompleta (actualiza precios, pero no retira autos ni manda avisos). Si ninguna fuente trajo nada, no se carga nada. Si la carga a Firestore se corta, la corrida no queda registrada y se puede volver a cargar. Los autos mal cargados y las marcas fuera del catálogo salen como aviso amarillo; un error real deja el workflow en rojo.
+- Las corridas quedan 7 días como artefacto. A mano: **Actions → Scraper → Run workflow** (también necesita que el archivo esté en `main`).
+- El horario es aproximado (GitHub lo puede demorar) y en un repo público GitHub apaga los `schedule` después de 60 días sin actividad: se reactiva desde **Actions**.
+- Riesgo: que un sitio bloquee los servidores de GitHub (al scraper viejo de Kavak con Playwright le pasó el 09/11). Si pasa, la PC sigue siendo el respaldo.
+
 ## Formato común
 
 El mismo que definió Taro para Kavak, con dos campos más (`combustible`, `foto`) y el `dolar` del día:

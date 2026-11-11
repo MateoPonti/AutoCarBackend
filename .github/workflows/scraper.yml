@@ -1,17 +1,19 @@
-# Corre el recolector de Kavak una vez por semana, guarda el resultado como artefacto y lo importa en Firestore (metabuscador).
-# Detalle en recolectores/kavak/README.md.
-# GitHub solo ejecuta "schedule" desde la rama por defecto (main): hasta que este archivo llegue a main no corre solo.
+# Corrida diaria del scraper en GitHub Actions: lo mismo que recolectores/diario.bat en la PC.
+# Recolecta Kavak, Autocosmos y MercadoLibre, arma los modelos del comparador y carga la corrida en el metabuscador.
+# GitHub solo ejecuta "schedule" desde la rama por defecto (main): carga el Firestore de PROD.
+#
+# Si algo falla:
+#   - Una fuente que falla no frena a las otras. Si se cortó a mitad de camino, lo que juntó se guarda como corrida
+#     incompleta: actualiza precios, pero no da autos por retirados ni manda avisos.
+#   - Si ninguna fuente trajo nada, no se carga nada.
+#   - Si la carga a Firestore se corta, la corrida no queda registrada y se puede volver a cargar (da lo mismo).
+#   - El workflow termina en rojo para que se vea en Actions, y las corridas quedan 7 días como artefacto.
 name: Scraper
 
 on:
   schedule:
-    # Lunes 09:00 UTC = 06:00 en Argentina. Para que sea diario: '0 9 * * *'
-    - cron: '0 9 * * 1'
+    - cron: '0 9 * * *' # todos los días a las 09:00 UTC = 06:00 en Argentina
   workflow_dispatch:
-    inputs:
-      paginas:
-        description: Cantidad de páginas a recorrer (vacío = todas)
-        type: string
 
 permissions:
   contents: read
@@ -19,46 +21,72 @@ permissions:
 jobs:
   scrapear:
     runs-on: ubuntu-latest
-    timeout-minutes: 40 # todo el listado tarda unos 16 minutos, por la pausa de 20 s entre páginas
-    defaults:
-      run:
-        working-directory: recolectores/kavak
+    timeout-minutes: 240 # MercadoLibre completo tarda ~2 h 30 min
+    env:
+      MERCADO_ALMACEN: firestore
+      COMPARADOR_ALMACEN: firestore
+      FIRESTORE_CREDENCIALES_JSON: ${{ secrets.FIRESTORE_CREDENCIALES_JSON }}
+      # Marcas del catálogo: los autos con otra marca no se cargan y se avisan en el log (ver bin/importar-autos.php)
+      MARCAS_URL: ${{ vars.MARCAS_URL || 'https://autocarbackend-1.onrender.com/api/marcas-modelos' }}
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3' # la misma que el Dockerfile
-          extensions: pdo_pgsql, mbstring
+          extensions: curl, dom, mbstring, openssl
           coverage: none
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-      - run: composer install --no-interaction --prefer-dist
-      - name: Instalar Chromium
-        run: vendor/bin/playwright-install --with-deps chromium
-      - name: Ejecutar el scraper
-        env:
-          PAGINAS: ${{ inputs.paginas }}
-        run: php scraper.php ${PAGINAS:+"$PAGINAS"}
-      # También si el scraper falló a mitad de camino: guarda lo que juntó hasta ese momento
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
-        with:
-          name: autos-kavak-${{ github.run_number }}
-          path: recolectores/kavak/autos.json
-          if-no-files-found: error
-          retention-days: 30
-      # Sin el secreto FIRESTORE_CREDENCIALES_JSON, se saltea. Una corrida incompleta se guarda, pero no retira autos ni genera avisos.
-      - name: Importar a Firestore
-        if: ${{ !cancelled() && hashFiles('recolectores/kavak/autos.json') != '' }}
-        working-directory: .
-        env:
-          MERCADO_ALMACEN: firestore
-          FIRESTORE_CREDENCIALES_JSON: ${{ secrets.FIRESTORE_CREDENCIALES_JSON }}
+      - run: composer install --no-dev --no-interaction --prefer-dist
+
+      # Cada fuente por separado: si una falla, las otras siguen
+      - name: Kavak
+        id: kavak
+        continue-on-error: true
+        run: php recolectores/kavak/recolectar.php
+      - name: Autocosmos
+        id: autocosmos
+        continue-on-error: true
+        run: php recolectores/autocosmos/recolectar.php
+      - name: MercadoLibre
+        id: mercadolibre
+        continue-on-error: true
+        run: php -d memory_limit=1G recolectores/mercadolibre/recolectar.php
+
+      - name: Corridas guardadas
+        id: corridas
         run: |
-          if [ -z "$FIRESTORE_CREDENCIALES_JSON" ]; then
-            echo "Sin el secreto FIRESTORE_CREDENCIALES_JSON: no se importa."
-            exit 0
-          fi
-          composer install --no-dev --no-interaction --prefer-dist
-          php bin/importar-autos.php recolectores/kavak/autos.json
+          ls -la storage/mercado/*/*.json 2>/dev/null || true
+          if ls storage/mercado/*/"$(date +%F)".json >/dev/null 2>&1; then echo "hay=si" >> "$GITHUB_OUTPUT"; else echo "hay=no" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ steps.corridas.outputs.hay == 'si' }}
+        with:
+          name: corridas-${{ github.run_number }}
+          path: storage/mercado/*/*.json
+          retention-days: 7
+
+      # Sin el secreto no se carga nada (por ejemplo, en un fork)
+      - name: Comparador (modelos)
+        id: comparador
+        if: ${{ steps.corridas.outputs.hay == 'si' && env.FIRESTORE_CREDENCIALES_JSON != '' }}
+        run: php -d memory_limit=1G bin/armar-modelos.php
+      - name: Metabuscador (carga la corrida de hoy)
+        id: metabuscador
+        if: ${{ steps.corridas.outputs.hay == 'si' && env.FIRESTORE_CREDENCIALES_JSON != '' }}
+        # Termina en 1 también con advertencias (autos mal cargados, marcas que no están en el catálogo): eso es un
+        # aviso amarillo. Solo es error si una corrida no se pudo leer o cargar.
+        run: |
+          set +e
+          php -d memory_limit=1G bin/importar-autos.php --hoy 2>&1 | tee importar.log
+          if grep -q "No se importó\|No se pudo leer" importar.log; then exit 1; fi
+          grep "^Advertencia" importar.log | while read -r linea; do echo "::warning::$linea"; done
+          exit 0
+
+      - name: Resultado
+        if: ${{ always() }}
+        run: |
+          echo "Kavak: ${{ steps.kavak.outcome }} · Autocosmos: ${{ steps.autocosmos.outcome }} · MercadoLibre: ${{ steps.mercadolibre.outcome }}"
+          echo "Comparador: ${{ steps.comparador.outcome }} · Metabuscador: ${{ steps.metabuscador.outcome }}"
+          if [ -z "$FIRESTORE_CREDENCIALES_JSON" ]; then echo "Falta el secreto FIRESTORE_CREDENCIALES_JSON: no se cargó nada."; exit 1; fi
+          for r in "${{ steps.kavak.outcome }}" "${{ steps.autocosmos.outcome }}" "${{ steps.mercadolibre.outcome }}" "${{ steps.comparador.outcome }}" "${{ steps.metabuscador.outcome }}"; do
+            if [ "$r" = "failure" ]; then echo "Algo falló: revisar el paso en rojo."; exit 1; fi
+          done

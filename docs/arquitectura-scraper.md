@@ -237,6 +237,6 @@ MercadoLibre solo Volkswagen con tope de 3 páginas por búsqueda (140 pedidos, 
 2. **Programar la corrida diaria** en la PC: `schtasks /create /tn "AutoCar scraper" /sc daily /st 09:00 /tr "C:\...\Backend\recolectores\diario.bat"`. El `.env` de la PC necesita `MARCAS_URL` (sección 6).
 3. ~~**Primera corrida completa de MercadoLibre**~~: hecha el 10/11 (~2 h 30 min, 86.427 autos). Falta la del día siguiente y `php bin/medir-cambios.php mercadolibre`, para tener el dato real de cuánto cambia por día.
 4. ~~**Front:** el bloque de la ficha que consume `/api/vehiculos/{id}/comparacion`~~: hecho (front #50 y #52).
-5. **Respaldo con GitHub Actions** (si la PC no corrió): GitHub solo ejecuta los `schedule` desde `main`, así que para que corra solo el workflow tiene que estar en `main`. Decidir si se sube solo el workflow o se deja manual.
+5. **GitHub Actions todos los días a las 06:00** (11/11): el workflow Scraper corre las tres fuentes y carga Firestore de **prod** (GitHub solo programa desde `main`; empieza a correr con el pase). Falta cargar el secreto `FIRESTORE_CREDENCIALES_JSON` (prod) en el repo. Detalle en `recolectores/README.md`.
 6. ~~Pasar el metabuscador de Taro a NoSQL~~: hecho el 08/11 (sección 6). Queda unificar `modelos/{clave}` del comparador con `mercado/{clave}`, que hoy guardan casi los mismos autos dos veces.
 7. **Modelos con distinto nombre dentro de una marca** ("4" y "DS4", "Clase C" y "C 200"): la clave no los puede igualar. Haría falta una lista de equivalencias hecha a mano.
