@@ -7,7 +7,7 @@ use RuntimeException;
 
 /**
  * Pedidos GET con curl, sin librerías. Espera entre pedidos para no cargar al sitio y reintenta los errores
- * transitorios (red, 429, 5xx). Un 403 no se reintenta: suele ser un bloqueo y conviene frenar.
+ * transitorios (red, cortes por tiempo, 429, 5xx). Un 403 no se reintenta: suele ser un bloqueo y conviene frenar.
  */
 final class Http
 {
@@ -30,12 +30,23 @@ final class Http
             if ($codigo === 200 && $cuerpo !== '') {
                 return $cuerpo;
             }
-            $transitorio = $codigo === 0 || $codigo === 429 || $codigo >= 500;
-            if (!$transitorio || $intento >= self::REINTENTOS) {
+            if (!self::transitorio($codigo, $error) || $intento >= self::REINTENTOS) {
                 throw new RuntimeException("GET $url respondió $codigo" . ($error !== '' ? " ($error)" : ''));
             }
             sleep(10 * $intento);
         }
+    }
+
+    /**
+     * Si conviene reintentar. Un corte de curl (por ejemplo "Operation timed out") también, aunque el código sea 200:
+     * el 11/11 una página de MercadoLibre empezó a responder, se colgó a mitad de camino y frenó toda la corrida.
+     */
+    public static function transitorio(int $codigo, string $errorCurl): bool
+    {
+        if ($codigo === 403) {
+            return false;
+        }
+        return $errorCurl !== '' || $codigo === 0 || $codigo === 429 || $codigo >= 500;
     }
 
     private function esperar(): void
