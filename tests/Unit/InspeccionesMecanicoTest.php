@@ -107,6 +107,14 @@ final class InspeccionesMecanicoTest extends TestCase
         self::assertNotNull(Estados::validarMotivo(['x'])[1]);
     }
 
+    public function testSiNoSePudoHacerSeLeDevuelveTodoAlComprador(): void
+    {
+        self::assertTrue(Estados::puedePasar('aceptada', 'no_realizada'));
+        self::assertFalse(Estados::puedePasar('pedida', 'no_realizada'));
+        self::assertFalse(Estados::puedePasar('firmada', 'no_realizada'));
+        self::assertSame('reembolsado', Estados::pagoAl('no_realizada'));
+    }
+
     // --- Momento de la firma en la huella
 
     public function testElMomentoDeLaFirmaEsElMismoAlGuardarYAlLeer(): void

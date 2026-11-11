@@ -36,11 +36,12 @@ final class Inspeccion
 
     // Cómo se ordena cada pestaña de la bandeja del mecánico
     private const ORDEN = [
-        'pedida'    => 'i.created_at ASC',
-        'aceptada'  => 'i.fecha_turno ASC NULLS LAST',
-        'firmada'   => 'i.firmada_at DESC',
-        'rechazada' => 'i.updated_at DESC',
-        'cancelada' => 'i.updated_at DESC',
+        'pedida'       => 'i.created_at ASC',
+        'aceptada'     => 'i.fecha_turno ASC NULLS LAST',
+        'firmada'      => 'i.firmada_at DESC',
+        'rechazada'    => 'i.updated_at DESC',
+        'cancelada'    => 'i.updated_at DESC',
+        'no_realizada' => 'i.updated_at DESC',
     ];
 
     private static function pdo(): PDO
@@ -142,7 +143,7 @@ final class Inspeccion
 
     /**
      * Pasa la inspección de $desde a $hacia, solo si sigue en $desde. El pago cambia según Estados::pagoAl().
-     * $extra: columnas que se guardan con el cambio (fecha_turno, motivo_rechazo).
+     * $extra: columnas que se guardan con el cambio (fecha_turno, motivo_rechazo: el del rechazo o el de por qué no se pudo hacer).
      * @return bool false si la inspección ya no estaba en $desde
      */
     public static function cambiarEstado(int $id, string $desde, string $hacia, array $extra = []): bool

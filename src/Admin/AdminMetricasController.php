@@ -136,7 +136,7 @@ final class AdminMetricasController
                 'disponible' => (float)$g['fondo'] - $compensado,
             ],
             'retenido'         => (float)$g['retenido'],    // pedidos en curso: se libera al firmar
-            'reembolsado'      => (float)$g['reembolsado'], // rechazadas o canceladas: vuelve al comprador
+            'reembolsado'      => (float)$g['reembolsado'], // rechazadas, canceladas o no realizadas: vuelve al comprador
         ];
     }
 

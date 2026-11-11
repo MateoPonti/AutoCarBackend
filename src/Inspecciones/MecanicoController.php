@@ -47,8 +47,10 @@ final class MecanicoController
 
     /**
      * PATCH /api/mecanico/inspecciones/{id}
-     *   {"accion": "aceptar", "fecha_turno": "2026-11-12T13:00:00Z"}  o  {"accion": "rechazar", "motivo": "..."}
-     * Solo desde "pedida". Rechazar le devuelve todo al comprador (pago reembolsado).
+     *   {"accion": "aceptar", "fecha_turno": "2026-11-12T13:00:00Z"}  o  {"accion": "rechazar", "motivo": "..."}: desde "pedida"
+     *   {"accion": "no_realizada", "motivo": "..."}: desde "aceptada", cuando fue y no la pudo hacer
+     *   (por ejemplo, el vendedor no dejó revisar el auto).
+     * Rechazar y no_realizada le devuelven todo al comprador (pago reembolsado); el motivo va en motivo_rechazo.
      */
     public function cambiarEstado(int $id): void
     {
@@ -73,13 +75,22 @@ final class MecanicoController
             }
             $hacia = 'rechazada';
             $extra = ['motivo_rechazo' => $motivo];
+        } elseif ($accion === 'no_realizada') {
+            [$motivo, $error] = Estados::validarMotivo($in['motivo'] ?? null);
+            if ($error !== null) {
+                Response::error(422, 'validacion', 'Falta el motivo.', ['motivo' =>
+                    'Contale al comprador por qué no se pudo hacer (entre ' . Estados::MOTIVO_MIN . ' y ' . Estados::MOTIVO_MAX . ' caracteres).']);
+            }
+            $hacia = 'no_realizada';
+            $extra = ['motivo_rechazo' => $motivo];
         } else {
-            Response::error(422, 'validacion', 'Revisá la acción.', ['accion' => 'Tiene que ser aceptar o rechazar.']);
+            Response::error(422, 'validacion', 'Revisá la acción.', ['accion' => 'Tiene que ser aceptar, rechazar o no_realizada.']);
         }
 
         if (!Estados::puedePasar($inspeccion['estado'], $hacia)
             || !Inspeccion::cambiarEstado($id, $inspeccion['estado'], $hacia, $extra)) {
-            self::fallar(409, 'estado_invalido', self::noSePuede($inspeccion['estado'], 'aceptar o rechazar'));
+            $que = $hacia === 'no_realizada' ? 'marcarla como no realizada' : 'aceptar o rechazar';
+            self::fallar(409, 'estado_invalido', self::noSePuede($inspeccion['estado'], $que));
         }
         self::responderDetalle($id);
     }
