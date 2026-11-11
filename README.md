@@ -17,7 +17,7 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | Método y ruta | Acceso | Descripción |
 |---|---|---|
 | `POST /api/registro` | público | Crea una cuenta (`nombre`, `email`, `password`, `password_confirm` opcional). Rol siempre `usuario`. → 201 |
-| `POST /api/login` | público | `email`, `password` → `{csrf, expira_en, usuario}` y la cookie de sesión (`Set-Cookie`). La cuenta de un taller con la solicitud pendiente o rechazada → 403 `taller_pendiente` o `taller_rechazado` (con el motivo) |
+| `POST /api/login` | público | `email`, `password` → `{csrf, expira_en, usuario}` y la cookie de sesión (`Set-Cookie`). La cuenta de un taller con la solicitud pendiente o rechazada → 403 `taller_pendiente` o `taller_rechazado` (con el motivo). Más de 5 intentos en 15 minutos con el mismo email → 429 `demasiados_intentos` con `Retry-After`, aunque la contraseña sea la correcta |
 | `POST /api/logout` | público | Borra la cookie de sesión → 204 |
 | `GET /api/me` | sesión | `{usuario, csrf}` del usuario autenticado |
 | `PUT /api/me` | sesión | Cambia el nombre (`{nombre}`, 2 a 80 caracteres) → `{usuario}`. El email no se cambia |
@@ -32,7 +32,7 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `GET /api/mis-vehiculos` | sesión | Las publicaciones propias (menos las eliminadas), con `estado`, `motivo_rechazo`, `completa` y `faltan` |
 | `POST /api/mis-vehiculos` | sesión | **Publicar por partes** (multipart/form-data). Alcanza con `marca`, `modelo` y `anio`; `precio`, `kilometraje`, `combustible`, `transmision`, `condicion`, `localidad`, el resto de los campos y `fotos[]` (hasta 5, JPG/PNG/WebP, 2 MB c/u) se pueden mandar ahora o después. Lo que viene se valida. Nace `pendiente` → 201 `{vehiculo}` con `completa` y `faltan` (lo que le falta para que el moderador la pueda aprobar) |
 | `GET /api/mis-vehiculos/{id}` | sesión (dueño) | Una publicación propia con todas sus `fotos` (para seguir completándola). De otro → 404 |
-| `PUT /api/mis-vehiculos/{id}` | sesión (dueño) | Completa o edita (JSON, sin fotos): lo que no se manda queda igual. Vuelve a `pendiente`. Vendida → 409 |
+| `PUT /api/mis-vehiculos/{id}` | sesión (dueño) | Completa o edita (JSON, sin fotos): lo que no se manda queda igual. Vuelve a `pendiente`. Vendida → 409. Un campo que llega como arreglo u objeto → 422 y no se toca lo guardado |
 | `POST /api/mis-vehiculos/{id}/fotos` | sesión (dueño) | Agrega `fotos[]` (multipart) a las que ya tiene, hasta 5 entre todas → 201. Vuelve a `pendiente` |
 | `DELETE /api/mis-vehiculos/{id}/fotos/{foto}` | sesión (dueño) | Saca una foto. Vuelve a `pendiente` |
 | `PATCH /api/mis-vehiculos/{id}/estado` | sesión (dueño) | `{"estado":"vendido"}`, solo desde `disponible` |
@@ -51,7 +51,7 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `GET /api/fotos/{id}` | público / dueño | La foto. Las de publicaciones visibles son públicas; las de una pendiente o rechazada solo las ven el dueño y el moderador (si no, 404) |
 | `GET /api/admin/vehiculos?estado=pendiente&completa=1` | `vehiculos.moderar` o `vehiculos.gestionar` | Listado / cola de moderación. `completa=1`: solo las que se pueden aprobar; `completa=0`: las que el vendedor todavía está completando |
 | `GET /api/admin/vehiculos/{id}` | `vehiculos.moderar` o `vehiculos.gestionar` | Detalle con fotos y quién lo publicó |
-| `PATCH /api/admin/vehiculos/{id}/estado` | `vehiculos.moderar` (moderador) | Aprobar (`{"estado":"disponible"}`) o rechazar con `motivo`. Una incompleta no se aprueba: 409 `incompleta` con lo que falta (rechazarla sí se puede). La base también lo controla: una visible tiene que tener precio, kilometraje, combustible y transmisión |
+| `PATCH /api/admin/vehiculos/{id}/estado` | `vehiculos.moderar` (moderador) | Aprobar (`{"estado":"disponible"}`) o rechazar con `motivo`. Una incompleta no se aprueba: 409 `incompleta` con lo que falta (rechazarla sí se puede). La base también lo controla: una visible tiene que tener precio, kilometraje, combustible y transmisión. Si otro moderador la cambió mientras tanto → 409 `estado_cambiado` (gana la primera decisión) |
 | `DELETE /api/admin/vehiculos/{id}` | `vehiculos.gestionar` (admin) | Baja lógica → 204. El panel no crea ni edita vehículos: toda publicación tiene un vendedor (la base lo exige), entra por `POST /api/mis-vehiculos` y la corrige solo su dueño. `POST /api/admin/vehiculos` y `PUT /api/admin/vehiculos/{id}` → 405 |
 | `GET /api/admin/usuarios?q=&rol=&activo=1\|0&page=` | `usuarios.ver` (admin) | Usuarios con rol, estado y cantidad de publicaciones |
 | `GET /api/admin/usuarios/{id}` | `usuarios.ver` | Detalle |
@@ -69,7 +69,7 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `POST /api/meta-busquedas/{id}/avisos/vistos` | sesión (dueño) | Marca como vistos los avisos de esa búsqueda → 204 |
 | `GET /api/autos-externos?id=` | sesión | Detalle de un auto de otra plataforma: ficha, etiqueta de precio, comparables, historial y link al original. El `id` es texto (`fuente~modelo~id`, ej. `kavak~renault_sandero~562339`), el mismo que viene en los resultados |
 | `GET /api/mecanicos?localidad=` | público | Ranking de la red: taller, dirección, precio con su desglose, inspecciones firmadas, reclamos que procedieron, `puntaje` (o `nuevo: true` con menos de 3 firmadas) y `localidades` para el filtro. Sin teléfono |
-| `POST /api/inspecciones` | sesión | Pedir una inspección: `url` del aviso (solo MercadoLibre, Kavak, Autocosmos o AutoCar: los de otros sitios dan 422) y `mecanico_id`; `titulo`, `anio`, `kilometraje`, `precio_publicado` y `localidad` opcionales (si el link es de AutoCar salen de la publicación). Pago simulado `retenido` → 201. 409: `mecanico_propio`, `vehiculo_propio`, `mecanico_vendedor`, `duplicada` |
+| `POST /api/inspecciones` | sesión | Pedir una inspección: `url` del aviso (solo MercadoLibre, Kavak, Autocosmos o AutoCar: los de otros sitios dan 422) y `mecanico_id`; `titulo`, `anio`, `kilometraje`, `precio_publicado` y `localidad` opcionales (si el link es de AutoCar salen de la publicación). Pago simulado `retenido` → 201. 409: `mecanico_propio`, `vehiculo_propio`, `mecanico_vendedor`, `duplicada` (ya hay un pedido en curso de ese aviso, aunque sea con otro link; lo controla un índice único, así que vale también con pedidos simultáneos) |
 | `GET /api/mis-inspecciones` | sesión | Las inspecciones que pidió el usuario, con el mecánico, el reclamo y `puede_reclamar` |
 | `GET /api/inspecciones/{id}` | sesión | Detalle de una inspección con el checklist. La ven el comprador, el mecánico asignado y quien tiene `reclamos.resolver`; para el resto, 404 |
 | `POST /api/inspecciones/{id}/cancelar` | sesión (comprador) | Solo antes de que el mecánico la acepte; pago `reembolsado`. Si no, 409 |
@@ -303,7 +303,10 @@ Marca y modelo coinciden por la clave del modelo, que no distingue mayúsculas, 
 - **Protección CSRF**: además de `SameSite`, toda ruta con sesión que cambia datos (`POST`, `PUT`, `DELETE`) exige el header `X-CSRF-Token` (`Router` → `Auth::requireCsrf`). El token se genera al azar en el login (`random_bytes(32)`), se guarda en `$_SESSION` y se compara con `hash_equals`. Otro sitio puede hacer que el navegador mande la cookie, pero no puede conocer el token.
 - **Permisos en el servidor**: cada ruta de `/api/admin` pide un permiso en `src/routes.php` (`permiso:vehiculos.moderar`, `permiso:usuarios.editar`, ...). `Auth::requirePermiso()` lee de la base los permisos del rol del usuario en cada pedido (el rol no se guarda en la sesión), así un cambio de rol o una baja surten efecto al instante. Las reglas de "es tuyo" (tus publicaciones, tus conversaciones) se controlan aparte, comparando el id de la sesión con el dueño.
 - **CORS** restringido a los orígenes de `FRONT_URL` (en producción el front usa el proxy de Vercel y no hace falta; sirve para desarrollo local).
-- **Errores**: `display_errors=0`; se registran en `storage/logs/app.log` y el cliente recibe un 500 genérico.
+- **Errores**: `display_errors=0`; se registran en `storage/logs/app.log` y el cliente recibe un 500 genérico. Lo que es culpa del dato no es un 500: un id que no entra en `INTEGER` da 404, la página tiene tope y un texto que la base rechaza (no UTF-8, byte nulo, número fuera de rango: errores de clase 22 de PostgreSQL) da 400 `dato_invalido`.
+- **Límite de intentos de ingreso**: 5 cada 15 minutos por email (`Auth\IntentosLogin`, tabla `login_intento`). Cada intento se anota antes de verificar la contraseña, así que pedidos simultáneos tampoco lo saltean. Se cuenta por email y no por IP porque todo el front llega por el proxy de Vercel.
+- **Sin versiones en las cabeceras**: `expose_php = Off`, `ServerTokens Prod` y `ServerSignature Off` en el `Dockerfile` (las respuestas dicen `Server: Apache`, sin versión ni sistema operativo, y no mandan `X-Powered-By`).
+- **Cambios de estado concurrentes**: los `UPDATE` de estado exigen el estado que se leyó (`... AND estado = :desde`). Si dos personas deciden a la vez, gana la primera y la segunda recibe 409.
 - Login sin pistas: mismo mensaje y mismo costo si el email no existe o la contraseña es incorrecta.
 
 ## Entrega
