@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace AutoCar\MetaBusqueda;
 
+use AutoCar\Comparador\Clave;
 use AutoCar\Core\Request;
 
 /**
@@ -209,7 +210,7 @@ final class Busqueda
         $entero = static fn(mixed $v): ?int => $v !== null ? (int)$v : null;
         return [
             'id'          => (int)$f['id'],
-            'marca'       => (string)$f['marca'],
+            'marca'       => Clave::nombreMarca((string)$f['marca']),
             'modelo'      => (string)$f['modelo'],
             'anio_desde'  => $entero($f['anio_desde'] ?? null),
             'anio_hasta'  => $entero($f['anio_hasta'] ?? null),

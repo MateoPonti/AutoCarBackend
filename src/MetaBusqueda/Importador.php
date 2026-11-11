@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace AutoCar\MetaBusqueda;
 
+use AutoCar\Comparador\Clave;
 use InvalidArgumentException;
 
 /**
@@ -114,7 +115,7 @@ final class Importador
             $modelo = Catalogo::leer($this->docs, $clave);
             if ($modelo === null) {
                 $primero = reset($llegados);
-                $modelo = ['clave' => $clave, 'marca' => $primero['marca'], 'modelo' => $primero['modelo'], 'autos' => []];
+                $modelo = ['clave' => $clave, 'marca' => Clave::nombreMarca($primero['marca']), 'modelo' => $primero['modelo'], 'autos' => []];
             }
             $antes = $modelo['autos'];
             foreach ($llegados as $a) {

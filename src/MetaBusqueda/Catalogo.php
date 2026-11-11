@@ -43,7 +43,7 @@ final class Catalogo
         foreach ($lista as $a) {
             $autos[self::idAuto($a['fuente'], $a['id_externo'])] = $a;
         }
-        return ['clave' => $clave, 'marca' => (string)$doc['marca'], 'modelo' => (string)$doc['modelo'], 'autos' => $autos];
+        return ['clave' => $clave, 'marca' => Clave::nombreMarca((string)$doc['marca']), 'modelo' => (string)$doc['modelo'], 'autos' => $autos];
     }
 
     /** @return array<string, array<string, mixed>> ruta → campos, listo para Documentos::escribir */

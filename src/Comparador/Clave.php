@@ -21,6 +21,30 @@ final class Clave
         'great wall motor' => 'great wall',
     ];
 
+    /** Marcas que no se escriben con mayúscula inicial y nada más; mismos nombres que la tabla marca de Neon. */
+    private const NOMBRES = [
+        'baic'          => 'BAIC',
+        'bmw'           => 'BMW',
+        'byd'           => 'BYD',
+        'citroen'       => 'Citroën',
+        'd s'           => 'DS',
+        'dfsk'          => 'DFSK',
+        'ds'            => 'DS',
+        'gac'           => 'GAC',
+        'gmc'           => 'GMC',
+        'gwm'           => 'GWM',
+        'ika'           => 'IKA',
+        'ime'           => 'IME',
+        'jac'           => 'JAC',
+        'mercedes benz' => 'Mercedes-Benz',
+        'mg'            => 'MG',
+        'mini'          => 'MINI',
+        'ram'           => 'RAM',
+        'saab'          => 'SAAB',
+        'ssangyong'     => 'SsangYong',
+        'swm'           => 'SWM',
+    ];
+
     public static function de(string $marca, string $modelo): string
     {
         $m = self::limpiar($marca);
@@ -31,6 +55,17 @@ final class Clave
             $modelo = substr($modelo, strlen($m) + 1);
         }
         return str_replace(' ', '_', "$m $modelo");
+    }
+
+    /**
+     * Cómo se muestra una marca, la escriba como la escriba cada sitio:
+     * "Ds", "D.S." y "DS" → "DS"; "Citroen" → "Citroën"; "KIA" → "Kia"; "Mercedes Benz" → "Mercedes-Benz".
+     */
+    public static function nombreMarca(string $marca): string
+    {
+        $m = self::limpiar($marca);
+        $m = self::MARCAS[$m] ?? $m;
+        return self::NOMBRES[$m] ?? ucwords($m);
     }
 
     /** Minúsculas, sin acentos y con un solo espacio entre palabras. */
