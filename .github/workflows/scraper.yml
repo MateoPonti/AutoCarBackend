@@ -1,5 +1,7 @@
 # Corrida diaria del scraper en GitHub Actions: lo mismo que recolectores/diario.bat en la PC.
-# Recolecta Kavak, Autocosmos y MercadoLibre, arma los modelos del comparador y carga la corrida en el metabuscador.
+# Recolecta Autocosmos y MercadoLibre, arma los modelos del comparador y carga la corrida en el metabuscador.
+# Kavak NO va acá: responde 403 a los servidores de GitHub (bloquea IP de centros de datos; desde la PC anda).
+# Se corre a mano en la PC y se carga en prod (ver recolectores/README.md).
 # GitHub solo ejecuta "schedule" desde la rama por defecto (main): la corrida automática carga el Firestore de PROD.
 # Secretos y variables por Environment (Settings → Environments), cada uno limitado a su rama:
 #   prod (solo main): FIRESTORE_CREDENCIALES_JSON de autocar-9897d y MARCAS_URL del back de prod
@@ -43,10 +45,6 @@ jobs:
       - run: composer install --no-dev --no-interaction --prefer-dist
 
       # Cada fuente por separado: si una falla, las otras siguen
-      - name: Kavak
-        id: kavak
-        continue-on-error: true
-        run: php recolectores/kavak/recolectar.php
       - name: Autocosmos
         id: autocosmos
         continue-on-error: true
@@ -89,9 +87,9 @@ jobs:
       - name: Resultado
         if: ${{ always() }}
         run: |
-          echo "Kavak: ${{ steps.kavak.outcome }} · Autocosmos: ${{ steps.autocosmos.outcome }} · MercadoLibre: ${{ steps.mercadolibre.outcome }}"
+          echo "Autocosmos: ${{ steps.autocosmos.outcome }} · MercadoLibre: ${{ steps.mercadolibre.outcome }}"
           echo "Comparador: ${{ steps.comparador.outcome }} · Metabuscador: ${{ steps.metabuscador.outcome }}"
           if [ -z "$FIRESTORE_CREDENCIALES_JSON" ]; then echo "Falta el secreto FIRESTORE_CREDENCIALES_JSON: no se cargó nada."; exit 1; fi
-          for r in "${{ steps.kavak.outcome }}" "${{ steps.autocosmos.outcome }}" "${{ steps.mercadolibre.outcome }}" "${{ steps.comparador.outcome }}" "${{ steps.metabuscador.outcome }}"; do
+          for r in "${{ steps.autocosmos.outcome }}" "${{ steps.mercadolibre.outcome }}" "${{ steps.comparador.outcome }}" "${{ steps.metabuscador.outcome }}"; do
             if [ "$r" = "failure" ]; then echo "Algo falló: revisar el paso en rojo."; exit 1; fi
           done
