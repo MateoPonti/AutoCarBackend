@@ -7,12 +7,14 @@
  * Los autos con una marca que no está en el catálogo (MARCAS_URL o la tabla marca) no se cargan y se avisa en la salida.
  * --revisar-marcas muestra solo esos autos (marca como la escribió el sitio, modelo y link) para ver si es una marca
  * nueva (se agrega a la tabla marca con una migración y entran en la carga siguiente) o un error del que publicó.
+ * Cada corrida anota en recolecciones/{fuente} las marcas que no se cargaron y los modelos que no están en el catálogo
+ * (esos sí se cargan), con cuántos autos: es la lista para decidir qué agregar a Neon.
  * Código de salida: 0 bien; 1 alguna no se pudo importar, o se importó con advertencias.
  */
 declare(strict_types=1);
 
+use AutoCar\Catalogo\MarcaModelo;
 use AutoCar\Core\Config;
-use AutoCar\Core\Database;
 use AutoCar\MetaBusqueda\Almacenamiento;
 use AutoCar\MetaBusqueda\Importador;
 
@@ -37,12 +39,13 @@ if ($archivos === []) {
     exit(1);
 }
 
-// Las marcas del catálogo (las mismas que se pueden publicar). Sin lista, se importa todo sin apartar ninguna.
-$marcas = leerMarcas();
-if ($revisar && $marcas === null) {
+// El catálogo (las mismas marcas y modelos que se pueden publicar). Sin lista, se importa todo sin apartar ninguna.
+$catalogo = leerCatalogo();
+if ($revisar && $catalogo === null) {
     exit(1);
 }
-$importador = new Importador(Almacenamiento::documentos(), $marcas);
+$marcas = $catalogo === null ? null : array_column($catalogo, 'marca');
+$importador = new Importador(Almacenamiento::documentos(), $marcas, $catalogo);
 $salida = 0;
 foreach ($archivos as $archivo) {
     $crudo = is_file($archivo) ? file_get_contents($archivo) : false;
@@ -64,7 +67,7 @@ foreach ($archivos as $archivo) {
         continue;
     }
     echo "{$r['fuente']} {$r['fecha']}: {$r['autos']} autos, " . ($r['completo'] ? 'completa' : 'INCOMPLETA')
-        . ", {$r['modelos_escritos']} modelos escritos, {$r['retirados']} retirados, {$r['avisos']} avisos, {$r['apartados']} apartados.\n";
+        . ", {$r['modelos_escritos']} modelos escritos, {$r['retirados']} retirados, {$r['avisos']} avisos, {$r['apartados']} apartados, {$r['modelos_faltantes']} con modelo fuera del catálogo.\n";
     foreach ($r['advertencias'] as $a) {
         fwrite(STDERR, "Advertencia: $a\n");
         $salida = 1;
@@ -73,16 +76,16 @@ foreach ($archivos as $archivo) {
 exit($salida);
 
 /**
- * Las marcas del catálogo. Con MARCAS_URL, de la API del back de ese entorno (GET /api/marcas-modelos, pública):
- * así la PC del scraper usa el catálogo de dev o de prod sin conectarse a Neon. Sin MARCAS_URL, de la base del .env.
- * @return list<string>|null null si no se pudo leer
+ * Las marcas y modelos del catálogo. Con MARCAS_URL, de la API del back de ese entorno (GET /api/marcas-modelos,
+ * pública): así la PC del scraper usa el catálogo de dev o de prod sin conectarse a Neon. Sin MARCAS_URL, de la base del .env.
+ * @return list<array{marca: string, modelos: list<string>}>|null null si no se pudo leer
  */
-function leerMarcas(): ?array
+function leerCatalogo(): ?array
 {
     $url = Config::get('MARCAS_URL');
     try {
         if ($url === null || $url === '') {
-            return Database::pdo()->query('SELECT nombre FROM marca')->fetchAll(PDO::FETCH_COLUMN);
+            return MarcaModelo::lista();
         }
         $ch = curl_init($url);
         $opciones = [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 120]; // Render dormido tarda en despertar
@@ -95,7 +98,7 @@ function leerMarcas(): ?array
         if (!is_array($r['marcas'] ?? null) || $r['marcas'] === []) {
             throw new RuntimeException("$url no devolvió la lista de marcas");
         }
-        return array_column($r['marcas'], 'marca');
+        return $r['marcas'];
     } catch (Throwable $e) {
         fwrite(STDERR, 'Advertencia: no se pudo leer la lista de marcas (' . $e->getMessage()
             . "): se importa sin apartar las marcas desconocidas.\n");
