@@ -248,7 +248,6 @@ final class MetaBusquedaDocumentosTest extends TestCase
 
         $j = $this->reporte($this->busqueda());
         self::assertSame(['kavak', 'mercadolibre'], array_column($j['referencia'], 'fuente'));
-        self::assertSame(['Renault' => ['Logan', 'Sandero']], array_column((new Mercado($this->docs))->marcasYModelos(), 'modelos', 'marca'));
     }
 
     public function testUnModeloGrandeSeParteEnVariosDocumentos(): void

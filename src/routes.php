@@ -63,7 +63,6 @@ $router->post('/api/conversaciones/{id}/mensajes', [ChatController::class, 'envi
 // Meta-búsqueda: cada usuario ve solo sus búsquedas (las rutas fijas no chocan con {id}, que acepta solo dígitos)
 $router->get('/api/meta-busquedas', [MetaBusquedaController::class, 'index'], 'auth');
 $router->post('/api/meta-busquedas', [MetaBusquedaController::class, 'crear'], 'usuario');
-$router->get('/api/meta-busquedas/marcas', [MetaBusquedaController::class, 'marcasYModelos'], 'auth');
 $router->get('/api/meta-busquedas/avisos', [MetaBusquedaController::class, 'avisos'], 'auth');
 $router->get('/api/meta-busquedas/{id}', [MetaBusquedaController::class, 'reporte'], 'auth');
 $router->put('/api/meta-busquedas/{id}', [MetaBusquedaController::class, 'actualizar'], 'auth');

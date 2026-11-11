@@ -102,13 +102,6 @@ final class MetaBusquedaController
         Response::json($detalle);
     }
 
-    /** Nombres exactos de marcas y modelos para armar el formulario de búsqueda. */
-    public function marcasYModelos(): void
-    {
-        $mercado = new Mercado(self::docs());
-        Response::json(['marcas' => self::intentar(static fn() => $mercado->marcasYModelos())]);
-    }
-
     /** GET /api/meta-busquedas/avisos?sin_ver=1 */
     public function avisos(): void
     {
