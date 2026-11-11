@@ -1,7 +1,7 @@
 <?php
 /**
- * Recolector de Kavak con curl, sin Playwright (el HTML ya trae las tarjetas). Mismo resultado que scraper.php,
- * pero guarda en storage/mercado/kavak/{fecha}.json y no necesita Node ni Chromium.
+ * Recolector de Kavak con curl, sin navegador (el HTML ya trae las tarjetas). Guarda en
+ * storage/mercado/kavak/{fecha}.json.
  * Uso: php recolectores/kavak/recolectar.php [paginas]   (sin límite: todas, ~15 minutos por la pausa de 20 s)
  */
 declare(strict_types=1);
