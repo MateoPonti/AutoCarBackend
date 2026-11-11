@@ -52,6 +52,7 @@ set_exception_handler(static function (Throwable $e): void {
 });
 
 // ---------- Cabeceras ----------
+header_remove('X-Powered-By'); // no decir la versión de PHP (en Docker también lo apaga expose_php = Off)
 header('X-Content-Type-Options: nosniff');
 $https = (($_SERVER['HTTPS'] ?? '') === 'on') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
 if ($https) {
