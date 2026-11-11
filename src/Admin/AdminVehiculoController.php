@@ -76,7 +76,10 @@ final class AdminVehiculoController
             Response::error(409, 'incompleta', 'Todavía no se puede aprobar: le falta ' . implode(', ', $faltan) . '.');
         }
 
-        Vehiculo::cambiarEstado($id, $nuevo, $motivo);
+        // Si otro moderador la cambió mientras tanto, gana el primero y este pedido da 409
+        if (!Vehiculo::cambiarEstado($id, $nuevo, $motivo, $actual['estado'])) {
+            Response::error(409, 'estado_cambiado', 'Otro moderador acaba de revisar esta publicación. Recargá para ver cómo quedó.');
+        }
         Response::json(['vehiculo' => Vehiculo::paraApi(Vehiculo::find($id))]);
     }
 

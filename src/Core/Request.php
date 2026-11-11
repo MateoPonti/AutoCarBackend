@@ -53,6 +53,24 @@ final class Request
         };
     }
 
+    /**
+     * Errores por campo para los que llegan como arreglo u objeto ({"precio": [1]}) en vez de un valor simple.
+     * Sin esto, texto() los lee como vacíos y una edición por partes los tomaría como "sin cargar" y borraría lo guardado.
+     * @param string[] $campos
+     * @return array<string, string>
+     */
+    public static function noSimples(array $datos, array $campos): array
+    {
+        $errores = [];
+        foreach ($campos as $campo) {
+            $v = $datos[$campo] ?? null;
+            if ($v !== null && !is_scalar($v)) {
+                $errores[$campo] = 'Este dato tiene que ser un texto o un número.';
+            }
+        }
+        return $errores;
+    }
+
     /** Lee un campo como texto. Si no es un valor simple (array, objeto) lo trata como vacío. */
     public static function texto(array $datos, string $campo): string
     {

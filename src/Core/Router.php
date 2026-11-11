@@ -9,6 +9,8 @@ namespace AutoCar\Core;
  */
 final class Router
 {
+    private const MAX_ID = 2147483647; // el máximo de INTEGER en PostgreSQL
+
     private array $routes = [];
 
     public function get(string $p, array $h, ?string $g = null): void    { $this->add('GET', $p, $h, $g); }
@@ -38,6 +40,12 @@ final class Router
             }
             Middleware::aplicar($guard, $method); // si no pasa, responde 401/403 y corta acá
             $params = array_map('intval', array_filter($match, 'is_string', ARRAY_FILTER_USE_KEY));
+            // Los ids de la base son INTEGER: uno más grande no existe (y si llegara a la consulta daría un 500)
+            foreach ($params as $valor) {
+                if ($valor > self::MAX_ID) {
+                    Response::error(404, 'no_encontrado', 'El recurso no existe.');
+                }
+            }
             [$clase, $accion] = $handler;
             (new $clase())->$accion(...$params);
             return;

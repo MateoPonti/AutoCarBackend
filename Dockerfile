@@ -14,6 +14,12 @@ RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 # Fotos de las publicaciones: hasta 5 de 2 MB cada una (Foto::MAX y Foto::MAX_BYTES) más los campos
 RUN printf "upload_max_filesize = 2M\npost_max_size = 12M\nmax_file_uploads = 10\n" > "$PHP_INI_DIR/conf.d/uploads.ini"
 
+# Las respuestas no dicen qué versión de PHP ni de Apache corre (le ahorraría trabajo a un atacante):
+# sin X-Powered-By, y "Server: Apache" a secas, sin versión ni sistema operativo
+RUN echo "expose_php = Off" > "$PHP_INI_DIR/conf.d/seguridad.ini" \
+ && sed -ri -e 's/^ServerTokens .*/ServerTokens Prod/' -e 's/^ServerSignature .*/ServerSignature Off/' \
+      /etc/apache2/conf-available/security.conf
+
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf \
  && sed -ri -e 's!AllowOverride None!AllowOverride All!g' /etc/apache2/apache2.conf \

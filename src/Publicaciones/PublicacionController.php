@@ -139,7 +139,9 @@ final class PublicacionController
             Response::error(422, 'validacion', 'Revisá los datos ingresados.',
                 ['estado' => 'Sólo podés marcar como vendida una publicación disponible.']);
         }
-        Vehiculo::cambiarEstado($id, $nuevo);
+        if (!Vehiculo::cambiarEstado($id, $nuevo, null, $actual['estado'])) {
+            Response::error(409, 'estado_cambiado', 'La publicación cambió mientras tanto. Recargá para ver cómo quedó.');
+        }
         Response::json(['vehiculo' => Vehiculo::paraApi(Vehiculo::find($id))]);
     }
 

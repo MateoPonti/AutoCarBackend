@@ -30,7 +30,7 @@ final class AdminUsuarioController
             'rol'    => $texto('rol', 20),
             'activo' => $activo === '1' ? true : ($activo === '0' ? false : null),
         ];
-        $pagina = max(1, (int)($_GET['page'] ?? 1));
+        $pagina = min(10000, max(1, (int)($_GET['page'] ?? 1))); // tope: una página enorme desbordaría el OFFSET
         $r = Usuario::listar($filtros, $pagina);
         Response::json([
             'items'      => array_map([Usuario::class, 'paraAdmin'], $r['items']),

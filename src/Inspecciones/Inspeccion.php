@@ -94,12 +94,15 @@ final class Inspeccion
         return $st->fetchAll();
     }
 
-    /** ¿El comprador ya tiene un pedido en curso (pedida o aceptada) para ese mismo link? */
-    public static function enCursoPorUrl(int $compradorId, string $url): ?int
+    /**
+     * ¿El comprador ya tiene un pedido en curso (pedida o aceptada) para ese mismo aviso? $clave = Fuente::clave.
+     * Es el aviso amable; si llegan dos pedidos a la vez, el que frena al segundo es el índice único de la 020.
+     */
+    public static function enCursoPorUrl(int $compradorId, string $clave): ?int
     {
         $st = self::pdo()->prepare("SELECT id FROM inspeccion
-            WHERE comprador_id = :c AND url = :u AND estado IN ('pedida', 'aceptada') LIMIT 1");
-        $st->execute(['c' => $compradorId, 'u' => $url]);
+            WHERE comprador_id = :c AND url_clave = :u AND estado IN ('pedida', 'aceptada') LIMIT 1");
+        $st->execute(['c' => $compradorId, 'u' => $clave]);
         $id = $st->fetchColumn();
         return $id === false ? null : (int)$id;
     }
@@ -108,13 +111,14 @@ final class Inspeccion
     public static function crear(int $compradorId, array $datos, array $montos): int
     {
         $st = self::pdo()->prepare(
-            'INSERT INTO inspeccion (comprador_id, mecanico_id, vehiculo_id, url, fuente, titulo, anio, kilometraje,
+            'INSERT INTO inspeccion (comprador_id, mecanico_id, vehiculo_id, url, url_clave, fuente, titulo, anio, kilometraje,
                precio_publicado, localidad, precio, monto_mecanico, monto_autocar, monto_fondo)
-             VALUES (:c, :m, :v, :url, :fuente, :titulo, :anio, :km, :pp, :loc, :precio, :mm, :ma, :mf)
+             VALUES (:c, :m, :v, :url, :clave, :fuente, :titulo, :anio, :km, :pp, :loc, :precio, :mm, :ma, :mf)
              RETURNING id'
         );
         $st->execute([
             'c' => $compradorId, 'm' => $datos['mecanico_id'], 'v' => $datos['vehiculo_id'], 'url' => $datos['url'],
+            'clave' => Fuente::clave($datos['url'], $datos['fuente'], $datos['vehiculo_id']),
             'fuente' => $datos['fuente'], 'titulo' => $datos['titulo'], 'anio' => $datos['anio'],
             'km' => $datos['kilometraje'], 'pp' => $datos['precio_publicado'], 'loc' => $datos['localidad'],
             'precio' => $montos['precio'], 'mm' => $montos['monto_mecanico'], 'ma' => $montos['monto_autocar'],
