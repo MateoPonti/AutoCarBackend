@@ -40,8 +40,19 @@ final class AuthController
         $email = mb_strtolower(Request::texto($in, 'email'));
         $pass  = is_string($in['password'] ?? null) ? $in['password'] : '';
 
+        $emailValido = filter_var($email, FILTER_VALIDATE_EMAIL) !== false && strlen($email) <= 254;
+        // Más de 5 intentos en 15 minutos con el mismo email: se frena, aunque la contraseña sea la correcta
+        if ($emailValido) {
+            $espera = IntentosLogin::anotar($email);
+            if ($espera > 0) {
+                header('Retry-After: ' . $espera);
+                Response::error(429, 'demasiados_intentos', 'Probaste demasiadas veces. Esperá '
+                    . (int)ceil($espera / 60) . ' minutos y volvé a intentar.');
+            }
+        }
+
         $usuario = null;
-        if (filter_var($email, FILTER_VALIDATE_EMAIL) && $pass !== '' && strlen($pass) <= 72) {
+        if ($emailValido && $pass !== '' && strlen($pass) <= 72) {
             $usuario = Usuario::porEmail($email);
         }
         if ($usuario === null) {
@@ -53,6 +64,7 @@ final class AuthController
         if (!$ok) {
             Response::error(401, 'credenciales', 'El email o la contraseña no son correctos.');
         }
+        IntentosLogin::limpiar($email);
         // Recién con la contraseña correcta se dice que la cuenta está dada de baja (no revela qué emails existen)
         if (!$usuario['activo']) {
             Response::error(403, 'cuenta_deshabilitada', 'Tu cuenta está dada de baja. Si creés que es un error, escribinos.');
