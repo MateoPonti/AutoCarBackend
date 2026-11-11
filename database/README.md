@@ -33,6 +33,12 @@
 
 Se copian y pegan enteras en el **SQL Editor de Neon**, primero en el proyecto de Neon de dev y en el de main recién cuando se pasa `dev` → `main` (son dos proyectos separados).
 
+### Estado al 11/11/2026
+
+Verificado con una consulta de solo lectura contra las dos bases: **Neon dev y Neon main tienen corridas todas las migraciones, de la `001` a la `020`**. La próxima migración nueva es la `021`.
+
+La `007` (mecánicos `mecanicoN@demo.autocar.com.ar`) está solo en dev, como corresponde. Main tiene **sus propios talleres de demo**, cargados el 11/11 desde el sitio: 5 talleres aprobados (`*@autocar.test`: Acosta, Benítez, Gómez, Medina y Ferreyra), 3 compradores y 15 inspecciones firmadas (3 por mecánico). No se borran: son los que permiten hacer la demo sobre la URL pública.
+
 ## Reglas para una migración nueva
 
 1. **Nombre:** el número que sigue, con 3 dígitos, guion y un nombre corto en minúscula: `008-planes.sql`. Nada de `migracion-*.sql` ni números repetidos. Hay una prueba (`tests/Unit/MigracionesTest.php`) que hace fallar el CI si no se cumple.
@@ -44,5 +50,7 @@ Se copian y pegan enteras en el **SQL Editor de Neon**, primero en el proyecto d
 ## Historial de la demo (solo dev)
 
 Después de la 007, `php bin/demo-historial.php` carga inspecciones firmadas de meses anteriores de los 5 mecánicos (31 en total, 2 con reclamo que procedió), firmadas con el mismo código que la API. Sin eso, todos figuran como "Nuevo en la red" y en la demo no se ve al mecánico bajar en el ranking. No es una migración: es un script de PHP porque la huella se calcula en PHP. Toma la base de `.env` o de las variables de entorno, como `bin/importar-autos.php`; para Neon dev, con los datos de conexión de esa branch. Se puede correr más de una vez: si un mecánico ya tiene historial, no le agrega nada.
+
+**Ojo:** el script busca los mecánicos por los emails de la `007` (`mecanicoN@demo.autocar.com.ar`). En main esos usuarios no existen (los talleres de demo de main son otros, ver arriba), así que ahí falla sin cargar nada. Al 11/11 tampoco se corrió en dev: ninguna inspección tiene el link `historial.demo.invalid`.
 
 **Lo que no va acá:** los autos de otros sitios (MercadoLibre, Kavak, Autocosmos), las búsquedas guardadas y los avisos del metabuscador están en **Firestore (NoSQL)**, no en Neon. Ver `docs/arquitectura-scraper.md`, sección 6.
