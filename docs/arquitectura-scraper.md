@@ -231,11 +231,12 @@ MercadoLibre solo Volkswagen con tope de 3 páginas por búsqueda (140 pedidos, 
 | Polo 2020, 60.000 km, $ 28 M | `caro`: 15,1 % arriba de 21 autos |
 | Fiat Cronos 2022, 60.000 km, $ 21 M | `buen_precio`: 8,7 % abajo de 5 autos (Autocosmos y Kavak) |
 
-## 8. Pendiente
+## 8. Pendiente (al 11/11)
 
-1. **Crear el proyecto de Firebase** (Firestore en modo producción, plan Spark) y dos cuentas de servicio: una de escritura (rol *Cloud Datastore User*, el `.json` queda en la PC) y una de solo lectura (*Cloud Datastore Viewer*, su contenido va en `FIRESTORE_CREDENCIALES_JSON` de Render). Después: `COMPARADOR_ALMACEN=firestore` y `php bin/armar-modelos.php --almacen=firestore`. El cliente de Firestore está escrito y probado sin red (firma del token y conversión de datos), falta probarlo contra el proyecto real.
-2. **Programar la corrida diaria** en la PC: `schtasks /create /tn "AutoCar scraper" /sc daily /st 09:00 /tr "C:\...\Backend\recolectores\diario.bat"`.
-3. **Primera corrida completa de MercadoLibre** (~2 h 15 min) y al día siguiente `php bin/medir-cambios.php mercadolibre`, para tener el dato real de cuánto cambia por día.
-4. **Front:** el bloque de la ficha que consume `/api/vehiculos/{id}/comparacion`.
+1. ~~**Crear el proyecto de Firebase**~~: hecho el 10/11. Dos proyectos: `autocar-dev` (cargado con las corridas completas del 10/11: MercadoLibre 86.395 autos, Autocosmos 4.750, Kavak 1.330; comparador con 1.068 modelos) y `autocar-9897d` (prod, se carga en el pase `dev` → `main`). Render usa una cuenta de **escritura** (*Cloud Datastore User*), porque el metabuscador guarda las búsquedas.
+2. **Programar la corrida diaria** en la PC: `schtasks /create /tn "AutoCar scraper" /sc daily /st 09:00 /tr "C:\...\Backend\recolectores\diario.bat"`. El `.env` de la PC necesita `MARCAS_URL` (sección 6).
+3. ~~**Primera corrida completa de MercadoLibre**~~: hecha el 10/11 (~2 h 30 min, 86.427 autos). Falta la del día siguiente y `php bin/medir-cambios.php mercadolibre`, para tener el dato real de cuánto cambia por día.
+4. ~~**Front:** el bloque de la ficha que consume `/api/vehiculos/{id}/comparacion`~~: hecho (front #50 y #52).
 5. **Respaldo con GitHub Actions** (si la PC no corrió): GitHub solo ejecuta los `schedule` desde `main`, así que para que corra solo el workflow tiene que estar en `main`. Decidir si se sube solo el workflow o se deja manual.
 6. ~~Pasar el metabuscador de Taro a NoSQL~~: hecho el 08/11 (sección 6). Queda unificar `modelos/{clave}` del comparador con `mercado/{clave}`, que hoy guardan casi los mismos autos dos veces.
+7. **Modelos con distinto nombre dentro de una marca** ("4" y "DS4", "Clase C" y "C 200"): la clave no los puede igualar. Haría falta una lista de equivalencias hecha a mano.
