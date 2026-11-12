@@ -61,6 +61,7 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `GET /api/admin/metricas` | `metricas.ver` (admin) | Usuarios (activos, con actividad en 30 días, por rol), publicaciones (por estado, nuevas, precio promedio, valor en venta y vendido, marcas top), moderación y chat. Ganancias: no hay cobros todavía Incluye `ganancias` de las inspecciones (pago simulado): facturado, ganancia de AutoCar, pagado a mecánicos, fondo de garantía (acumulado, usado, disponible), retenido y reembolsado |
 | `GET /api/meta-busquedas` | sesión | Búsquedas guardadas del usuario, con autos que coinciden y avisos sin ver |
 | `POST /api/meta-busquedas` | sesión | Crea una búsqueda: `marca` y `modelo` obligatorios; `anio_desde`, `anio_hasta`, `precio_max`, `km_max` y `transmision` opcionales. Máximo 20 por usuario (409) → 201 |
+| `GET /api/meta-busquedas/conteo` | sesión | Cuántos autos coinciden hoy con esos criterios (los mismos que al crear), sin guardar nada: `{autos, por_fuente}`. Lo usa "Nueva búsqueda" mientras se eligen los filtros. 422 si los criterios no son válidos |
 | `GET /api/meta-busquedas/{id}` | sesión (dueño) | Reporte: referencia de precio, novedades, destacados, resultados y otros modelos. Listado: `fuente`, `etiqueta`, `precio_max`, `km_max`, `orden` (`precio`, `km`, `nuevos`), `page` |
 | `PUT /api/meta-busquedas/{id}` | sesión (dueño) | Modifica los criterios |
 | `DELETE /api/meta-busquedas/{id}` | sesión (dueño) | Borra la búsqueda y sus avisos → 204 |

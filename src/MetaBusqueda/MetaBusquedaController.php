@@ -27,16 +27,52 @@ final class MetaBusquedaController
 
         $salida = [];
         foreach (self::intentar(static fn() => Busqueda::delUsuario($docs, $usuario)) as $b) {
-            $autos = array_filter(
-                self::intentar(static fn() => $mercado->fotosDelModelo($actuales, $b['marca'], $b['modelo'])),
-                static fn(array $a): bool => Busqueda::coincide($b, $a)
-            );
             $salida[] = Busqueda::paraApi($b) + [
-                'autos'          => count($autos) + count($mercado->delPortal($b)),
+                'autos'          => array_sum(self::contar($mercado, $actuales, $b)),
                 'avisos_sin_ver' => $sinVer[$b['id']] ?? 0,
             ];
         }
         Response::json(['busquedas' => $salida]);
+    }
+
+    /**
+     * GET /api/meta-busquedas/conteo?marca=&modelo=&anio_desde=&anio_hasta=&precio_max=&km_max=&transmision=
+     * Cuántos autos coinciden con esos criterios hoy, en total y por sitio, sin guardar nada: la pantalla
+     * "Nueva búsqueda" lo muestra mientras se eligen los filtros. Valida igual que al crear.
+     * → {autos, por_fuente: {mercadolibre: n, kavak: n, autocosmos: n, autocar: n}}
+     */
+    public function conteo(): void
+    {
+        [$b, $errores] = Busqueda::validar($_GET);
+        if ($errores) {
+            Response::error(422, 'validacion', 'Revisá los datos ingresados.', $errores);
+        }
+        $mercado = new Mercado(self::docs(), Database::pdo());
+        $actuales = array_column(self::intentar(static fn() => $mercado->ultimasRecolecciones()), 'actual');
+        $porFuente = self::contar($mercado, $actuales, $b);
+        Response::json(['autos' => array_sum($porFuente), 'por_fuente' => $porFuente]);
+    }
+
+    /**
+     * Autos que coinciden con la búsqueda $b, por sitio: los de la última corrida de cada plataforma
+     * y los publicados en AutoCar.
+     * @return array<string, int>
+     */
+    private static function contar(Mercado $mercado, array $actuales, array $b): array
+    {
+        $porFuente = [];
+        $externos = self::intentar(static fn() => $mercado->fotosDelModelo($actuales, $b['marca'], $b['modelo']));
+        foreach ($externos as $a) {
+            if (Busqueda::coincide($b, $a)) {
+                $porFuente[$a['fuente']] = ($porFuente[$a['fuente']] ?? 0) + 1;
+            }
+        }
+        $portal = count($mercado->delPortal($b));
+        if ($portal > 0) {
+            $porFuente['autocar'] = ($porFuente['autocar'] ?? 0) + $portal;
+        }
+        ksort($porFuente);
+        return $porFuente;
     }
 
     public function crear(): void
