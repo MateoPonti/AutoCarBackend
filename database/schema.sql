@@ -1456,11 +1456,23 @@ CREATE TABLE IF NOT EXISTS inspeccion (
   taller_firma     VARCHAR(80),
   firmada_at       TIMESTAMPTZ,
   huella           CHAR(64),
+  patente          VARCHAR(7),   -- la carga el mecánico; obligatoria para firmar (022-patente.sql)
   created_at       TIMESTAMPTZ   NOT NULL DEFAULT now(),
   updated_at       TIMESTAMPTZ   NOT NULL DEFAULT now(),
   CHECK (comprador_id <> mecanico_id),
   CHECK (monto_mecanico + monto_autocar = precio),
-  CHECK (estado <> 'firmada' OR (conclusion IS NOT NULL AND firmado_por IS NOT NULL AND firmada_at IS NOT NULL AND huella IS NOT NULL))
+  CHECK (estado <> 'firmada' OR (conclusion IS NOT NULL AND firmado_por IS NOT NULL AND firmada_at IS NOT NULL AND huella IS NOT NULL)),
+  CONSTRAINT inspeccion_patente_formato CHECK (patente IS NULL OR patente ~ '^([A-Z]{3}[0-9]{3}|[A-Z]{2}[0-9]{3}[A-Z]{2})$'),
+  CONSTRAINT inspeccion_firmada_con_patente CHECK (estado <> 'firmada' OR patente IS NOT NULL)
+);
+CREATE INDEX IF NOT EXISTS idx_inspeccion_patente ON inspeccion (patente) WHERE patente IS NOT NULL;
+
+-- Foto de la chapa que sube el mecánico antes de firmar (022-patente.sql)
+CREATE TABLE IF NOT EXISTS inspeccion_patente_foto (
+  inspeccion_id INTEGER     PRIMARY KEY REFERENCES inspeccion(id) ON DELETE CASCADE,
+  mime          VARCHAR(20) NOT NULL,
+  datos         BYTEA       NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_inspeccion_comprador ON inspeccion (comprador_id, created_at);

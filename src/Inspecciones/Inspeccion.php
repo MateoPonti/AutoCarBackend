@@ -22,7 +22,8 @@ final class Inspeccion
     private const COLUMNAS = 'i.id, i.comprador_id, i.mecanico_id, i.vehiculo_id, i.url, i.fuente, i.titulo, i.anio,
         i.kilometraje, i.precio_publicado, i.localidad, i.estado, i.fecha_turno, i.motivo_rechazo, i.precio,
         i.monto_mecanico, i.monto_autocar, i.monto_fondo, i.tope_veces, i.dias_reclamo, i.pago, i.conclusion, i.resumen, i.firmado_por,
-        i.taller_firma, i.firmada_at, i.huella, i.created_at, i.updated_at, u.nombre AS comprador_nombre,
+        i.taller_firma, i.firmada_at, i.huella, i.patente, i.created_at, i.updated_at,
+        EXISTS (SELECT 1 FROM inspeccion_patente_foto pf WHERE pf.inspeccion_id = i.id) AS tiene_foto_patente, u.nombre AS comprador_nombre,
         mu.nombre AS mecanico_nombre, t.nombre AS taller_nombre, t.direccion AS taller_direccion, t.localidad AS taller_localidad,
         r.id AS reclamo_id, r.item_codigo AS reclamo_item, r.descripcion AS reclamo_descripcion, r.estado AS reclamo_estado,
         r.compensacion AS reclamo_compensacion, r.respuesta AS reclamo_respuesta, r.created_at AS reclamo_created_at,
@@ -177,7 +178,7 @@ final class Inspeccion
     }
 
     /** Reemplaza el checklist guardado (borrador). Se llama dentro de una transacción con la fila bloqueada. */
-    public static function guardarInforme(int $id, array $items, ?string $conclusion, ?string $resumen): void
+    public static function guardarInforme(int $id, array $items, ?string $conclusion, ?string $resumen, ?string $patente = null): void
     {
         $pdo = self::pdo();
         $pdo->prepare('DELETE FROM inspeccion_item WHERE inspeccion_id = :id')->execute(['id' => $id]);
@@ -185,8 +186,66 @@ final class Inspeccion
         foreach ($items as $codigo => [$resultado, $nota]) {
             $alta->execute(['id' => $id, 'c' => $codigo, 'r' => $resultado, 'n' => $nota]);
         }
-        $pdo->prepare('UPDATE inspeccion SET conclusion = :c, resumen = :r, updated_at = now() WHERE id = :id')
-            ->execute(['id' => $id, 'c' => $conclusion, 'r' => $resumen]);
+        $pdo->prepare('UPDATE inspeccion SET conclusion = :c, resumen = :r, patente = :p, updated_at = now() WHERE id = :id')
+            ->execute(['id' => $id, 'c' => $conclusion, 'r' => $resumen, 'p' => $patente]);
+    }
+
+    /** La foto de la chapa (reemplaza la que hubiera). $tmp: archivo ya validado con Foto::validarSubidas. */
+    public static function guardarFotoPatente(int $id, string $tmp, string $mime): void
+    {
+        $st = self::pdo()->prepare(
+            'INSERT INTO inspeccion_patente_foto (inspeccion_id, mime, datos) VALUES (:id, :mime, :datos)
+             ON CONFLICT (inspeccion_id) DO UPDATE SET mime = EXCLUDED.mime, datos = EXCLUDED.datos, created_at = now()'
+        );
+        $st->bindValue(':id', $id, PDO::PARAM_INT);
+        $st->bindValue(':mime', $mime);
+        $st->bindValue(':datos', (string)file_get_contents($tmp), PDO::PARAM_LOB);
+        $st->execute();
+    }
+
+    /** La foto de la chapa: mime y datos, o null si no hay. */
+    public static function fotoPatente(int $id): ?array
+    {
+        $st = self::pdo()->prepare('SELECT mime, datos FROM inspeccion_patente_foto WHERE inspeccion_id = :id');
+        $st->execute(['id' => $id]);
+        $f = $st->fetch();
+        if (!$f) {
+            return null;
+        }
+        // BYTEA llega como stream desde pdo_pgsql
+        return ['mime' => $f['mime'], 'datos' => is_resource($f['datos']) ? stream_get_contents($f['datos']) : $f['datos']];
+    }
+
+    /**
+     * Historial de un auto: sus inspecciones firmadas, la más nueva primero. Solo lo del informe (fecha, km,
+     * conclusión, quién firmó y si hubo un reclamo que procedió): nada del comprador ni del dueño.
+     */
+    public static function historial(string $patente): array
+    {
+        $st = self::pdo()->prepare(
+            "SELECT i.firmada_at, i.titulo, i.anio, i.kilometraje, i.conclusion, i.firmado_por, i.taller_firma,
+                    (SELECT COUNT(*) FROM inspeccion_item it WHERE it.inspeccion_id = i.id AND it.resultado <> 'ok') AS observaciones,
+                    EXISTS (SELECT 1 FROM reclamo r WHERE r.inspeccion_id = i.id AND r.estado = 'procede') AS reclamo_procedente
+               FROM inspeccion i
+              WHERE i.patente = :p AND i.estado = 'firmada'
+              ORDER BY i.firmada_at DESC LIMIT 50"
+        );
+        $st->execute(['p' => $patente]);
+        $lista = [];
+        foreach ($st->fetchAll() as $f) {
+            $lista[] = [
+                'firmada_at'         => (new DateTimeImmutable($f['firmada_at']))->format(DATE_ATOM),
+                'titulo'             => $f['titulo'],
+                'anio'               => $f['anio'] === null ? null : (int)$f['anio'],
+                'kilometraje'        => $f['kilometraje'] === null ? null : (int)$f['kilometraje'],
+                'conclusion'         => $f['conclusion'],
+                'observaciones'      => (int)$f['observaciones'],
+                'firmado_por'        => $f['firmado_por'],
+                'taller'             => $f['taller_firma'],
+                'reclamo_procedente' => (bool)$f['reclamo_procedente'],
+            ];
+        }
+        return $lista;
     }
 
     /** Cierra el informe. Se llama dentro de una transacción con la fila bloqueada y el estado ya revisado. */
@@ -245,6 +304,9 @@ final class Inspeccion
             'taller_firma'     => $i['taller_firma'],
             'firmada_at'       => $fecha($i['firmada_at']),
             'huella'           => $i['huella'],
+            // La carga el mecánico (obligatoria para firmar); la foto de la chapa la ven los mismos que el detalle
+            'patente'          => $i['patente'],
+            'patente_foto'     => $i['tiene_foto_patente'] ? "/api/inspecciones/{$i['id']}/patente-foto" : null,
             'created_at'       => $fecha($i['created_at']),
             'mecanico_id'      => (int)$i['mecanico_id'],
             'comprador'        => ['id' => (int)$i['comprador_id'], 'nombre' => $i['comprador_nombre']],

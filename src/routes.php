@@ -79,6 +79,9 @@ $router->get('/api/mecanicos', [InspeccionController::class, 'mecanicos']);
 $router->post('/api/inspecciones', [InspeccionController::class, 'crear'], 'usuario');
 $router->get('/api/mis-inspecciones', [InspeccionController::class, 'mias'], 'auth');
 $router->get('/api/inspecciones/{id}', [InspeccionController::class, 'detalle'], 'auth');
+$router->get('/api/inspecciones/{id}/patente-foto', [InspeccionController::class, 'fotoPatente'], 'auth');
+// Historial de un auto por su patente: las inspecciones firmadas (una patente por vez, con sesión)
+$router->get('/api/historial-patente', [InspeccionController::class, 'historial'], 'auth');
 $router->post('/api/inspecciones/{id}/cancelar', [InspeccionController::class, 'cancelar'], 'auth');
 $router->post('/api/inspecciones/{id}/reclamo', [InspeccionController::class, 'reclamar'], 'auth');
 // Reclamos: los resuelven el moderador y el admin
@@ -99,6 +102,7 @@ $router->put('/api/mecanico/perfil', [MecanicoController::class, 'guardarPerfil'
 $router->get('/api/mecanico/inspecciones', [MecanicoController::class, 'bandeja'], $mecanico);
 $router->patch('/api/mecanico/inspecciones/{id}', [MecanicoController::class, 'cambiarEstado'], $mecanico);
 $router->put('/api/mecanico/inspecciones/{id}/informe', [MecanicoController::class, 'guardarInforme'], $mecanico);
+$router->post('/api/mecanico/inspecciones/{id}/patente-foto', [MecanicoController::class, 'subirFotoPatente'], $mecanico);
 $router->post('/api/mecanico/inspecciones/{id}/firma', [MecanicoController::class, 'firmar'], $mecanico);
 // "Adherí tu taller": el usuario pide sumarse y un admin lo aprueba (pasa a rol mecanico) o lo rechaza.
 // Aprobar le cambia el rol al usuario, por eso pide el mismo permiso que editar usuarios.

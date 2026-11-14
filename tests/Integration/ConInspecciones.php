@@ -50,12 +50,13 @@ trait ConInspecciones
         return $items;
     }
 
-    /** Con la sesión del mecánico: acepta, completa el checklist y firma. */
-    private function aceptarYFirmar(int $id): array
+    /** Con la sesión del mecánico: acepta, completa el checklist con la patente y la foto de la chapa, y firma. */
+    private function aceptarYFirmar(int $id, string $patente = 'AB123CD'): array
     {
         self::assertSame(200, $this->pedir('PATCH', "/api/mecanico/inspecciones/$id", ['accion' => 'aceptar', 'fecha_turno' => self::turno()])['status']);
         self::assertSame(200, $this->pedir('PUT', "/api/mecanico/inspecciones/$id/informe",
-            ['items' => self::checklistCompleto(), 'conclusion' => 'recomendable'])['status']);
+            ['items' => self::checklistCompleto(), 'conclusion' => 'recomendable', 'patente' => $patente])['status']);
+        self::assertSame(200, $this->pedirFormulario("/api/mecanico/inspecciones/$id/patente-foto", [], 1, 'foto')['status']);
         $firma = $this->pedir('POST', "/api/mecanico/inspecciones/$id/firma", []);
         self::assertSame(200, $firma['status'], json_encode($firma['json']));
         return $firma['json']['inspeccion'];

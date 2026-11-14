@@ -7,6 +7,7 @@ use AutoCar\Inspecciones\Checklist;
 use AutoCar\Inspecciones\Estados;
 use AutoCar\Inspecciones\Fuente;
 use AutoCar\Inspecciones\Huella;
+use AutoCar\Inspecciones\Patente;
 use AutoCar\Inspecciones\Precio;
 use AutoCar\Inspecciones\Ranking;
 use DateTimeImmutable;
@@ -112,6 +113,34 @@ final class InspeccionesTest extends TestCase
         self::assertSame(80000.0, $d['monto_mecanico']);
         self::assertSame(20000.0, $d['monto_autocar']);
         self::assertSame(10000.0, $d['monto_fondo']);
+    }
+
+    // --- Patente
+
+    public function testLaPatenteSeGuardaSinEspaciosYEnMayusculas(): void
+    {
+        self::assertSame('AB123CD', Patente::normalizar(' ab 123 cd '));
+        self::assertSame('ABC123', Patente::normalizar('abc-123'));
+        self::assertSame('AB123CD', Patente::normalizar('AB.123.CD'));
+    }
+
+    public function testUnaPatenteConOtroFormatoNoSirve(): void
+    {
+        foreach (['', 'A123BCD', 'ABCD123', 'AB1234C', '123ABC', 'patente', null, 123456] as $mala) {
+            self::assertNull(Patente::normalizar($mala), var_export($mala, true));
+        }
+    }
+
+    public function testLaPatenteEntraEnLaHuella(): void
+    {
+        $items = ['motor' => ['ok', null]];
+        $sin = Huella::calcular(1, $items, 'recomendable', null, 'Ana', 'Taller', '2026-11-14T10:00:00Z');
+        $con = Huella::calcular(1, $items, 'recomendable', null, 'Ana', 'Taller', '2026-11-14T10:00:00Z', 'AB123CD');
+        $otra = Huella::calcular(1, $items, 'recomendable', null, 'Ana', 'Taller', '2026-11-14T10:00:00Z', 'AB123CE');
+        self::assertNotSame($sin, $con);
+        self::assertNotSame($con, $otra);
+        // Las firmadas antes de la patente dan la misma huella que antes
+        self::assertSame($sin, Huella::calcular(1, $items, 'recomendable', null, 'Ana', 'Taller', '2026-11-14T10:00:00Z', null));
     }
 
     // --- Ranking

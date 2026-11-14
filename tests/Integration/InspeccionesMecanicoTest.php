@@ -147,8 +147,29 @@ final class InspeccionesMecanicoTest extends ApiTestCase
         $this->pedir('PUT', "/api/mecanico/inspecciones/$id/informe", ['items' => self::checklistCompleto()]);
         self::assertSame(422, $this->pedir('POST', "/api/mecanico/inspecciones/$id/firma", [])['status']);
 
+        // Completo pero sin patente: tampoco. Una patente con otro formato no se guarda
         $this->pedir('PUT', "/api/mecanico/inspecciones/$id/informe",
             ['items' => self::checklistCompleto(), 'conclusion' => 'recomendable', 'resumen' => 'Buen estado general.']);
+        $sinPatente = $this->pedir('POST', "/api/mecanico/inspecciones/$id/firma", []);
+        self::assertSame(422, $sinPatente['status']);
+        self::assertStringContainsString('patente', $sinPatente['json']['mensaje']);
+        $mal = $this->pedir('PUT', "/api/mecanico/inspecciones/$id/informe",
+            ['items' => self::checklistCompleto(), 'conclusion' => 'recomendable', 'patente' => 'NO-ES-1']);
+        self::assertSame(422, $mal['status']);
+        self::assertArrayHasKey('patente', $mal['json']['errores']);
+
+        // Con la patente (se guarda en mayúsculas y sin espacios) pero sin la foto de la chapa: tampoco
+        $conPatente = $this->pedir('PUT', "/api/mecanico/inspecciones/$id/informe",
+            ['items' => self::checklistCompleto(), 'conclusion' => 'recomendable', 'resumen' => 'Buen estado general.', 'patente' => 'ac 456 bd']);
+        self::assertSame('AC456BD', $conPatente['json']['inspeccion']['patente']);
+        $sinFoto = $this->pedir('POST', "/api/mecanico/inspecciones/$id/firma", []);
+        self::assertSame(422, $sinFoto['status']);
+        self::assertStringContainsString('foto', $sinFoto['json']['mensaje']);
+        $foto = $this->pedirFormulario("/api/mecanico/inspecciones/$id/patente-foto", [], 1, 'foto');
+        self::assertSame(200, $foto['status'], json_encode($foto['json']));
+        self::assertNotNull($foto['json']['inspeccion']['patente_foto']);
+        self::assertSame(200, $this->pedir('GET', $foto['json']['inspeccion']['patente_foto'])['status']);
+
         $firma = $this->pedir('POST', "/api/mecanico/inspecciones/$id/firma", []);
         self::assertSame(200, $firma['status'], json_encode($firma['json']));
         $i = $firma['json']['inspeccion'];
@@ -165,7 +186,7 @@ final class InspeccionesMecanicoTest extends ApiTestCase
             $items[$item['codigo']] = [$item['resultado'], $item['nota']];
         }
         self::assertSame($i['huella'], Huella::calcular($id, $items, $i['conclusion'], $i['resumen'],
-            $i['firmado_por'], $i['taller_firma'], Inspeccion::momentoHuella($i['firmada_at'])));
+            $i['firmado_por'], $i['taller_firma'], Inspeccion::momentoHuella($i['firmada_at']), $i['patente']));
 
         // Firmada no cambia más
         $cambio = $this->pedir('PUT', "/api/mecanico/inspecciones/$id/informe", ['items' => self::checklistCompleto(), 'conclusion' => 'no_recomendable']);
