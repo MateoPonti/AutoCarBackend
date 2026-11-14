@@ -102,13 +102,14 @@ final class ParametrosYPreferenciasTest extends ApiTestCase
         self::assertSame(422, $fuera['status']);
         self::assertArrayHasKey('comision_autocar', $fuera['json']['errores']);
 
-        $original = array_column($antes['parametros'], 'valor', 'clave')['dias_reclamo'];
+        // JSON manda 15.0 como 15: se compara como número con decimales
+        $original = (float)array_column($antes['parametros'], 'valor', 'clave')['dias_reclamo'];
         $nuevo = $original === 20.0 ? 21 : 20;
         $r = $this->pedir('PUT', '/api/admin/parametros', ['valores' => ['dias_reclamo' => $nuevo]]);
         self::assertSame(200, $r['status'], json_encode($r['json']));
-        self::assertSame((float)$nuevo, array_column($r['json']['parametros'], 'valor', 'clave')['dias_reclamo']);
+        self::assertSame((float)$nuevo, (float)array_column($r['json']['parametros'], 'valor', 'clave')['dias_reclamo']);
         self::assertSame('dias_reclamo', $r['json']['cambios'][0]['clave']);
-        self::assertSame($original, $r['json']['cambios'][0]['valor_anterior']);
+        self::assertSame($original, (float)$r['json']['cambios'][0]['valor_anterior']);
 
         // Lo dejo como estaba para las otras pruebas
         $this->pedir('PUT', '/api/admin/parametros', ['valores' => ['dias_reclamo' => $original]]);
