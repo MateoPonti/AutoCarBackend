@@ -126,13 +126,16 @@ final class Preferencias
         ]);
     }
 
-    /** Cuántas cuentas eligieron cada uso (para las métricas del admin). Los que no contestaron no cuentan. */
+    /** Cuántas cuentas eligieron cada uso, con el texto de la opción ("Para la familia" => 4). Para las métricas. */
     public static function porUso(): array
     {
         $filas = Database::pdo()->query('SELECT uso, COUNT(*) AS n FROM usuario_preferencia GROUP BY uso')->fetchAll();
-        $conteo = array_fill_keys(array_keys(self::USOS), 0);
+        $conteo = [];
+        foreach (self::USOS as $texto) {
+            $conteo[$texto] = 0;
+        }
         foreach ($filas as $fila) {
-            $conteo[$fila['uso']] = (int)$fila['n'];
+            $conteo[self::USOS[$fila['uso']]] = (int)$fila['n'];
         }
         return $conteo;
     }
