@@ -16,7 +16,7 @@ final class Usuario
 
     /** Columnas que devuelven las consultas: el rol se trae por nombre con un JOIN. */
     // foto_v: versión de la foto de perfil (cuándo se subió), para que el navegador no muestre una vieja del caché
-    private const CAMPOS = 'u.id, u.nombre, u.email, u.activo, u.created_at, r.nombre AS rol,
+    private const CAMPOS = 'u.id, u.nombre, u.email, u.activo, u.created_at, u.privacidad_aceptada_at, r.nombre AS rol,
         (SELECT extract(epoch FROM uf.updated_at)::bigint FROM usuario_foto uf WHERE uf.usuario_id = u.id) AS foto_v';
 
     public static function porEmail(string $email): ?array
@@ -64,15 +64,25 @@ final class Usuario
      * Un registro público nace con el rol 'usuario'. La cuenta de un taller ("Adherí tu taller") nace 'mecanico',
      * pero no puede ingresar hasta que un admin apruebe la solicitud (ver AuthController::login).
      * Los demás roles los asigna el admin.
+     * $aceptoPrivacidad: true en el registro público, que no deja seguir sin aceptar la política de privacidad.
      */
-    public static function crear(string $nombre, string $email, string $hash, string $rol = 'usuario'): int
+    public static function crear(string $nombre, string $email, string $hash, string $rol = 'usuario', bool $aceptoPrivacidad = false): int
     {
         $st = Database::pdo()->prepare(
-            "INSERT INTO usuario (nombre, email, password_hash, rol_id)
-             VALUES (:nombre, :email, :hash, (SELECT id FROM rol WHERE nombre = :rol)) RETURNING id"
+            "INSERT INTO usuario (nombre, email, password_hash, rol_id, privacidad_aceptada_at)
+             VALUES (:nombre, :email, :hash, (SELECT id FROM rol WHERE nombre = :rol),
+               CASE WHEN :acepto = 'si' THEN now() END) RETURNING id"
         );
-        $st->execute(['nombre' => $nombre, 'email' => $email, 'hash' => $hash, 'rol' => $rol]);
+        $st->execute(['nombre' => $nombre, 'email' => $email, 'hash' => $hash, 'rol' => $rol,
+            'acepto' => $aceptoPrivacidad ? 'si' : 'no']);
         return (int)$st->fetchColumn();
+    }
+
+    /** Anota que aceptó la política de privacidad (si ya la había aceptado, queda la primera fecha). */
+    public static function aceptarPrivacidad(int $id): void
+    {
+        Database::pdo()->prepare('UPDATE usuario SET privacidad_aceptada_at = COALESCE(privacidad_aceptada_at, now()) WHERE id = :id')
+            ->execute(['id' => $id]);
     }
 
     /** Nombres de los permisos del usuario, según su rol. Vacío si no existe o está dado de baja. */

@@ -10,8 +10,8 @@ use AutoCar\Core\Response;
 
 /**
  * Cola de reclamos (B8): permiso reclamos.resolver (moderador y admin, ver routes.php).
- * Si un reclamo procede, al comprador se le devuelve lo que pagó, se le paga la compensación (hasta 3 veces el
- * precio) y el mecánico baja en el ranking (Ranking cuenta los reclamos que procedieron).
+ * Si un reclamo procede, al comprador se le devuelve lo que pagó, se le paga la compensación (hasta el tope de
+ * la inspección) y el mecánico baja en el ranking (Ranking cuenta los reclamos que procedieron).
  */
 final class AdminReclamoController
 {
@@ -42,7 +42,7 @@ final class AdminReclamoController
         if ((int)$reclamo['mecanico_id'] === (int)Auth::id() || (int)$reclamo['comprador_id'] === (int)Auth::id()) {
             self::fallar(409, 'interes_propio', 'No podés resolver un reclamo sobre una inspección tuya.');
         }
-        [$resolucion, $errores] = Reclamo::validarResolucion($in, (float)$reclamo['precio']);
+        [$resolucion, $errores] = Reclamo::validarResolucion($in, (float)$reclamo['precio'], (float)$reclamo['tope_veces']);
         if ($errores) {
             self::fallar(422, 'validacion', 'Revisá la resolución.', $errores);
         }

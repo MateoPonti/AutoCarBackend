@@ -20,7 +20,7 @@ final class SolicitudTallerTest extends TestCase
 
     public function testUnFormularioCompletoEsValido(): void
     {
-        [$datos, $errores] = SolicitudTaller::validar(self::formulario());
+        [$datos, $errores] = SolicitudTaller::validar(self::formulario(), 70000, 150000);
         self::assertSame([], $errores);
         self::assertSame('30-12345678-9', $datos['cuit']);
         self::assertSame('Lun a vie 8 a 18', $datos['horarios']);
@@ -29,7 +29,7 @@ final class SolicitudTallerTest extends TestCase
 
     public function testElCuitSinGuionesSeGuardaConGuiones(): void
     {
-        [$datos, $errores] = SolicitudTaller::validar(self::formulario(['cuit' => ' 30123456789 ']));
+        [$datos, $errores] = SolicitudTaller::validar(self::formulario(['cuit' => ' 30123456789 ']), 70000, 150000);
         self::assertSame([], $errores);
         self::assertSame('30-12345678-9', $datos['cuit']);
     }
@@ -37,7 +37,7 @@ final class SolicitudTallerTest extends TestCase
     public function testCuitMalEscrito(): void
     {
         foreach (['30-1234567-9', 'abc', '', '30-12345678-99'] as $cuit) {
-            [, $errores] = SolicitudTaller::validar(self::formulario(['cuit' => $cuit]));
+            [, $errores] = SolicitudTaller::validar(self::formulario(['cuit' => $cuit]), 70000, 150000);
             self::assertArrayHasKey('cuit', $errores, "CUIT $cuit");
         }
     }
@@ -45,14 +45,14 @@ final class SolicitudTallerTest extends TestCase
     public function testSinAceptarLasCondicionesNoSePuede(): void
     {
         foreach ([false, 'true', 1, null] as $valor) {
-            [, $errores] = SolicitudTaller::validar(self::formulario(['condiciones' => $valor]));
+            [, $errores] = SolicitudTaller::validar(self::formulario(['condiciones' => $valor]), 70000, 150000);
             self::assertArrayHasKey('condiciones', $errores);
         }
     }
 
     public function testUsaLasMismasReglasQueElPerfilDelMecanico(): void
     {
-        [, $errores] = SolicitudTaller::validar(self::formulario(['precio_inspeccion' => 10, 'localidad' => '', 'horarios' => 'x']));
+        [, $errores] = SolicitudTaller::validar(self::formulario(['precio_inspeccion' => 10, 'localidad' => '', 'horarios' => 'x']), 70000, 150000);
         self::assertArrayHasKey('precio_inspeccion', $errores);
         self::assertArrayHasKey('localidad', $errores);
         self::assertArrayHasKey('horarios', $errores);

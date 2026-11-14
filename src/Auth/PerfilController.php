@@ -26,6 +26,38 @@ final class PerfilController
         Response::json(['usuario' => self::yo()]);
     }
 
+    /** GET /api/me/preferencias → {preferencias (o null si no contestó), usos, tipos}: las opciones salen de acá. */
+    public function preferencias(): void
+    {
+        Response::json([
+            'preferencias' => Preferencias::delUsuario((int)Auth::id()),
+            'usos'         => Preferencias::USOS,
+            'tipos'        => Preferencias::TIPOS,
+        ]);
+    }
+
+    /**
+     * PUT /api/me/preferencias {uso, tipo?, presupuesto?, localidad?, acepta_privacidad?} → {preferencias}.
+     * Solo cuentas personales. Una cuenta de antes de la 021 tiene que aceptar la política de privacidad acá.
+     */
+    public function guardarPreferencias(): void
+    {
+        $in = Request::json();
+        [$datos, $errores] = Preferencias::validar($in);
+        $debeAceptar = (Auth::usuario()['privacidad_aceptada_at'] ?? null) === null;
+        if ($debeAceptar && ($in['acepta_privacidad'] ?? null) !== true) {
+            $errores['acepta_privacidad'] = 'Para seguir tenés que aceptar la política de privacidad.';
+        }
+        if ($errores) {
+            Response::error(422, 'validacion', 'Revisá tus respuestas.', $errores);
+        }
+        if ($debeAceptar) {
+            Usuario::aceptarPrivacidad((int)Auth::id());
+        }
+        Preferencias::guardar((int)Auth::id(), $datos);
+        Response::json(['preferencias' => Preferencias::delUsuario((int)Auth::id())]);
+    }
+
     /** POST /api/me/foto (multipart/form-data: foto) → {usuario}. Reemplaza la que tenía. */
     public function subirFoto(): void
     {

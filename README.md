@@ -16,13 +16,15 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 
 | Método y ruta | Acceso | Descripción |
 |---|---|---|
-| `POST /api/registro` | público | Crea una cuenta (`nombre`, `email`, `password`, `password_confirm` opcional). Rol siempre `usuario`. → 201 |
+| `POST /api/registro` | público | Crea una cuenta (`nombre`, `email`, `password`, `password_confirm` opcional, `acepta_privacidad: true` obligatorio). Rol siempre `usuario`. → 201 |
 | `POST /api/login` | público | `email`, `password` → `{csrf, expira_en, usuario}` y la cookie de sesión (`Set-Cookie`). La cuenta de un taller con la solicitud pendiente o rechazada → 403 `taller_pendiente` o `taller_rechazado` (con el motivo). Más de 5 intentos en 15 minutos con el mismo email → 429 `demasiados_intentos` con `Retry-After`, aunque la contraseña sea la correcta |
 | `POST /api/logout` | público | Borra la cookie de sesión → 204 |
-| `GET /api/me` | sesión | `{usuario, csrf}` del usuario autenticado |
+| `GET /api/me` | sesión | `{usuario, csrf}` del usuario autenticado. `usuario` trae `preferencias`, `preferencias_pendientes` y `privacidad_pendiente` (el front no deja seguir a una cuenta personal hasta que contesta y acepta) |
 | `PUT /api/me` | sesión | Cambia el nombre (`{nombre}`, 2 a 80 caracteres) → `{usuario}`. El email no se cambia |
 | `POST /api/me/foto` | sesión | Sube o reemplaza la foto de perfil (multipart, campo `foto`: JPG, PNG o WebP de hasta 2 MB) → `{usuario}` con `foto` |
 | `DELETE /api/me/foto` | sesión | Borra la foto de perfil → 204 |
+| `GET /api/me/preferencias` | cuenta personal | `{preferencias, usos, tipos}`: lo que contestó (o `null`) y las opciones |
+| `PUT /api/me/preferencias` | cuenta personal | "¿Para qué buscás el auto?": `{uso, tipo?, presupuesto?, localidad?, acepta_privacidad?}` → `{preferencias}`. `uso`: `personal`, `familia`, `trabajo` o `aplicacion`. Una cuenta que todavía no aceptó la política de privacidad manda `acepta_privacidad: true` |
 | `GET /api/usuarios/{id}/foto` | público | La foto de perfil (se ve en el detalle de sus publicaciones y en el chat). 404 si no tiene. `usuario.foto`, `vendedor.foto` y `con.foto` traen esta ruta con `?v=` (o `null`) |
 | `GET /api/vehiculos` | público | Listado. Filtros: `q`, `marca`, `combustible`, `precio_max`, `page` |
 | `GET /api/marcas-modelos` | público | Marcas y modelos que se pueden publicar: `{marcas: [{marca, modelos: [...]}]}`. Publicar o corregir con una marca o un modelo que no está en la lista → 422 (y la base tampoco lo acepta) |
@@ -58,7 +60,10 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `PATCH /api/admin/usuarios/{id}` | `usuarios.editar` (admin) | `{nombre?, rol?, activo?}`. No se puede cambiar el propio rol ni darse de baja (409) |
 | `DELETE /api/admin/usuarios/{id}` | `usuarios.editar` | Baja lógica (`activo = false`): no puede ingresar y su sesión deja de valer → 204 |
 | `GET /api/admin/roles` | `usuarios.ver` | Roles con sus permisos |
-| `GET /api/admin/metricas` | `metricas.ver` (admin) | Usuarios (activos, con actividad en 30 días, por rol), publicaciones (por estado, nuevas, precio promedio, valor en venta y vendido, marcas top), moderación y chat. Ganancias: no hay cobros todavía Incluye `ganancias` de las inspecciones (pago simulado): facturado, ganancia de AutoCar, pagado a mecánicos, fondo de garantía (acumulado, usado, disponible), retenido y reembolsado |
+| `GET /api/admin/metricas` | `metricas.ver` (admin) | Usuarios (activos, con actividad en 30 días, por rol), publicaciones (por estado, nuevas, precio promedio, valor en venta y vendido, marcas top), moderación y chat. Ganancias: no hay cobros todavía Incluye `ganancias` de las inspecciones (pago simulado): facturado, ganancia de AutoCar, pagado a mecánicos, fondo de garantía (acumulado, usado, disponible), retenido y reembolsado. `compradores_por_uso`: cuántas cuentas eligieron cada respuesta de "¿Para qué buscás el auto?" |
+| `GET /api/admin/parametros` | `parametros.editar` (admin) | `{parametros, cambios}`: los números del negocio (comisión de AutoCar, parte al fondo, tope de compensación, días de reclamo, precio mínimo/sugerido/máximo de la inspección) con sus límites, y los últimos 30 cambios |
+| `PUT /api/admin/parametros` | `parametros.editar` (admin) | `{valores: {clave: valor}}` → `{parametros, cambios}`. Valida límites (422 por clave) y que el sugerido quede entre el mínimo y el máximo. Cada cambio queda anotado (quién, cuándo, antes y después). Las inspecciones ya pedidas siguen con su tope y sus días |
+| `GET /api/parametros` | público | `{comision_autocar, parte_fondo, tope_veces, dias_reclamo, precio_minimo, precio_sugerido, precio_maximo}`: el front arma el desglose del precio y el rango que acepta `PUT /api/mecanico/perfil` y "Adherí tu taller" |
 | `GET /api/meta-busquedas` | sesión | Búsquedas guardadas del usuario, con autos que coinciden y avisos sin ver |
 | `POST /api/meta-busquedas` | sesión | Crea una búsqueda: `marca` y `modelo` obligatorios; `anio_desde`, `anio_hasta`, `precio_max`, `km_max` y `transmision` opcionales. Máximo 20 por usuario (409) → 201 |
 | `GET /api/meta-busquedas/conteo` | sesión | Cuántos autos coinciden hoy con esos criterios (los mismos que al crear), sin guardar nada: `{autos, por_fuente}`. Lo usa "Nueva búsqueda" mientras se eligen los filtros. 422 si los criterios no son válidos |

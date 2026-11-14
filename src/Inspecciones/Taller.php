@@ -11,9 +11,6 @@ use AutoCar\Core\Database;
  */
 final class Taller
 {
-    public const PRECIO_MINIMO = 1000;
-    public const PRECIO_MAXIMO = 10000000;
-
     private const COLUMNAS = 'usuario_id, nombre, direccion, localidad, telefono, precio_inspeccion, activo, estado';
 
     public static function delMecanico(int $usuarioId): ?array
@@ -80,7 +77,7 @@ final class Taller
             'direccion'         => $m['direccion'],
             'localidad'         => $m['localidad'],
             'precio_inspeccion' => (float)$m['precio_inspeccion'],
-            'desglose'          => Precio::desglose((float)$m['precio_inspeccion']),
+            'desglose'          => Precio::desgloseActual((float)$m['precio_inspeccion']),
             'firmadas'          => $m['firmadas'],
             'reclamos_procedentes' => $m['procedentes'],
             'puntaje'           => $m['puntaje'],
@@ -112,9 +109,10 @@ final class Taller
 
     /**
      * Valida el cuerpo de PUT /api/mecanico/perfil. Función pura (se prueba sin base).
+     * El precio tiene que quedar entre $precioMinimo y $precioMaximo (parámetros precio_minimo y precio_maximo).
      * @return array{0: array, 1: array<string, string>} [datos limpios, errores por campo]
      */
-    public static function validar(array $in): array
+    public static function validar(array $in, float $precioMinimo, float $precioMaximo): array
     {
         $texto = static fn(string $k): string => is_scalar($in[$k] ?? null) ? trim((string)$in[$k]) : '';
         $datos = [
@@ -141,9 +139,9 @@ final class Taller
         }
         if (!is_int($precio) && !is_float($precio)) {
             $errores['precio_inspeccion'] = 'Ingresá el precio en pesos.';
-        } elseif ($precio < self::PRECIO_MINIMO || $precio > self::PRECIO_MAXIMO) {
-            $errores['precio_inspeccion'] = 'Tiene que estar entre $ ' . number_format(self::PRECIO_MINIMO, 0, ',', '.')
-                . ' y $ ' . number_format(self::PRECIO_MAXIMO, 0, ',', '.') . '.';
+        } elseif ($precio < $precioMinimo || $precio > $precioMaximo) {
+            $errores['precio_inspeccion'] = 'Tiene que estar entre $ ' . number_format($precioMinimo, 0, ',', '.')
+                . ' y $ ' . number_format($precioMaximo, 0, ',', '.') . '.';
         } elseif (fmod((float)$precio, 1.0) !== 0.0) {
             $errores['precio_inspeccion'] = 'Ingresá un precio sin centavos.';
         }
