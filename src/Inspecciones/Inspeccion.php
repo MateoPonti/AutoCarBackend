@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace AutoCar\Inspecciones;
 
 use AutoCar\Core\Database;
+use AutoCar\Parametros\Parametros;
 use DateTimeImmutable;
 use DateTimeZone;
 use PDO;
@@ -20,7 +21,7 @@ final class Inspeccion
 
     private const COLUMNAS = 'i.id, i.comprador_id, i.mecanico_id, i.vehiculo_id, i.url, i.fuente, i.titulo, i.anio,
         i.kilometraje, i.precio_publicado, i.localidad, i.estado, i.fecha_turno, i.motivo_rechazo, i.precio,
-        i.monto_mecanico, i.monto_autocar, i.monto_fondo, i.pago, i.conclusion, i.resumen, i.firmado_por,
+        i.monto_mecanico, i.monto_autocar, i.monto_fondo, i.tope_veces, i.dias_reclamo, i.pago, i.conclusion, i.resumen, i.firmado_por,
         i.taller_firma, i.firmada_at, i.huella, i.created_at, i.updated_at, u.nombre AS comprador_nombre,
         mu.nombre AS mecanico_nombre, t.nombre AS taller_nombre, t.direccion AS taller_direccion, t.localidad AS taller_localidad,
         r.id AS reclamo_id, r.item_codigo AS reclamo_item, r.descripcion AS reclamo_descripcion, r.estado AS reclamo_estado,
@@ -107,13 +108,17 @@ final class Inspeccion
         return $id === false ? null : (int)$id;
     }
 
-    /** Alta del pedido (B4). $datos ya validados con Pedido::validar; $montos de Precio::desglose. → id */
+    /**
+     * Alta del pedido (B4). $datos ya validados con Pedido::validar; $montos de Precio::desgloseActual.
+     * Guarda también el tope y los días de reclamo de hoy: si el admin los cambia, esta inspección sigue con los suyos.
+     * → id
+     */
     public static function crear(int $compradorId, array $datos, array $montos): int
     {
         $st = self::pdo()->prepare(
             'INSERT INTO inspeccion (comprador_id, mecanico_id, vehiculo_id, url, url_clave, fuente, titulo, anio, kilometraje,
-               precio_publicado, localidad, precio, monto_mecanico, monto_autocar, monto_fondo)
-             VALUES (:c, :m, :v, :url, :clave, :fuente, :titulo, :anio, :km, :pp, :loc, :precio, :mm, :ma, :mf)
+               precio_publicado, localidad, precio, monto_mecanico, monto_autocar, monto_fondo, tope_veces, dias_reclamo)
+             VALUES (:c, :m, :v, :url, :clave, :fuente, :titulo, :anio, :km, :pp, :loc, :precio, :mm, :ma, :mf, :tope, :dias)
              RETURNING id'
         );
         $st->execute([
@@ -122,15 +127,16 @@ final class Inspeccion
             'fuente' => $datos['fuente'], 'titulo' => $datos['titulo'], 'anio' => $datos['anio'],
             'km' => $datos['kilometraje'], 'pp' => $datos['precio_publicado'], 'loc' => $datos['localidad'],
             'precio' => $montos['precio'], 'mm' => $montos['monto_mecanico'], 'ma' => $montos['monto_autocar'],
-            'mf' => $montos['monto_fondo'],
+            'mf' => $montos['monto_fondo'], 'tope' => Parametros::valor('tope_veces'),
+            'dias' => (int)Parametros::valor('dias_reclamo'),
         ]);
         return (int)$st->fetchColumn();
     }
 
     /** Hasta cuándo puede reclamar el comprador, o null si no está firmada. */
-    public static function reclamoHasta(?string $firmadaAt): ?DateTimeImmutable
+    public static function reclamoHasta(?string $firmadaAt, int $dias): ?DateTimeImmutable
     {
-        return $firmadaAt === null ? null : (new DateTimeImmutable($firmadaAt))->modify('+' . Estados::DIAS_RECLAMO . ' days');
+        return $firmadaAt === null ? null : (new DateTimeImmutable($firmadaAt))->modify('+' . $dias . ' days');
     }
 
     /** @return array<string, int> cantidad por estado (todos los estados, con 0 si no hay) */
@@ -257,11 +263,11 @@ final class Inspeccion
                 'resuelto_at'  => $fecha($i['reclamo_resuelto_at']),
             ],
         ];
-        // El comprador puede reclamar una vez, hasta 15 días después de la firma
-        $hasta = self::reclamoHasta($i['firmada_at']);
+        // El comprador puede reclamar una vez, hasta los días de reclamo de esta inspección después de la firma
+        $hasta = self::reclamoHasta($i['firmada_at'], (int)$i['dias_reclamo']);
         $datos['reclamo_hasta'] = $hasta?->format(DATE_ATOM);
         $datos['puede_reclamar'] = $i['estado'] === 'firmada' && $i['reclamo_id'] === null
-            && Estados::enPlazoDeReclamo(new DateTimeImmutable($i['firmada_at']), new DateTimeImmutable());
+            && Estados::enPlazoDeReclamo(new DateTimeImmutable($i['firmada_at']), new DateTimeImmutable(), (int)$i['dias_reclamo']);
         if ($items !== null) {
             $datos['items'] = [];
             foreach ($items as $codigo => [$resultado, $nota]) {

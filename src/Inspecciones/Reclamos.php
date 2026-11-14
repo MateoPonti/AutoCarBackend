@@ -11,7 +11,7 @@ final class Reclamos
     public const POR_PAGINA = 100;
 
     private const COLUMNAS = 'r.id, r.inspeccion_id, r.item_codigo, r.descripcion, r.estado, r.compensacion, r.respuesta,
-        r.resuelto_por, r.created_at, r.resuelto_at, i.precio, i.titulo, i.url, i.fuente, i.firmada_at, i.conclusion,
+        r.resuelto_por, r.created_at, r.resuelto_at, i.precio, i.tope_veces, i.titulo, i.url, i.fuente, i.firmada_at, i.conclusion,
         i.mecanico_id, i.comprador_id, mu.nombre AS mecanico_nombre, i.taller_firma, u.nombre AS comprador_nombre,
         ru.nombre AS resuelto_por_nombre';
 
@@ -79,7 +79,7 @@ final class Reclamos
             'item_codigo'  => $r['item_codigo'],
             'descripcion'  => $r['descripcion'],
             'compensacion' => $r['compensacion'] === null ? null : (float)$r['compensacion'],
-            'tope'         => Precio::topeCompensacion((float)$r['precio']),
+            'tope'         => Precio::topeCompensacion((float)$r['precio'], (float)$r['tope_veces']),
             'respuesta'    => $r['respuesta'],
             'created_at'   => $fecha($r['created_at']),
             'resuelto_at'  => $fecha($r['resuelto_at']),

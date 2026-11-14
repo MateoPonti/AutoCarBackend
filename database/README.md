@@ -30,12 +30,13 @@
 | 18 | `018-inspeccion-no-realizada.sql` | Estado `no_realizada` de una inspección: el mecánico fue y no la pudo hacer (por ejemplo, el vendedor no dejó revisar el auto); se le devuelve todo al comprador. Correrla **antes** de desplegar el back que la usa |
 | 19 | `019-marca-unica.sql` | Una marca no se repite con otra escritura ("DS" y "Ds"): índice único sobre el nombre en minúsculas. No hace falta desplegar nada antes ni después |
 | 20 | `020-seguridad.sql` | Arreglos de seguridad de la Entrega 4: un solo pedido de inspección en curso por comprador y aviso (columna `url_clave` e índice único, aunque lleguen varios a la vez) y tabla `login_intento` para el límite de 5 intentos de ingreso cada 15 minutos. Correrla **antes** de desplegar el back que la usa |
+| 21 | `021-preferencias-y-parametros.sql` | Lo que pidió el profe el 13/11: tabla `parametro` (comisión, fondo, tope, días de reclamo y rango del precio de la inspección, editables por el admin, con historial en `parametro_cambio` y permiso `parametros.editar`), tope y días de reclamo guardados en cada inspección, `usuario_preferencia` ("¿Para qué buscás el auto?") y `usuario.privacidad_aceptada_at`. Correrla **antes** de desplegar el back que la usa |
 
 Se copian y pegan enteras en el **SQL Editor de Neon**, primero en el proyecto de Neon de dev y en el de main recién cuando se pasa `dev` → `main` (son dos proyectos separados).
 
 ### Estado al 11/11/2026
 
-Verificado con una consulta de solo lectura contra las dos bases: **Neon dev y Neon main tienen corridas todas las migraciones, de la `001` a la `020`**. La próxima migración nueva es la `021`.
+Verificado con una consulta de solo lectura contra las dos bases: **Neon dev y Neon main tienen corridas todas las migraciones, de la `001` a la `020`**. La próxima migración nueva es la `021`. La `021` (14/11) se corre en dev con el back nuevo y en main en el próximo pase.
 
 La `007` (mecánicos `mecanicoN@demo.autocar.com.ar`) está solo en dev, como corresponde. Main tiene **sus propios talleres de demo**, cargados el 11/11 desde el sitio: 5 talleres aprobados (`*@autocar.test`: Acosta, Benítez, Gómez, Medina y Ferreyra), 3 compradores y 15 inspecciones firmadas (3 por mecánico). No se borran: son los que permiten hacer la demo sobre la URL pública.
 

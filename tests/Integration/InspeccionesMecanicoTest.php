@@ -44,7 +44,7 @@ final class InspeccionesMecanicoTest extends ApiTestCase
     private function pedidaA(int $mecanicoId): array
     {
         $email = $this->registrar();
-        $d = Precio::desglose(130000);
+        $d = Precio::desglose(130000, 23, 33.3333);
         $st = Entorno::pdo()->prepare(
             "INSERT INTO inspeccion (comprador_id, mecanico_id, url, fuente, titulo, anio, kilometraje, localidad,
                precio, monto_mecanico, monto_autocar, monto_fondo)

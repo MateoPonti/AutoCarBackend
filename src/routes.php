@@ -21,6 +21,7 @@ use AutoCar\Inspecciones\InspeccionController;
 use AutoCar\Inspecciones\MecanicoController;
 use AutoCar\Inspecciones\SolicitudTallerController;
 use AutoCar\MetaBusqueda\MetaBusquedaController;
+use AutoCar\Parametros\ParametroController;
 use AutoCar\Publicaciones\PublicacionController;
 use AutoCar\Soporte\SoporteController;
 use AutoCar\Core\Router;
@@ -73,7 +74,7 @@ $router->get('/api/autos-externos', [MetaBusquedaController::class, 'autoExterno
 
 // Inspecciones: el mecánico que firma. El ranking de mecánicos es público.
 $router->get('/api/mecanicos', [InspeccionController::class, 'mecanicos']);
-// Comprador: pide, ve las suyas, cancela antes de que la acepten y reclama hasta 15 días después de la firma.
+// Comprador: pide, ve las suyas, cancela antes de que la acepten y reclama dentro de los días de reclamo (parámetro) después de la firma.
 // El detalle lo ven el comprador, el mecánico asignado y quien resuelve reclamos.
 $router->post('/api/inspecciones', [InspeccionController::class, 'crear'], 'usuario');
 $router->get('/api/mis-inspecciones', [InspeccionController::class, 'mias'], 'auth');
@@ -114,6 +115,9 @@ $router->get('/api/me', [AuthController::class, 'me'], 'auth');
 $router->put('/api/me', [PerfilController::class, 'actualizar'], 'auth');
 $router->post('/api/me/foto', [PerfilController::class, 'subirFoto'], 'auth');
 $router->delete('/api/me/foto', [PerfilController::class, 'borrarFoto'], 'auth');
+// "¿Para qué buscás el auto?": obligatoria para las cuentas personales la primera vez que entran (las clasifica)
+$router->get('/api/me/preferencias', [PerfilController::class, 'preferencias'], 'usuario');
+$router->put('/api/me/preferencias', [PerfilController::class, 'guardarPreferencias'], 'usuario');
 $router->get('/api/usuarios/{id}/foto', [PerfilController::class, 'foto']);
 
 // Vehículos: el moderador y el admin revisan las publicaciones; solo el admin las borra. Nadie del panel publica ni edita:
@@ -127,6 +131,12 @@ $router->delete('/api/admin/vehiculos/{id}', [AdminVehiculoController::class, 'e
 // Usuarios (admin): ver datos, editar nombre y rol, baja lógica
 // Métricas de la app (admin)
 $router->get('/api/admin/metricas', [AdminMetricasController::class, 'index'], 'permiso:metricas.ver');
+
+// Parámetros del negocio (comisión, fondo, tope, días de reclamo, precio de la inspección): los cambia el admin.
+// El rango del precio es público porque lo muestra el formulario del taller.
+$router->get('/api/admin/parametros', [ParametroController::class, 'index'], 'permiso:parametros.editar');
+$router->put('/api/admin/parametros', [ParametroController::class, 'actualizar'], 'permiso:parametros.editar');
+$router->get('/api/parametros/precio-inspeccion', [ParametroController::class, 'precioInspeccion']);
 
 $router->get('/api/admin/roles', [AdminUsuarioController::class, 'roles'], 'permiso:usuarios.ver');
 $router->get('/api/admin/usuarios', [AdminUsuarioController::class, 'index'], 'permiso:usuarios.ver');

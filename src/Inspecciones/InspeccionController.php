@@ -73,7 +73,7 @@ final class InspeccionController
 
         // Dos pedidos a la vez pasan juntos el chequeo de arriba: el índice único de la base deja entrar solo uno
         try {
-            $id = Inspeccion::crear($yo, $datos, Precio::desglose((float)$taller['precio_inspeccion']));
+            $id = Inspeccion::crear($yo, $datos, Precio::desgloseActual((float)$taller['precio_inspeccion']));
         } catch (PDOException $e) {
             if ($e->getCode() !== '23505') { // 23505 = unique_violation
                 throw $e;
@@ -124,7 +124,7 @@ final class InspeccionController
 
     /**
      * POST /api/inspecciones/{id}/reclamo {descripcion, item_codigo?} → 201
-     * Solo el comprador, con la inspección firmada, hasta 15 días después de la firma y una sola vez.
+     * Solo el comprador, con la inspección firmada, dentro de los días de reclamo de su inspección (parámetro dias_reclamo) y una sola vez.
      */
     public function reclamar(int $id): void
     {
@@ -139,8 +139,8 @@ final class InspeccionController
         if ($i['reclamo_id'] !== null) {
             Response::error(409, 'reclamo_existente', 'Ya hiciste un reclamo por esta inspección.');
         }
-        if (!Estados::enPlazoDeReclamo(new DateTimeImmutable($i['firmada_at']), new DateTimeImmutable())) {
-            Response::error(409, 'fuera_de_plazo', 'Pasaron más de ' . Estados::DIAS_RECLAMO . ' días desde la firma.');
+        if (!Estados::enPlazoDeReclamo(new DateTimeImmutable($i['firmada_at']), new DateTimeImmutable(), (int)$i['dias_reclamo'])) {
+            Response::error(409, 'fuera_de_plazo', 'Pasaron más de ' . (int)$i['dias_reclamo'] . ' días desde la firma.');
         }
         if (Reclamos::crear($id, $datos) === null) { // otro pedido lo creó recién
             Response::error(409, 'reclamo_existente', 'Ya hiciste un reclamo por esta inspección.');

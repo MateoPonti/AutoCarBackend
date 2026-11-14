@@ -36,7 +36,8 @@ INSERT INTO permiso (nombre, descripcion) VALUES
   ('verificaciones.ver',      'Ver las verificaciones de vehículos asignadas al taller'),
   ('verificaciones.realizar', 'Cargar el resultado de una verificación'),
   ('metricas.ver',            'Ver las métricas de la aplicación'),
-  ('reclamos.resolver',       'Ver los reclamos de inspecciones y decidir si proceden')
+  ('reclamos.resolver',       'Ver los reclamos de inspecciones y decidir si proceden'),
+  ('parametros.editar',       'Cambiar los parámetros del negocio (comisión, fondo, tope, días de reclamo, precios)')
 ON CONFLICT (nombre) DO NOTHING;
 
 INSERT INTO rol_permiso (rol_id, permiso_id)
@@ -64,7 +65,8 @@ CREATE TABLE IF NOT EXISTS usuario (
   password_hash VARCHAR(255) NOT NULL,
   rol_id        INTEGER      NOT NULL REFERENCES rol(id),
   activo        BOOLEAN      NOT NULL DEFAULT true,
-  created_at    TIMESTAMPTZ  NOT NULL DEFAULT now()
+  created_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  privacidad_aceptada_at TIMESTAMPTZ   -- cuándo aceptó la política de privacidad (021); NULL = todavía no
 );
 
 CREATE INDEX IF NOT EXISTS idx_usuario_rol ON usuario (rol_id);
@@ -1445,6 +1447,8 @@ CREATE TABLE IF NOT EXISTS inspeccion (
   monto_mecanico   NUMERIC(11,2) NOT NULL,
   monto_autocar    NUMERIC(11,2) NOT NULL,
   monto_fondo      NUMERIC(11,2) NOT NULL,   -- parte de monto_autocar que va al fondo de garantía
+  tope_veces       NUMERIC(6,2)  NOT NULL DEFAULT 3,   -- con los que se pidió (parámetros, 021-preferencias-y-parametros.sql)
+  dias_reclamo     SMALLINT      NOT NULL DEFAULT 15,
   pago             VARCHAR(11)   NOT NULL DEFAULT 'retenido' CHECK (pago IN ('retenido', 'liberado', 'reembolsado')),
   conclusion       VARCHAR(16)   CHECK (conclusion IN ('recomendable', 'con_reparos', 'no_recomendable')),
   resumen          VARCHAR(1000),
@@ -1523,3 +1527,49 @@ CREATE TABLE IF NOT EXISTS login_intento (
   created_at TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_login_intento_email ON login_intento (email, created_at);
+
+-- Parámetros del negocio que cambia el admin (021-preferencias-y-parametros.sql, Parametros\Parametros)
+CREATE TABLE IF NOT EXISTS parametro (
+  clave        VARCHAR(40)   PRIMARY KEY,
+  valor        NUMERIC(14,4) NOT NULL,
+  minimo       NUMERIC(14,4) NOT NULL,   -- lo que se puede poner, para que nadie escriba 770 en vez de 77
+  maximo       NUMERIC(14,4) NOT NULL,
+  unidad       VARCHAR(10)   NOT NULL CHECK (unidad IN ('porcentaje', 'pesos', 'dias', 'veces')),
+  descripcion  VARCHAR(200)  NOT NULL,
+  orden        SMALLINT      NOT NULL,   -- en qué orden se muestran en el panel
+  updated_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_by   INTEGER       REFERENCES usuario(id) ON DELETE SET NULL,
+  CHECK (minimo <= maximo AND valor BETWEEN minimo AND maximo)
+);
+
+CREATE TABLE IF NOT EXISTS parametro_cambio (
+  id             INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  clave          VARCHAR(40)   NOT NULL REFERENCES parametro(clave) ON DELETE CASCADE,
+  valor_anterior NUMERIC(14,4) NOT NULL,
+  valor_nuevo    NUMERIC(14,4) NOT NULL,
+  usuario_id     INTEGER       REFERENCES usuario(id) ON DELETE SET NULL,
+  created_at     TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_parametro_cambio_fecha ON parametro_cambio (created_at DESC);
+
+-- Valores decididos el 14/11 (ideas-14-11-2026/decisiones-14-11-2026.md del front)
+INSERT INTO parametro (clave, valor, minimo, maximo, unidad, descripcion, orden) VALUES
+  ('comision_autocar', 23,      0,    50,       'porcentaje', 'Parte del precio de la inspección que se queda AutoCar (el resto es del mecánico)', 1),
+  ('parte_fondo',      33.3333, 0,    100,      'porcentaje', 'Parte de lo de AutoCar que va al fondo de garantía', 2),
+  ('tope_veces',       3,       0,    10,       'veces',      'Tope de la compensación de un reclamo, en veces el precio de la inspección', 3),
+  ('dias_reclamo',     15,      1,    60,       'dias',       'Días que tiene el comprador para reclamar después de la firma', 4),
+  ('precio_minimo',    70000,   1000, 10000000, 'pesos',      'Precio mínimo que puede cobrar un taller por la inspección', 5),
+  ('precio_sugerido',  100000,  1000, 10000000, 'pesos',      'Precio que se le sugiere al taller', 6),
+  ('precio_maximo',    150000,  1000, 10000000, 'pesos',      'Precio máximo que puede cobrar un taller por la inspección', 7)
+ON CONFLICT (clave) DO NOTHING;
+
+-- Preferencias del comprador: "¿Para qué buscás el auto?" (021-preferencias-y-parametros.sql, Auth\Preferencias)
+CREATE TABLE IF NOT EXISTS usuario_preferencia (
+  usuario_id  INTEGER      PRIMARY KEY REFERENCES usuario(id) ON DELETE CASCADE,
+  uso         VARCHAR(10)  NOT NULL CHECK (uso IN ('personal', 'familia', 'trabajo', 'aplicacion')),
+  tipo        VARCHAR(10)  CHECK (tipo IN ('chico', 'sedan', 'suv', 'pickup')),   -- NULL = me da igual
+  presupuesto INTEGER      CHECK (presupuesto > 0),                               -- NULL = no lo dijo
+  localidad   VARCHAR(100),
+  created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+);

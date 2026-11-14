@@ -26,7 +26,7 @@ final class InspeccionesMecanicoTest extends TestCase
 
     public function testUnPerfilCompletoEsValido(): void
     {
-        [$datos, $errores] = Taller::validar(self::perfil(['nombre' => '  Taller San Martín  ']));
+        [$datos, $errores] = Taller::validar(self::perfil(['nombre' => '  Taller San Martín  ']), 70000, 150000);
         self::assertSame([], $errores);
         self::assertSame('Taller San Martín', $datos['nombre']);
         self::assertSame(130000.0, $datos['precio_inspeccion']);
@@ -34,35 +34,45 @@ final class InspeccionesMecanicoTest extends TestCase
 
     public function testElPrecioPuedeLlegarComoTextoNumerico(): void
     {
-        [$datos, $errores] = Taller::validar(self::perfil(['precio_inspeccion' => '95000']));
+        [$datos, $errores] = Taller::validar(self::perfil(['precio_inspeccion' => '95000']), 70000, 150000);
         self::assertSame([], $errores);
         self::assertSame(95000.0, $datos['precio_inspeccion']);
     }
 
     public function testMarcaCadaCampoQueFalta(): void
     {
-        [, $errores] = Taller::validar([]);
+        [, $errores] = Taller::validar([], 70000, 150000);
         self::assertSame(['nombre', 'direccion', 'localidad', 'telefono', 'precio_inspeccion'], array_keys($errores));
     }
 
     public function testElPrecioTieneLimitesYNoLlevaCentavos(): void
     {
-        self::assertArrayHasKey('precio_inspeccion', Taller::validar(self::perfil(['precio_inspeccion' => 500]))[1]);
-        self::assertArrayHasKey('precio_inspeccion', Taller::validar(self::perfil(['precio_inspeccion' => 20000000]))[1]);
-        self::assertArrayHasKey('precio_inspeccion', Taller::validar(self::perfil(['precio_inspeccion' => 130000.5]))[1]);
-        self::assertArrayHasKey('precio_inspeccion', Taller::validar(self::perfil(['precio_inspeccion' => 'mucho']))[1]);
-        self::assertArrayHasKey('precio_inspeccion', Taller::validar(self::perfil(['precio_inspeccion' => true]))[1]);
+        self::assertArrayHasKey('precio_inspeccion', Taller::validar(self::perfil(['precio_inspeccion' => 500]), 70000, 150000)[1]);
+        self::assertArrayHasKey('precio_inspeccion', Taller::validar(self::perfil(['precio_inspeccion' => 20000000]), 70000, 150000)[1]);
+        self::assertArrayHasKey('precio_inspeccion', Taller::validar(self::perfil(['precio_inspeccion' => 130000.5]), 70000, 150000)[1]);
+        self::assertArrayHasKey('precio_inspeccion', Taller::validar(self::perfil(['precio_inspeccion' => 'mucho']), 70000, 150000)[1]);
+        self::assertArrayHasKey('precio_inspeccion', Taller::validar(self::perfil(['precio_inspeccion' => true]), 70000, 150000)[1]);
+    }
+
+    public function testElRangoDelPrecioSaleDeLosParametros(): void
+    {
+        self::assertArrayHasKey('precio_inspeccion', Taller::validar(self::perfil(['precio_inspeccion' => 69999]), 70000, 150000)[1]);
+        self::assertArrayHasKey('precio_inspeccion', Taller::validar(self::perfil(['precio_inspeccion' => 150001]), 70000, 150000)[1]);
+        self::assertSame([], Taller::validar(self::perfil(['precio_inspeccion' => 70000]), 70000, 150000)[1]);
+        self::assertSame([], Taller::validar(self::perfil(['precio_inspeccion' => 150000]), 70000, 150000)[1]);
+        // Si el admin sube el máximo, el mismo precio pasa
+        self::assertSame([], Taller::validar(self::perfil(['precio_inspeccion' => 180000]), 70000, 200000)[1]);
     }
 
     public function testElTelefonoSoloLlevaNumerosYSignos(): void
     {
-        self::assertArrayHasKey('telefono', Taller::validar(self::perfil(['telefono' => 'llamame al 1234']))[1]);
-        self::assertSame([], Taller::validar(self::perfil(['telefono' => '+54 9 2324 123456']))[1]);
+        self::assertArrayHasKey('telefono', Taller::validar(self::perfil(['telefono' => 'llamame al 1234']), 70000, 150000)[1]);
+        self::assertSame([], Taller::validar(self::perfil(['telefono' => '+54 9 2324 123456']), 70000, 150000)[1]);
     }
 
     public function testUnValorQueNoEsTextoCuentaComoVacio(): void
     {
-        self::assertArrayHasKey('nombre', Taller::validar(self::perfil(['nombre' => ['<b>x</b>']]))[1]);
+        self::assertArrayHasKey('nombre', Taller::validar(self::perfil(['nombre' => ['<b>x</b>']]), 70000, 150000)[1]);
     }
 
     // --- Turno al aceptar

@@ -30,11 +30,12 @@ final class SolicitudTaller
     /**
      * Valida el formulario de "Adherí tu taller". Función pura (se prueba sin base).
      * Usa las mismas reglas que el perfil del mecánico (Taller::validar) y suma CUIT, horarios y las condiciones.
+     * $precioMinimo y $precioMaximo: los parámetros precio_minimo y precio_maximo.
      * @return array{0: array, 1: array<string, string>} [datos limpios, errores por campo]
      */
-    public static function validar(array $in): array
+    public static function validar(array $in, float $precioMinimo, float $precioMaximo): array
     {
-        [$datos, $errores] = Taller::validar($in);
+        [$datos, $errores] = Taller::validar($in, $precioMinimo, $precioMaximo);
 
         // CUIT: 11 números. Se acepta con o sin guiones y se guarda siempre como 30-12345678-9.
         $cuit = is_scalar($in['cuit'] ?? null) ? trim((string)$in['cuit']) : '';

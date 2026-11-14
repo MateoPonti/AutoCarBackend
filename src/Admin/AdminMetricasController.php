@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace AutoCar\Admin;
 
+use AutoCar\Auth\Preferencias;
 use AutoCar\Core\Database;
 use AutoCar\Core\Response;
 use PDO;
@@ -21,6 +22,8 @@ final class AdminMetricasController
             'moderacion'    => self::moderacion(),
             'chat'          => self::chat(),
             'ganancias'     => self::ganancias(),
+            // "¿Para qué buscás el auto?": cuántas cuentas personales eligieron cada respuesta
+            'compradores_por_uso' => Preferencias::porUso(),
             'generado'      => date(DATE_ATOM),
         ]);
     }

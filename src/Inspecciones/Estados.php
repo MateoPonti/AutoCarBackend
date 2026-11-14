@@ -11,13 +11,13 @@ use DateTimeImmutable;
  *   pedida → rechazada (el mecánico) o cancelada (el comprador): se le devuelve todo al comprador.
  *   aceptada → no_realizada (el mecánico fue y no la pudo hacer, por ejemplo porque el vendedor no dejó revisar el auto):
  *   también se le devuelve todo al comprador.
- * Firmada no cambia más. Después de firmar, el comprador tiene 15 días para reclamar (una sola vez).
+ * Firmada no cambia más. Después de firmar, el comprador tiene unos días para reclamar (una sola vez): los que
+ * decía el parámetro dias_reclamo cuando pidió la inspección (quedan guardados en inspeccion.dias_reclamo).
  */
 final class Estados
 {
     public const ESTADOS = ['pedida', 'aceptada', 'rechazada', 'cancelada', 'firmada', 'no_realizada'];
     public const PAGOS   = ['retenido', 'liberado', 'reembolsado'];
-    public const DIAS_RECLAMO = 15;
 
     private const TRANSICIONES = [
         'pedida'   => ['aceptada', 'rechazada', 'cancelada'],
@@ -82,8 +82,8 @@ final class Estados
         return [$motivo, null];
     }
 
-    public static function enPlazoDeReclamo(DateTimeImmutable $firmadaAt, DateTimeImmutable $ahora): bool
+    public static function enPlazoDeReclamo(DateTimeImmutable $firmadaAt, DateTimeImmutable $ahora, int $dias): bool
     {
-        return $ahora >= $firmadaAt && $ahora <= $firmadaAt->modify('+' . self::DIAS_RECLAMO . ' days');
+        return $ahora >= $firmadaAt && $ahora <= $firmadaAt->modify('+' . $dias . ' days');
     }
 }

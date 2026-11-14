@@ -8,6 +8,7 @@ use AutoCar\Auth\Usuario;
 use AutoCar\Core\Database;
 use AutoCar\Core\Request;
 use AutoCar\Core\Response;
+use AutoCar\Parametros\Parametros;
 use PDOException;
 
 /**
@@ -38,7 +39,7 @@ final class SolicitudTallerController
             $errores['responsable'] = $errores['nombre'];
             unset($errores['nombre']);
         }
-        [$datos, $erroresTaller] = SolicitudTaller::validar($in);
+        [$datos, $erroresTaller] = SolicitudTaller::validar($in, Parametros::valor('precio_minimo'), Parametros::valor('precio_maximo'));
         $errores = $erroresTaller + $errores;
         if ($errores) {
             Response::error(422, 'validacion', 'Revisá los datos del taller.', $errores);

@@ -7,6 +7,7 @@ use AutoCar\Auth\Auth;
 use AutoCar\Core\Database;
 use AutoCar\Core\Request;
 use AutoCar\Core\Response;
+use AutoCar\Parametros\Parametros;
 use DateTimeImmutable;
 
 /**
@@ -25,7 +26,7 @@ final class MecanicoController
     /** PUT /api/mecanico/perfil {nombre, direccion, localidad, telefono, precio_inspeccion} → {taller} */
     public function guardarPerfil(): void
     {
-        [$datos, $errores] = Taller::validar(Request::json());
+        [$datos, $errores] = Taller::validar(Request::json(), Parametros::valor('precio_minimo'), Parametros::valor('precio_maximo'));
         if ($errores) {
             Response::error(422, 'validacion', 'Revisá los datos del taller.', $errores);
         }
