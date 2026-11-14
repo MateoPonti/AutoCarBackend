@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace AutoCar\MetaBusqueda;
 
 use AutoCar\Auth\Auth;
+use AutoCar\Auth\Preferencias;
 use AutoCar\Core\Database;
 use AutoCar\Core\Logger;
 use AutoCar\Core\Request;
@@ -114,7 +115,11 @@ final class MetaBusquedaController
         Response::noContent();
     }
 
-    /** GET /api/meta-busquedas/{id}: filtros opcionales del listado: fuente, etiqueta, precio_max, km_max, orden, page. */
+    /**
+     * GET /api/meta-busquedas/{id}: filtros opcionales del listado: fuente, etiqueta, precio_max, km_max, orden, page.
+     * orden: precio, km, nuevos, para_vos o (vacío) diferencia con el precio típico. Si el usuario eligió un perfil,
+     * cada auto trae para_vos {puntaje, motivo} y el orden por defecto pasa a ser para_vos.
+     */
     public function reporte(int $id): void
     {
         $docs = self::docs();
@@ -123,7 +128,9 @@ final class MetaBusquedaController
             self::noExiste();
         }
         $reporte = new Reporte(new Mercado($docs, Database::pdo()));
-        Response::json(self::intentar(static fn() => $reporte->construir($b, $_GET)));
+        // El perfil del comprador ordena los resultados "para vos" (las cuentas del equipo no tienen)
+        $uso = Preferencias::delUsuario((int)Auth::id())['uso'] ?? null;
+        Response::json(self::intentar(static fn() => $reporte->construir($b, $_GET, $uso)));
     }
 
     /** GET /api/autos-externos?id=fuente~modelo~id: el id viene en la query porque es texto (las rutas solo aceptan números). */
