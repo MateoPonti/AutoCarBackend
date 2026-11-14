@@ -235,6 +235,9 @@ final class Inspeccion
             'monto_mecanico'   => (float)$i['monto_mecanico'],
             'monto_autocar'    => (float)$i['monto_autocar'],
             'monto_fondo'      => (float)$i['monto_fondo'],
+            // Con los que se pidió (si el admin cambia los parámetros, esta inspección sigue con estos)
+            'tope_veces'       => (float)$i['tope_veces'],
+            'dias_reclamo'     => (int)$i['dias_reclamo'],
             'pago'             => $i['pago'],
             'conclusion'       => $i['conclusion'],
             'resumen'          => $i['resumen'],
