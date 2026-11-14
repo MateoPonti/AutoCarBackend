@@ -133,10 +133,10 @@ $router->delete('/api/admin/vehiculos/{id}', [AdminVehiculoController::class, 'e
 $router->get('/api/admin/metricas', [AdminMetricasController::class, 'index'], 'permiso:metricas.ver');
 
 // Parámetros del negocio (comisión, fondo, tope, días de reclamo, precio de la inspección): los cambia el admin.
-// El rango del precio es público porque lo muestra el formulario del taller.
+// Los valores son públicos: el front muestra el desglose del precio y el rango que acepta el taller.
 $router->get('/api/admin/parametros', [ParametroController::class, 'index'], 'permiso:parametros.editar');
 $router->put('/api/admin/parametros', [ParametroController::class, 'actualizar'], 'permiso:parametros.editar');
-$router->get('/api/parametros/precio-inspeccion', [ParametroController::class, 'precioInspeccion']);
+$router->get('/api/parametros', [ParametroController::class, 'publicos']);
 
 $router->get('/api/admin/roles', [AdminUsuarioController::class, 'roles'], 'permiso:usuarios.ver');
 $router->get('/api/admin/usuarios', [AdminUsuarioController::class, 'index'], 'permiso:usuarios.ver');

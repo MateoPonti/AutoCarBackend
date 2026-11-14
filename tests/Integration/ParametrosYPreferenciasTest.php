@@ -74,12 +74,13 @@ final class ParametrosYPreferenciasTest extends ApiTestCase
 
     // --- Parámetros
 
-    public function testElRangoDelPrecioEsPublico(): void
+    public function testLosValoresSonPublicos(): void
     {
-        $r = $this->pedir('GET', '/api/parametros/precio-inspeccion');
+        $r = $this->pedir('GET', '/api/parametros');
         self::assertSame(200, $r['status']);
-        self::assertLessThanOrEqual($r['json']['sugerido'], $r['json']['minimo']);
-        self::assertLessThanOrEqual($r['json']['maximo'], $r['json']['sugerido']);
+        self::assertSame(23.0, (float)$r['json']['comision_autocar']);
+        self::assertLessThanOrEqual($r['json']['precio_sugerido'], $r['json']['precio_minimo']);
+        self::assertLessThanOrEqual($r['json']['precio_maximo'], $r['json']['precio_sugerido']);
     }
 
     public function testSoloElAdminVeYCambiaLosParametros(): void

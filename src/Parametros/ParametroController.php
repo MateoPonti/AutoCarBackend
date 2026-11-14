@@ -7,7 +7,7 @@ use AutoCar\Auth\Auth;
 use AutoCar\Core\Request;
 use AutoCar\Core\Response;
 
-/** Parámetros del negocio: el admin los ve y los cambia; el precio de la inspección es público (lo usa el taller). */
+/** Parámetros del negocio: el admin los ve y los cambia. Los valores son públicos (el front muestra el desglose). */
 final class ParametroController
 {
     /** GET /api/admin/parametros (permiso parametros.editar) → {parametros, cambios} */
@@ -37,13 +37,16 @@ final class ParametroController
         $this->index();
     }
 
-    /** GET /api/parametros/precio-inspeccion (público) → {minimo, sugerido, maximo}: lo muestra el formulario del taller. */
-    public function precioInspeccion(): void
+    /**
+     * GET /api/parametros (público) → {clave: valor}: el front los usa para el desglose del precio, el rango que
+     * acepta el formulario del taller y los días para reclamar. No hay nada secreto: son las reglas del sitio.
+     */
+    public function publicos(): void
     {
-        Response::json([
-            'minimo'   => Parametros::valor('precio_minimo'),
-            'sugerido' => Parametros::valor('precio_sugerido'),
-            'maximo'   => Parametros::valor('precio_maximo'),
-        ]);
+        $valores = [];
+        foreach (Parametros::CLAVES as $clave) {
+            $valores[$clave] = Parametros::valor($clave);
+        }
+        Response::json($valores);
     }
 }
