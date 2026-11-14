@@ -97,6 +97,38 @@ final class InspeccionController
      */
     public function detalle(int $id): void
     {
+        $i = self::visible($id);
+        Response::json(['inspeccion' => Inspeccion::paraApi($i, Inspeccion::items($id))]);
+    }
+
+    /** GET /api/inspecciones/{id}/patente-foto: la foto de la chapa. La ven los mismos que el detalle. */
+    public function fotoPatente(int $id): void
+    {
+        self::visible($id);
+        $f = Inspeccion::fotoPatente($id);
+        if ($f === null) {
+            Response::error(404, 'no_encontrado', 'Esta inspección no tiene foto de la chapa.');
+        }
+        Response::archivo($f['datos'], $f['mime'], false);
+    }
+
+    /**
+     * GET /api/historial-patente?patente=AB123CD (con sesión) → {patente, items}: las inspecciones firmadas de ese
+     * auto. Se busca una patente por vez; no hay lista de patentes (no se publican).
+     */
+    public function historial(): void
+    {
+        $patente = Patente::normalizar($_GET['patente'] ?? null);
+        if ($patente === null) {
+            Response::error(422, 'validacion', 'Revisá la patente.',
+                ['patente' => 'Escribila como está en la chapa: ABC123 o AB123CD.']);
+        }
+        Response::json(['patente' => $patente, 'items' => Inspeccion::historial($patente)]);
+    }
+
+    /** La inspección si la puede ver quien pregunta (comprador, mecánico o quien resuelve reclamos); si no, 404. */
+    private static function visible(int $id): array
+    {
         $i = Inspeccion::porId($id);
         $yo = (int)Auth::id();
         $puedeVer = $i !== null && (
@@ -107,7 +139,7 @@ final class InspeccionController
         if (!$puedeVer) {
             Response::error(404, 'no_encontrado', 'La inspección no existe.');
         }
-        Response::json(['inspeccion' => Inspeccion::paraApi($i, Inspeccion::items($id))]);
+        return $i;
     }
 
     /** POST /api/inspecciones/{id}/cancelar: solo el comprador y antes de que el mecánico la acepte. */

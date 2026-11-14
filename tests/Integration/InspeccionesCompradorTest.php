@@ -41,6 +41,33 @@ final class InspeccionesCompradorTest extends ApiTestCase
         self::assertEqualsWithDelta((float)$fila['monto_fondo'], $despues['fondo']['acumulado'] - $antes['fondo']['acumulado'], 0.01);
     }
 
+    public function testElHistorialJuntaLasInspeccionesDeUnaPatente(): void
+    {
+        $patente = 'AA' . str_pad((string)random_int(0, 999), 3, '0', STR_PAD_LEFT) . 'ZZ'; // propia de esta prueba
+        [$mecanicoId, $mecanico] = $this->ingresarComoMecanico();
+        foreach (['https://auto.mercadolibre.com.ar/MLA-111-gol-_JM', 'https://auto.mercadolibre.com.ar/MLA-222-gol-_JM'] as $url) {
+            $this->ingresarComoUsuario();
+            $id = $this->pedirInspeccion($mecanicoId, ['url' => $url])['json']['inspeccion']['id'];
+            $this->ingresar($mecanico);
+            $this->aceptarYFirmar($id, $patente);
+        }
+
+        // Hace falta sesión; la patente se busca escrita de cualquier forma
+        $this->pedir('POST', '/api/logout');
+        self::assertSame(401, $this->pedir('GET', '/api/historial-patente?patente=' . $patente)['status']);
+        $this->ingresarComoUsuario();
+        $r = $this->pedir('GET', '/api/historial-patente?patente=' . rawurlencode(strtolower(substr($patente, 0, 2) . ' ' . substr($patente, 2, 3) . ' ' . substr($patente, 5))));
+        self::assertSame(200, $r['status'], json_encode($r['json']));
+        self::assertSame($patente, $r['json']['patente']);
+        self::assertCount(2, $r['json']['items']);
+        self::assertSame('Taller de Prueba', $r['json']['items'][0]['taller']);
+        self::assertSame(1, $r['json']['items'][0]['observaciones']); // el rayón del checklist de prueba
+        self::assertArrayNotHasKey('comprador', $r['json']['items'][0]); // nada de quién la pidió
+
+        self::assertSame(422, $this->pedir('GET', '/api/historial-patente?patente=cualquiera')['status']);
+        self::assertSame([], $this->pedir('GET', '/api/historial-patente?patente=ZZ999ZZ')['json']['items']);
+    }
+
     public function testRecorridoDeLaDemo(): void
     {
         $localidad = 'Pueblo ' . bin2hex(random_bytes(3)); // propia, para no mezclarse con otras pruebas

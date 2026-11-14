@@ -31,6 +31,7 @@
 | 19 | `019-marca-unica.sql` | Una marca no se repite con otra escritura ("DS" y "Ds"): índice único sobre el nombre en minúsculas. No hace falta desplegar nada antes ni después |
 | 20 | `020-seguridad.sql` | Arreglos de seguridad de la Entrega 4: un solo pedido de inspección en curso por comprador y aviso (columna `url_clave` e índice único, aunque lleguen varios a la vez) y tabla `login_intento` para el límite de 5 intentos de ingreso cada 15 minutos. Correrla **antes** de desplegar el back que la usa |
 | 21 | `021-preferencias-y-parametros.sql` | Lo que pidió el profe el 13/11: tabla `parametro` (comisión, fondo, tope, días de reclamo y rango del precio de la inspección, editables por el admin, con historial en `parametro_cambio` y permiso `parametros.editar`), tope y días de reclamo guardados en cada inspección, `usuario_preferencia` ("¿Para qué buscás el auto?") y `usuario.privacidad_aceptada_at`. Correrla **antes** de desplegar el back que la usa |
+| 22 | `022-patente.sql` | Patente del auto en cada inspección (la carga el mecánico con una foto de la chapa, tabla `inspeccion_patente_foto`; sin patente no se firma) e índice para el historial por patente. A las firmadas que ya existían les inventa una (`AD000DM`…, la misma por aviso). Correrla **antes** de desplegar el back que la usa |
 
 Se copian y pegan enteras en el **SQL Editor de Neon**, primero en el proyecto de Neon de dev y en el de main recién cuando se pasa `dev` → `main` (son dos proyectos separados).
 
