@@ -74,8 +74,9 @@ final class ParaVos
     private static function motivo(array $aportes, float $diferencia, array $auto, float $medianaKm, int $dias): string
     {
         $km = (int)round(abs($medianaKm - $auto['km']) / $medianaKm * 100);
+        $pct = str_replace('.', ',', (string)abs($diferencia)); // 11,3 %
         $textos = [
-            'precio' => $diferencia < 0 ? abs($diferencia) . ' % más barato que autos parecidos' : abs($diferencia) . ' % más caro que autos parecidos',
+            'precio' => $diferencia < 0 ? "$pct % más barato que autos parecidos" : "$pct % más caro que autos parecidos",
             'km'     => $auto['km'] <= $medianaKm ? "$km % menos kilómetros que los parecidos" : "$km % más kilómetros que los parecidos",
             'dias'   => "lleva $dias días publicado: hay margen para negociar",
             'anio'   => $aportes['anio'] >= 0 ? "es de los más nuevos de la búsqueda ({$auto['anio']})" : "es más viejo que la mayoría ({$auto['anio']})",
