@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace AutoCar\Tests\Unit;
 
 use AutoCar\Auth\Preferencias;
+use AutoCar\Parametros\Cotizacion;
 use AutoCar\Parametros\Parametros;
 use PHPUnit\Framework\TestCase;
 
@@ -109,5 +110,17 @@ final class ParametrosYPreferenciasTest extends TestCase
         self::assertNull($datos['tipo']);
         self::assertNull($datos['presupuesto']);
         self::assertNull($datos['localidad']);
+    }
+
+    public function testLaCotizacionAutomaticaSoloAceptaValoresCreibles(): void
+    {
+        self::assertSame(1575.0, Cotizacion::validar(1575, 1450.0, 1.0, 100000.0));
+        self::assertSame(1580.9, Cotizacion::validar(1580.9, 1575.0, 1.0, 100000.0));
+        // Lo que no es un número, fuera de los límites o un salto de más del 50 % de un día al otro: queda la anterior
+        self::assertNull(Cotizacion::validar(null, 1575.0, 1.0, 100000.0));
+        self::assertNull(Cotizacion::validar('1575', 1575.0, 1.0, 100000.0));
+        self::assertNull(Cotizacion::validar(0, 1575.0, 1.0, 100000.0));
+        self::assertNull(Cotizacion::validar(15750, 1575.0, 1.0, 100000.0));
+        self::assertNull(Cotizacion::validar(500, 1575.0, 1.0, 100000.0));
     }
 }

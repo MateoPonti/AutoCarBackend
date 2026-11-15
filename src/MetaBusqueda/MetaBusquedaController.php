@@ -9,7 +9,7 @@ use AutoCar\Core\Database;
 use AutoCar\Core\Logger;
 use AutoCar\Core\Request;
 use AutoCar\Core\Response;
-use AutoCar\Parametros\Parametros;
+use AutoCar\Parametros\Cotizacion;
 use Throwable;
 
 /**
@@ -131,7 +131,7 @@ final class MetaBusquedaController
         $reporte = new Reporte(new Mercado($docs, Database::pdo()));
         // El perfil del comprador ordena los resultados "para vos" (las cuentas del equipo no tienen)
         $uso = Preferencias::delUsuario((int)Auth::id())['uso'] ?? null;
-        $cotizacion = Parametros::valor('cotizacion_dolar');
+        $cotizacion = Cotizacion::actual(); // dólar blue, se actualiza solo cada 12 horas
         Response::json(self::intentar(static fn() => $reporte->construir($b, $_GET, $uso, $cotizacion)));
     }
 
