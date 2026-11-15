@@ -1572,7 +1572,8 @@ INSERT INTO parametro (clave, valor, minimo, maximo, unidad, descripcion, orden)
   ('dias_reclamo',     15,      1,    60,       'dias',       'Días que tiene el comprador para reclamar después de la firma', 4),
   ('precio_minimo',    70000,   1000, 10000000, 'pesos',      'Precio mínimo que puede cobrar un taller por la inspección', 5),
   ('precio_sugerido',  100000,  1000, 10000000, 'pesos',      'Precio que se le sugiere al taller', 6),
-  ('precio_maximo',    150000,  1000, 10000000, 'pesos',      'Precio máximo que puede cobrar un taller por la inspección', 7)
+  ('precio_maximo',    150000,  1000, 10000000, 'pesos',      'Precio máximo que puede cobrar un taller por la inspección', 7),
+  ('cotizacion_dolar', 1450,    1,    100000,   'pesos',      'Cotización del dólar: con ella se muestran en pesos los autos publicados en dólares en el metabuscador', 8) -- 023
 ON CONFLICT (clave) DO NOTHING;
 
 -- Preferencias del comprador: "¿Para qué buscás el auto?" (021-preferencias-y-parametros.sql, Auth\Preferencias)
