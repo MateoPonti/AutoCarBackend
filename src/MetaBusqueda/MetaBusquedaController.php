@@ -9,6 +9,7 @@ use AutoCar\Core\Database;
 use AutoCar\Core\Logger;
 use AutoCar\Core\Request;
 use AutoCar\Core\Response;
+use AutoCar\Parametros\Parametros;
 use Throwable;
 
 /**
@@ -130,7 +131,8 @@ final class MetaBusquedaController
         $reporte = new Reporte(new Mercado($docs, Database::pdo()));
         // El perfil del comprador ordena los resultados "para vos" (las cuentas del equipo no tienen)
         $uso = Preferencias::delUsuario((int)Auth::id())['uso'] ?? null;
-        Response::json(self::intentar(static fn() => $reporte->construir($b, $_GET, $uso)));
+        $cotizacion = Parametros::valor('cotizacion_dolar');
+        Response::json(self::intentar(static fn() => $reporte->construir($b, $_GET, $uso, $cotizacion)));
     }
 
     /** GET /api/autos-externos?id=fuente~modelo~id: el id viene en la query porque es texto (las rutas solo aceptan números). */

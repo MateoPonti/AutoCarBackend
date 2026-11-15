@@ -25,8 +25,10 @@ final class Reporte
      * @param array<string, mixed> $get filtros del listado que llegan por la URL
      * @param string|null $uso perfil del comprador (Auth\Preferencias::USOS); con él, cada auto trae "para_vos"
      *                        y el listado se ordena por ese puntaje si no se pidió otro orden
+     * @param float|null $cotizacion pesos por dólar (parámetro cotizacion_dolar): el listado no mezcla monedas,
+     *                               los autos en dólares se ordenan y se filtran por su precio en pesos
      */
-    public function construir(array $b, array $get, ?string $uso = null): array
+    public function construir(array $b, array $get, ?string $uso = null, ?float $cotizacion = null): array
     {
         $recolecciones = $this->mercado->ultimasRecolecciones();
         $actuales = array_column($recolecciones, 'actual');
@@ -63,12 +65,13 @@ final class Reporte
         return [
             'busqueda'      => Busqueda::paraApi($b),
             'perfil'        => $perfil,
+            'cotizacion_dolar' => $cotizacion,
             'actualizado'   => array_map(static fn(array $r): array => ['fuente' => $r['fuente'], 'fecha' => $r['fecha']], $recolecciones),
             'aclaracion'    => self::ACLARACION,
             'referencia'    => self::referencia(array_merge($externos, $portal)),
             'novedades'     => $this->novedades($b, $recolecciones),
             'destacados'    => self::destacados($externos, $comparaciones),
-            'resultados'    => self::paginar(self::filtrarYOrdenar($items, $get), $get),
+            'resultados'    => self::paginar(self::filtrarYOrdenar($items, $get, $cotizacion), $get),
             'otros_modelos' => $this->otrosModelos($b, $externos, $actuales),
         ];
     }
@@ -256,8 +259,15 @@ final class Reporte
     }
 
     /** Filtros y orden del listado. Lo que no se reconoce en la URL se ignora, como en el catálogo. */
-    private static function filtrarYOrdenar(array $items, array $get): array
+    private static function filtrarYOrdenar(array $items, array $get, ?float $cotizacion = null): array
     {
+        // Precio en pesos para comparar: los en dólares, con la cotización (sin cotización, después de los en pesos)
+        $enPesos = static fn(array $i): float => match (true) {
+            $i['precio'] === null => INF,
+            $i['moneda'] === 'ARS' => (float)$i['precio'],
+            $cotizacion !== null => $i['precio'] * $cotizacion,
+            default => 1e15 + $i['precio'],
+        };
         $texto = static fn(string $k): string => is_string($get[$k] ?? null) ? trim($get[$k]) : '';
         $numero = static fn(string $k): ?int => ctype_digit($texto($k)) && strlen($texto($k)) <= 12 ? (int)$texto($k) : null;
 
@@ -269,14 +279,13 @@ final class Reporte
         $items = array_values(array_filter($items, static fn(array $i): bool =>
             ($fuente === '' || $i['fuente'] === $fuente)
             && ($etiqueta === '' || ($i['etiqueta']['valor'] ?? null) === $etiqueta)
-            && ($precioMax === null || ($i['precio'] !== null && $i['precio'] <= $precioMax))
+            && ($precioMax === null || ($i['precio'] !== null && $enPesos($i) <= $precioMax))
             && ($kmMax === null || $i['km'] <= $kmMax)));
 
         $orden = $texto('orden');
-        usort($items, static function (array $a, array $b) use ($orden): int {
+        usort($items, static function (array $a, array $b) use ($orden, $enPesos): int {
             $r = match ($orden) {
-                // Primero los precios en pesos y después los en dólares: US$ 2.900 no es más barato que $ 26.500.000
-                'precio' => [$a['moneda'] !== 'ARS', $a['precio'] ?? INF] <=> [$b['moneda'] !== 'ARS', $b['precio'] ?? INF],
+                'precio' => $enPesos($a) <=> $enPesos($b),
                 'km'     => $a['km'] <=> $b['km'],
                 'nuevos' => strtotime((string)$b['primera_vez']) <=> strtotime((string)$a['primera_vez']),
                 // Mejor puntaje primero; los que no tienen (AutoCar, sin comparables) van al final
