@@ -76,7 +76,8 @@ final class Parametros
                 'valor_anterior' => (float)$fila['valor_anterior'],
                 'valor_nuevo'    => (float)$fila['valor_nuevo'],
                 'fecha'          => (new \DateTimeImmutable($fila['created_at']))->format(DATE_ATOM),
-                'usuario'        => $fila['usuario'],
+                // Sin usuario: lo cambió el sistema (la cotización del dólar se actualiza sola, ver Cotizacion)
+                'usuario'        => $fila['usuario'] ?? ($fila['clave'] === Cotizacion::CLAVE ? 'Automático (dólar blue, dolarapi.com)' : null),
             ];
         }
         return $lista;
