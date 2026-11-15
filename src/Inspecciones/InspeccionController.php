@@ -112,20 +112,6 @@ final class InspeccionController
         Response::archivo($f['datos'], $f['mime'], false);
     }
 
-    /**
-     * GET /api/historial-patente?patente=AB123CD (con sesión) → {patente, items}: las inspecciones firmadas de ese
-     * auto. Se busca una patente por vez; no hay lista de patentes (no se publican).
-     */
-    public function historial(): void
-    {
-        $patente = Patente::normalizar($_GET['patente'] ?? null);
-        if ($patente === null) {
-            Response::error(422, 'validacion', 'Revisá la patente.',
-                ['patente' => 'Escribila como está en la chapa: ABC123 o AB123CD.']);
-        }
-        Response::json(['patente' => $patente, 'items' => Inspeccion::historial($patente)]);
-    }
-
     /** La inspección si la puede ver quien pregunta (comprador, mecánico o quien resuelve reclamos); si no, 404. */
     private static function visible(int $id): array
     {

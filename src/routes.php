@@ -81,7 +81,6 @@ $router->get('/api/mis-inspecciones', [InspeccionController::class, 'mias'], 'au
 $router->get('/api/inspecciones/{id}', [InspeccionController::class, 'detalle'], 'auth');
 $router->get('/api/inspecciones/{id}/patente-foto', [InspeccionController::class, 'fotoPatente'], 'auth');
 // Historial de un auto por su patente: las inspecciones firmadas (una patente por vez, con sesión)
-$router->get('/api/historial-patente', [InspeccionController::class, 'historial'], 'auth');
 $router->post('/api/inspecciones/{id}/cancelar', [InspeccionController::class, 'cancelar'], 'auth');
 $router->post('/api/inspecciones/{id}/reclamo', [InspeccionController::class, 'reclamar'], 'auth');
 // Reclamos: los resuelven el moderador y el admin
