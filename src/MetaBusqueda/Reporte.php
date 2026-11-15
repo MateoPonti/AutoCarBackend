@@ -275,7 +275,8 @@ final class Reporte
         $orden = $texto('orden');
         usort($items, static function (array $a, array $b) use ($orden): int {
             $r = match ($orden) {
-                'precio' => ($a['precio'] ?? INF) <=> ($b['precio'] ?? INF),
+                // Primero los precios en pesos y después los en dólares: US$ 2.900 no es más barato que $ 26.500.000
+                'precio' => [$a['moneda'] !== 'ARS', $a['precio'] ?? INF] <=> [$b['moneda'] !== 'ARS', $b['precio'] ?? INF],
                 'km'     => $a['km'] <=> $b['km'],
                 'nuevos' => strtotime((string)$b['primera_vez']) <=> strtotime((string)$a['primera_vez']),
                 // Mejor puntaje primero; los que no tienen (AutoCar, sin comparables) van al final
