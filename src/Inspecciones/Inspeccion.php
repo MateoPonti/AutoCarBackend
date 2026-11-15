@@ -24,6 +24,7 @@ final class Inspeccion
         i.monto_mecanico, i.monto_autocar, i.monto_fondo, i.tope_veces, i.dias_reclamo, i.pago, i.conclusion, i.resumen, i.firmado_por,
         i.taller_firma, i.firmada_at, i.huella, i.patente, i.created_at, i.updated_at,
         EXISTS (SELECT 1 FROM inspeccion_patente_foto pf WHERE pf.inspeccion_id = i.id) AS tiene_foto_patente, u.nombre AS comprador_nombre,
+        (SELECT v.estado FROM vehiculo v WHERE v.id = i.vehiculo_id) AS vehiculo_estado,
         mu.nombre AS mecanico_nombre, t.nombre AS taller_nombre, t.direccion AS taller_direccion, t.localidad AS taller_localidad,
         r.id AS reclamo_id, r.item_codigo AS reclamo_item, r.descripcion AS reclamo_descripcion, r.estado AS reclamo_estado,
         r.compensacion AS reclamo_compensacion, r.respuesta AS reclamo_respuesta, r.created_at AS reclamo_created_at,
@@ -283,6 +284,9 @@ final class Inspeccion
             'fuente'           => $i['fuente'],
             'url'              => $i['url'],
             'vehiculo_id'      => $entero($i['vehiculo_id']),
+            // Si la publicación de AutoCar sigue a la vista. Que se venda o se dé de baja es lo normal: el informe
+            // sigue valiendo y queda en la patente. null = aviso de otro sitio (no sabemos si sigue publicado).
+            'aviso_publicado'  => $i['vehiculo_id'] === null ? null : ($i['vehiculo_estado'] ?? null) === 'disponible',
             'titulo'           => $i['titulo'],
             'anio'             => $entero($i['anio']),
             'kilometraje'      => $entero($i['kilometraje']),
