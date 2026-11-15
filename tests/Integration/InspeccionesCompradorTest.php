@@ -41,31 +41,38 @@ final class InspeccionesCompradorTest extends ApiTestCase
         self::assertEqualsWithDelta((float)$fila['monto_fondo'], $despues['fondo']['acumulado'] - $antes['fondo']['acumulado'], 0.01);
     }
 
-    public function testElHistorialJuntaLasInspeccionesDeUnaPatente(): void
+    public function testElInformeTraeLasInspeccionesAnterioresDeLaPatente(): void
     {
         $patente = 'AA' . str_pad((string)random_int(0, 999), 3, '0', STR_PAD_LEFT) . 'ZZ'; // propia de esta prueba
         [$mecanicoId, $mecanico] = $this->ingresarComoMecanico();
+        $primera = null;
         foreach (['https://auto.mercadolibre.com.ar/MLA-111-gol-_JM', 'https://auto.mercadolibre.com.ar/MLA-222-gol-_JM'] as $url) {
-            $this->ingresarComoUsuario();
+            $comprador = $this->ingresarComoUsuario();
             $id = $this->pedirInspeccion($mecanicoId, ['url' => $url])['json']['inspeccion']['id'];
+            $primera ??= $id;
             $this->ingresar($mecanico);
             $this->aceptarYFirmar($id, $patente);
         }
 
-        // Hace falta sesión; la patente se busca escrita de cualquier forma
-        $this->pedir('POST', '/api/logout');
-        self::assertSame(401, $this->pedir('GET', '/api/historial-patente?patente=' . $patente)['status']);
-        $this->ingresarComoUsuario();
-        $r = $this->pedir('GET', '/api/historial-patente?patente=' . rawurlencode(strtolower(substr($patente, 0, 2) . ' ' . substr($patente, 2, 3) . ' ' . substr($patente, 5))));
+        // El historial viene en el informe: la segunda trae la primera (misma patente), con qué falló
+        $this->ingresar($comprador);
+        $r = $this->pedir('GET', "/api/inspecciones/{$id}");
         self::assertSame(200, $r['status'], json_encode($r['json']));
-        self::assertSame($patente, $r['json']['patente']);
-        self::assertCount(2, $r['json']['items']);
-        self::assertSame('Taller de Prueba', $r['json']['items'][0]['taller']);
-        self::assertSame(1, $r['json']['items'][0]['observaciones']); // el rayón del checklist de prueba
-        self::assertArrayNotHasKey('comprador', $r['json']['items'][0]); // nada de quién la pidió
+        $anteriores = $r['json']['inspeccion']['anteriores'];
+        self::assertCount(1, $anteriores);
+        self::assertSame('Taller de Prueba', $anteriores[0]['taller']);
+        self::assertSame(1, count($anteriores[0]['fallas'])); // el rayón del checklist de prueba
+        self::assertArrayHasKey('codigo', $anteriores[0]['fallas'][0]);
+        self::assertArrayNotHasKey('nota', $anteriores[0]['fallas'][0]); // las notas no
+        self::assertArrayNotHasKey('comprador', $anteriores[0]); // nada de quién la pidió
 
-        self::assertSame(422, $this->pedir('GET', '/api/historial-patente?patente=cualquiera')['status']);
-        self::assertSame([], $this->pedir('GET', '/api/historial-patente?patente=ZZ999ZZ')['json']['items']);
+        // La primera no trae a la segunda (solo las de antes); el mecánico ve lo mismo
+        $this->ingresar($mecanico);
+        self::assertSame([], $this->pedir('GET', "/api/inspecciones/{$primera}")['json']['inspeccion']['anteriores']);
+        self::assertCount(1, $this->pedir('GET', "/api/inspecciones/{$id}")['json']['inspeccion']['anteriores']);
+
+        // Ya no hay buscador por patente
+        self::assertSame(404, $this->pedir('GET', '/api/historial-patente?patente=' . $patente)['status']);
     }
 
     public function testRecorridoDeLaDemo(): void

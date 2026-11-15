@@ -218,30 +218,48 @@ final class Inspeccion
     }
 
     /**
-     * Historial de un auto: sus inspecciones firmadas, la más nueva primero. Solo lo del informe (fecha, km,
-     * conclusión, quién firmó y si hubo un reclamo que procedió): nada del comprador ni del dueño.
+     * El historial que trae el informe: las otras inspecciones firmadas del mismo auto (misma patente), la más nueva
+     * primero. Si esta ya está firmada, solo las de antes (si firmaron en el mismo segundo, desempata el id). No se busca por patente desde afuera: lo ven los que ven
+     * esta inspección (el comprador que la pagó, el mecánico y quien resuelve reclamos). De cada una va un resumen y
+     * qué ítems salieron observados o con falla; las notas y las fotos no. Nada del comprador ni del dueño.
      */
-    public static function historial(string $patente): array
+    public static function anteriores(int $id, ?string $patente, ?string $firmadaAt): array
     {
+        if ($patente === null) {
+            return [];
+        }
         $st = self::pdo()->prepare(
-            "SELECT i.firmada_at, i.titulo, i.anio, i.kilometraje, i.conclusion, i.firmado_por, i.taller_firma,
-                    (SELECT COUNT(*) FROM inspeccion_item it WHERE it.inspeccion_id = i.id AND it.resultado <> 'ok') AS observaciones,
+            "SELECT i.firmada_at, i.titulo, i.anio, i.kilometraje, i.conclusion, i.taller_firma,
+                    (SELECT string_agg(it.codigo || ':' || it.resultado, ',') FROM inspeccion_item it
+                      WHERE it.inspeccion_id = i.id AND it.resultado <> 'ok') AS fallas,
                     EXISTS (SELECT 1 FROM reclamo r WHERE r.inspeccion_id = i.id AND r.estado = 'procede') AS reclamo_procedente
                FROM inspeccion i
-              WHERE i.patente = :p AND i.estado = 'firmada'
-              ORDER BY i.firmada_at DESC LIMIT 50"
+              WHERE i.patente = :p AND i.estado = 'firmada' AND i.id <> :id
+                AND (CAST(:hasta AS TIMESTAMPTZ) IS NULL OR (i.firmada_at, i.id) < (CAST(:hasta AS TIMESTAMPTZ), :id2))
+              ORDER BY i.firmada_at DESC, i.id DESC LIMIT 20"
         );
-        $st->execute(['p' => $patente]);
+        $st->execute(['p' => $patente, 'id' => $id, 'id2' => $id, 'hasta' => $firmadaAt]);
         $lista = [];
         foreach ($st->fetchAll() as $f) {
+            // "frenos:falla,motor:observado" → [{codigo, resultado}], en el orden del checklist
+            $porCodigo = [];
+            foreach (array_filter(explode(',', (string)$f['fallas'])) as $par) {
+                [$codigo, $resultado] = explode(':', $par);
+                $porCodigo[$codigo] = $resultado;
+            }
+            $fallas = [];
+            foreach (array_keys(Checklist::ITEMS) as $codigo) {
+                if (isset($porCodigo[$codigo])) {
+                    $fallas[] = ['codigo' => $codigo, 'resultado' => $porCodigo[$codigo]];
+                }
+            }
             $lista[] = [
                 'firmada_at'         => (new DateTimeImmutable($f['firmada_at']))->format(DATE_ATOM),
                 'titulo'             => $f['titulo'],
                 'anio'               => $f['anio'] === null ? null : (int)$f['anio'],
                 'kilometraje'        => $f['kilometraje'] === null ? null : (int)$f['kilometraje'],
                 'conclusion'         => $f['conclusion'],
-                'observaciones'      => (int)$f['observaciones'],
-                'firmado_por'        => $f['firmado_por'],
+                'fallas'             => $fallas,
                 'taller'             => $f['taller_firma'],
                 'reclamo_procedente' => (bool)$f['reclamo_procedente'],
             ];
@@ -338,6 +356,8 @@ final class Inspeccion
         $datos['puede_reclamar'] = $i['estado'] === 'firmada' && $i['reclamo_id'] === null
             && Estados::enPlazoDeReclamo(new DateTimeImmutable($i['firmada_at']), new DateTimeImmutable(), (int)$i['dias_reclamo']);
         if ($items !== null) {
+            // Con el detalle va el historial del auto (las otras inspecciones de la misma patente)
+            $datos['anteriores'] = self::anteriores((int)$i['id'], $i['patente'], $i['firmada_at']);
             $datos['items'] = [];
             foreach ($items as $codigo => [$resultado, $nota]) {
                 $datos['items'][] = ['codigo' => $codigo, 'resultado' => $resultado, 'nota' => $nota];
