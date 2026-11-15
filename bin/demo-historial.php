@@ -105,7 +105,7 @@ try {
                 'url' => URL_HISTORIAL . 'm' . $m['id'] . '-' . ($k + 1), 'fuente' => 'otro', 'titulo' => $titulo,
                 'anio' => $anio, 'kilometraje' => $km + $k * 1500, 'precio_publicado' => $precioAuto,
                 'localidad' => $m['localidad'],
-            ], Precio::desglose($precio));
+            ], Precio::desgloseActual($precio));
             Inspeccion::cambiarEstado($id, 'pedida', 'aceptada', ['fecha_turno' => $momento->modify('-3 hours')->format('c')]);
 
             // Uno de cada tres con algo observado; los que tienen reclamo, con un ítem que se pasó por alto
@@ -118,9 +118,11 @@ try {
             $resumen = $conclusion === 'recomendable'
                 ? 'Auto en buen estado para su año y kilometraje.'
                 : 'En buen estado general; hay que presupuestar lo observado antes de cerrar el precio.';
-            Inspeccion::guardarInforme($id, $items, $conclusion, $resumen);
+            // El mismo auto de la lista tiene siempre la misma patente: así se ve su historial con varios mecánicos
+            $patente = 'AC' . str_pad((string)(($k + $n) % count(AUTOS)), 3, '0', STR_PAD_LEFT) . 'HD';
+            Inspeccion::guardarInforme($id, $items, $conclusion, $resumen, $patente);
             $huella = Huella::calcular($id, $items, $conclusion, $resumen, $m['nombre'], $m['taller'],
-                Inspeccion::momentoHuella($momento));
+                Inspeccion::momentoHuella($momento), $patente);
             Inspeccion::firmar($id, $m['nombre'], $m['taller'], $momento, $huella);
             $pdo->prepare('UPDATE inspeccion SET created_at = :c, updated_at = :c WHERE id = :id')
                 ->execute(['id' => $id, 'c' => $momento->modify('-2 days')->format('c')]);

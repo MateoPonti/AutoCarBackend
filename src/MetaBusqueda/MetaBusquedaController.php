@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace AutoCar\MetaBusqueda;
 
 use AutoCar\Auth\Auth;
+use AutoCar\Auth\Preferencias;
 use AutoCar\Core\Database;
 use AutoCar\Core\Logger;
 use AutoCar\Core\Request;
@@ -27,16 +28,52 @@ final class MetaBusquedaController
 
         $salida = [];
         foreach (self::intentar(static fn() => Busqueda::delUsuario($docs, $usuario)) as $b) {
-            $autos = array_filter(
-                self::intentar(static fn() => $mercado->fotosDelModelo($actuales, $b['marca'], $b['modelo'])),
-                static fn(array $a): bool => Busqueda::coincide($b, $a)
-            );
             $salida[] = Busqueda::paraApi($b) + [
-                'autos'          => count($autos) + count($mercado->delPortal($b)),
+                'autos'          => array_sum(self::contar($mercado, $actuales, $b)),
                 'avisos_sin_ver' => $sinVer[$b['id']] ?? 0,
             ];
         }
         Response::json(['busquedas' => $salida]);
+    }
+
+    /**
+     * GET /api/meta-busquedas/conteo?marca=&modelo=&anio_desde=&anio_hasta=&precio_max=&km_max=&transmision=
+     * Cuántos autos coinciden con esos criterios hoy, en total y por sitio, sin guardar nada: la pantalla
+     * "Nueva búsqueda" lo muestra mientras se eligen los filtros. Valida igual que al crear.
+     * → {autos, por_fuente: {mercadolibre: n, kavak: n, autocosmos: n, autocar: n}}
+     */
+    public function conteo(): void
+    {
+        [$b, $errores] = Busqueda::validar($_GET);
+        if ($errores) {
+            Response::error(422, 'validacion', 'Revisá los datos ingresados.', $errores);
+        }
+        $mercado = new Mercado(self::docs(), Database::pdo());
+        $actuales = array_column(self::intentar(static fn() => $mercado->ultimasRecolecciones()), 'actual');
+        $porFuente = self::contar($mercado, $actuales, $b);
+        Response::json(['autos' => array_sum($porFuente), 'por_fuente' => $porFuente]);
+    }
+
+    /**
+     * Autos que coinciden con la búsqueda $b, por sitio: los de la última corrida de cada plataforma
+     * y los publicados en AutoCar.
+     * @return array<string, int>
+     */
+    private static function contar(Mercado $mercado, array $actuales, array $b): array
+    {
+        $porFuente = [];
+        $externos = self::intentar(static fn() => $mercado->fotosDelModelo($actuales, $b['marca'], $b['modelo']));
+        foreach ($externos as $a) {
+            if (Busqueda::coincide($b, $a)) {
+                $porFuente[$a['fuente']] = ($porFuente[$a['fuente']] ?? 0) + 1;
+            }
+        }
+        $portal = count($mercado->delPortal($b));
+        if ($portal > 0) {
+            $porFuente['autocar'] = ($porFuente['autocar'] ?? 0) + $portal;
+        }
+        ksort($porFuente);
+        return $porFuente;
     }
 
     public function crear(): void
@@ -78,7 +115,11 @@ final class MetaBusquedaController
         Response::noContent();
     }
 
-    /** GET /api/meta-busquedas/{id}: filtros opcionales del listado: fuente, etiqueta, precio_max, km_max, orden, page. */
+    /**
+     * GET /api/meta-busquedas/{id}: filtros opcionales del listado: fuente, etiqueta, precio_max, km_max, orden, page.
+     * orden: precio, km, nuevos, para_vos o (vacío) diferencia con el precio típico. Si el usuario eligió un perfil,
+     * cada auto trae para_vos {puntaje, motivo} y el orden por defecto pasa a ser para_vos.
+     */
     public function reporte(int $id): void
     {
         $docs = self::docs();
@@ -87,7 +128,9 @@ final class MetaBusquedaController
             self::noExiste();
         }
         $reporte = new Reporte(new Mercado($docs, Database::pdo()));
-        Response::json(self::intentar(static fn() => $reporte->construir($b, $_GET)));
+        // El perfil del comprador ordena los resultados "para vos" (las cuentas del equipo no tienen)
+        $uso = Preferencias::delUsuario((int)Auth::id())['uso'] ?? null;
+        Response::json(self::intentar(static fn() => $reporte->construir($b, $_GET, $uso)));
     }
 
     /** GET /api/autos-externos?id=fuente~modelo~id: el id viene en la query porque es texto (las rutas solo aceptan números). */

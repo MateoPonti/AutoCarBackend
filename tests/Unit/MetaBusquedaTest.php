@@ -8,6 +8,7 @@ use AutoCar\MetaBusqueda\Comparables;
 use AutoCar\MetaBusqueda\Estadistica;
 use AutoCar\MetaBusqueda\Importador;
 use AutoCar\MetaBusqueda\Novedades;
+use AutoCar\MetaBusqueda\ParaVos;
 use AutoCar\MetaBusqueda\Reporte;
 use AutoCar\Recolectores\Kavak\Normalizador;
 use PHPUnit\Framework\TestCase;
@@ -187,6 +188,41 @@ final class MetaBusquedaTest extends TestCase
         self::assertNull($d['mejor_relacion']);
         self::assertSame(1, $d['mas_barato']['auto']['id']);
         self::assertSame(['mejor_relacion' => null, 'mas_barato' => null, 'menos_usado' => null], Reporte::destacados([], []));
+    }
+
+    public function testParaVosPesaDistintoSegunElPerfil(): void
+    {
+        $comparacion = ['autos' => array_fill(0, 5, []), 'suficientes' => true, 'criterio' => 'anio_2_km', 'mediana_precio' => 15000000.0, 'mediana_km' => 100000.0];
+        // Barato pero muy usado, contra caro y poco usado
+        $barato = self::auto(1, ['precio' => 12000000.0, 'km' => 150000]);
+        $cuidado = self::auto(2, ['precio' => 16500000.0, 'km' => 40000]);
+        $puntaje = static fn(array $a, string $uso): float =>
+            ParaVos::puntuar($a, $comparacion, Comparables::etiqueta($a['precio'], $comparacion), $uso, 2017.0)['puntaje'];
+
+        // "Para trabajar" pesa más el precio; "Para la familia", los kilómetros
+        self::assertGreaterThan($puntaje($cuidado, 'trabajo'), $puntaje($barato, 'trabajo'));
+        self::assertGreaterThan($puntaje($barato, 'familia'), $puntaje($cuidado, 'familia'));
+
+        // "Para manejar con aplicaciones" prefiere el más nuevo
+        $nuevo = self::auto(3, ['anio' => 2021]);
+        $viejo = self::auto(4, ['anio' => 2014]);
+        self::assertGreaterThan($puntaje($viejo, 'aplicacion'), $puntaje($nuevo, 'aplicacion'));
+    }
+
+    public function testParaVosExplicaElMotivo(): void
+    {
+        $comparacion = ['autos' => array_fill(0, 5, []), 'suficientes' => true, 'criterio' => 'anio_2_km', 'mediana_precio' => 15000000.0, 'mediana_km' => 100000.0];
+        $a = self::auto(1, ['precio' => 12000000.0, 'km' => 100000]);
+        $r = ParaVos::puntuar($a, $comparacion, Comparables::etiqueta($a['precio'], $comparacion), 'personal', 2017.0);
+        self::assertStringStartsWith('Te conviene: 20 % más barato', $r['motivo']);
+
+        $caro = self::auto(2, ['precio' => 18000000.0, 'km' => 100000]);
+        $r = ParaVos::puntuar($caro, $comparacion, Comparables::etiqueta($caro['precio'], $comparacion), 'personal', 2017.0);
+        self::assertStringStartsWith('Ojo: 20 % más caro', $r['motivo']);
+
+        // Sin comparables o con un perfil que no existe no hay puntaje (y el revendedor no está)
+        self::assertNull(ParaVos::puntuar($a, null, null, 'personal', 2017.0));
+        self::assertNull(ParaVos::puntuar($a, $comparacion, null, 'revendedor', 2017.0));
     }
 
     public function testImportadorValidaCadaAuto(): void

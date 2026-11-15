@@ -7,6 +7,7 @@ use AutoCar\Inspecciones\Checklist;
 use AutoCar\Inspecciones\Estados;
 use AutoCar\Inspecciones\Fuente;
 use AutoCar\Inspecciones\Huella;
+use AutoCar\Inspecciones\Patente;
 use AutoCar\Inspecciones\Precio;
 use AutoCar\Inspecciones\Ranking;
 use DateTimeImmutable;
@@ -78,14 +79,14 @@ final class InspeccionesTest extends TestCase
     {
         self::assertSame(
             ['precio' => 130000.0, 'monto_mecanico' => 100000.0, 'monto_autocar' => 30000.0, 'monto_fondo' => 10000.0],
-            Precio::desglose(130000),
+            Precio::desglose(130000, 23, 33.3333),
         );
     }
 
     public function testLasPartesSiempreSumanElPrecio(): void
     {
         foreach ([120000, 140000, 99999, 1000] as $precio) {
-            $d = Precio::desglose($precio);
+            $d = Precio::desglose($precio, 23, 33.3333);
             self::assertEqualsWithDelta($precio, $d['monto_mecanico'] + $d['monto_autocar'], 0.001);
             self::assertLessThanOrEqual($d['monto_autocar'], $d['monto_fondo']);
             self::assertGreaterThanOrEqual(0, $d['monto_mecanico']);
@@ -94,7 +95,52 @@ final class InspeccionesTest extends TestCase
 
     public function testTopeDeLaCompensacion(): void
     {
-        self::assertSame(390000.0, Precio::topeCompensacion(130000));
+        self::assertSame(390000.0, Precio::topeCompensacion(130000, 3));
+        self::assertSame(200000.0, Precio::topeCompensacion(100000, 2));
+    }
+
+    public function testDesgloseConElPrecioSugeridoDel14DeNoviembre(): void
+    {
+        self::assertSame(
+            ['precio' => 100000.0, 'monto_mecanico' => 77000.0, 'monto_autocar' => 23000.0, 'monto_fondo' => 8000.0],
+            Precio::desglose(100000, 23, 33.3333),
+        );
+    }
+
+    public function testSiElAdminCambiaLaComisionCambiaElDesglose(): void
+    {
+        $d = Precio::desglose(100000, 20, 50);
+        self::assertSame(80000.0, $d['monto_mecanico']);
+        self::assertSame(20000.0, $d['monto_autocar']);
+        self::assertSame(10000.0, $d['monto_fondo']);
+    }
+
+    // --- Patente
+
+    public function testLaPatenteSeGuardaSinEspaciosYEnMayusculas(): void
+    {
+        self::assertSame('AB123CD', Patente::normalizar(' ab 123 cd '));
+        self::assertSame('ABC123', Patente::normalizar('abc-123'));
+        self::assertSame('AB123CD', Patente::normalizar('AB.123.CD'));
+    }
+
+    public function testUnaPatenteConOtroFormatoNoSirve(): void
+    {
+        foreach (['', 'A123BCD', 'ABCD123', 'AB1234C', '123ABC', 'patente', null, 123456] as $mala) {
+            self::assertNull(Patente::normalizar($mala), var_export($mala, true));
+        }
+    }
+
+    public function testLaPatenteEntraEnLaHuella(): void
+    {
+        $items = ['motor' => ['ok', null]];
+        $sin = Huella::calcular(1, $items, 'recomendable', null, 'Ana', 'Taller', '2026-11-14T10:00:00Z');
+        $con = Huella::calcular(1, $items, 'recomendable', null, 'Ana', 'Taller', '2026-11-14T10:00:00Z', 'AB123CD');
+        $otra = Huella::calcular(1, $items, 'recomendable', null, 'Ana', 'Taller', '2026-11-14T10:00:00Z', 'AB123CE');
+        self::assertNotSame($sin, $con);
+        self::assertNotSame($con, $otra);
+        // Las firmadas antes de la patente dan la misma huella que antes
+        self::assertSame($sin, Huella::calcular(1, $items, 'recomendable', null, 'Ana', 'Taller', '2026-11-14T10:00:00Z', null));
     }
 
     // --- Ranking
@@ -206,8 +252,15 @@ final class InspeccionesTest extends TestCase
     public function testPlazoDeQuinceDiasParaReclamar(): void
     {
         $firma = new DateTimeImmutable('2026-11-01 10:00');
-        self::assertTrue(Estados::enPlazoDeReclamo($firma, new DateTimeImmutable('2026-11-16 10:00')));
-        self::assertFalse(Estados::enPlazoDeReclamo($firma, new DateTimeImmutable('2026-11-16 10:01')));
-        self::assertFalse(Estados::enPlazoDeReclamo($firma, new DateTimeImmutable('2026-10-31 10:00')));
+        self::assertTrue(Estados::enPlazoDeReclamo($firma, new DateTimeImmutable('2026-11-16 10:00'), 15));
+        self::assertFalse(Estados::enPlazoDeReclamo($firma, new DateTimeImmutable('2026-11-16 10:01'), 15));
+        self::assertFalse(Estados::enPlazoDeReclamo($firma, new DateTimeImmutable('2026-10-31 10:00'), 15));
+    }
+
+    public function testElPlazoEsElQueTeniaLaInspeccion(): void
+    {
+        $firma = new DateTimeImmutable('2026-11-01 10:00');
+        self::assertFalse(Estados::enPlazoDeReclamo($firma, new DateTimeImmutable('2026-11-12 10:00'), 10));
+        self::assertTrue(Estados::enPlazoDeReclamo($firma, new DateTimeImmutable('2026-11-12 10:00'), 15));
     }
 }

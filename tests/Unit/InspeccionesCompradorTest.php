@@ -101,20 +101,20 @@ final class InspeccionesCompradorTest extends TestCase
 
     public function testProcedeConCompensacionHastaElTope(): void
     {
-        [$r, $errores] = Reclamo::validarResolucion(['procede' => true, 'compensacion' => 390000, 'respuesta' => 'Se veía en las fotos.'], 130000);
+        [$r, $errores] = Reclamo::validarResolucion(['procede' => true, 'compensacion' => 390000, 'respuesta' => 'Se veía en las fotos.'], 130000, 3);
         self::assertSame([], $errores);
         self::assertSame('procede', $r['estado']);
         self::assertSame(390000.0, $r['compensacion']);
 
-        $pasado = Reclamo::validarResolucion(['procede' => true, 'compensacion' => 390001, 'respuesta' => 'ok, procede'], 130000);
+        $pasado = Reclamo::validarResolucion(['procede' => true, 'compensacion' => 390001, 'respuesta' => 'ok, procede'], 130000, 3);
         self::assertArrayHasKey('compensacion', $pasado[1]);
-        self::assertArrayHasKey('compensacion', Reclamo::validarResolucion(['procede' => true, 'respuesta' => 'ok, procede'], 130000)[1]);
-        self::assertSame([], Reclamo::validarResolucion(['procede' => true, 'compensacion' => 0, 'respuesta' => 'Solo devolución'], 130000)[1]);
+        self::assertArrayHasKey('compensacion', Reclamo::validarResolucion(['procede' => true, 'respuesta' => 'ok, procede'], 130000, 3)[1]);
+        self::assertSame([], Reclamo::validarResolucion(['procede' => true, 'compensacion' => 0, 'respuesta' => 'Solo devolución'], 130000, 3)[1]);
     }
 
     public function testNoProcedeNoLlevaCompensacion(): void
     {
-        [$r, $errores] = Reclamo::validarResolucion(['procede' => false, 'compensacion' => 999999, 'respuesta' => 'Era un defecto oculto.'], 130000);
+        [$r, $errores] = Reclamo::validarResolucion(['procede' => false, 'compensacion' => 999999, 'respuesta' => 'Era un defecto oculto.'], 130000, 3);
         self::assertSame([], $errores);
         self::assertSame('no_procede', $r['estado']);
         self::assertNull($r['compensacion']);
@@ -122,7 +122,7 @@ final class InspeccionesCompradorTest extends TestCase
 
     public function testLaResolucionPideDecisionYRespuesta(): void
     {
-        [, $errores] = Reclamo::validarResolucion(['procede' => 'si'], 130000);
+        [, $errores] = Reclamo::validarResolucion(['procede' => 'si'], 130000, 3);
         self::assertArrayHasKey('procede', $errores);
         self::assertArrayHasKey('respuesta', $errores);
     }

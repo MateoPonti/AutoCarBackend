@@ -365,6 +365,33 @@ final class MetaBusquedaTest extends ApiTestCase
         self::assertSame('barato', $j['destacados']['mas_barato']['auto']['etiqueta']['valor']);
     }
 
+    public function testConteoSinGuardarCuentaPorSitioYValida(): void
+    {
+        $fuente = self::unico('f');
+        $marca = self::unico('M');
+        self::importar($fuente, '2026-11-02T06:00:00-03:00', self::primeraSemana($marca));
+        $this->vehiculoDisponible(['marca' => $marca, 'modelo' => 'Sandero', 'anio' => 2017, 'precio' => 1000000, 'kilometraje' => 90000]);
+
+        self::assertSame(401, $this->pedir('GET', '/api/meta-busquedas/conteo?marca=A&modelo=B')['status']);
+        $this->ingresarComoUsuario();
+
+        $todos = $this->pedir('GET', '/api/meta-busquedas/conteo?' . http_build_query(['marca' => $marca, 'modelo' => 'Sandero']));
+        self::assertSame(200, $todos['status'], json_encode($todos['json']));
+        self::assertSame(8, $todos['json']['autos'], 'los 7 Sandero de la plataforma y el del portal (el Logan no)');
+        self::assertEquals([$fuente => 7, 'autocar' => 1], $todos['json']['por_fuente'], 'por sitio');
+
+        $tope = $this->pedir('GET', '/api/meta-busquedas/conteo?' . http_build_query(['marca' => $marca, 'modelo' => 'Sandero', 'precio_max' => 14500000]));
+        self::assertSame(4, $tope['json']['autos'], 'los 3 de la plataforma hasta 14,5 M y el del portal');
+
+        $malo = $this->pedir('GET', '/api/meta-busquedas/conteo?' . http_build_query(['marca' => $marca, 'modelo' => '', 'anio_desde' => 2020, 'anio_hasta' => 2010]));
+        self::assertSame(422, $malo['status']);
+        self::assertArrayHasKey('modelo', $malo['json']['errores']);
+        self::assertArrayHasKey('anio_hasta', $malo['json']['errores']);
+
+        $ninguna = $this->pedir('GET', '/api/meta-busquedas')['json']['busquedas'];
+        self::assertSame([], $ninguna, 'contar no guarda la búsqueda');
+    }
+
     public function testAutoInexistente(): void
     {
         $this->ingresarComoUsuario();

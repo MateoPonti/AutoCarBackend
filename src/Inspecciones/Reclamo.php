@@ -5,8 +5,9 @@ namespace AutoCar\Inspecciones;
 
 /**
  * Reglas del reclamo (B8). Funciones puras: no tocan la base.
- * El comprador reclama una sola vez, hasta 15 días después de la firma (Estados::enPlazoDeReclamo).
- * Quien resuelve decide si procede; si procede, la compensación llega hasta 3 veces el precio (Precio::topeCompensacion).
+ * El comprador reclama una sola vez, dentro de los días de reclamo de su inspección (Estados::enPlazoDeReclamo).
+ * Quien resuelve decide si procede; si procede, la compensación llega hasta el tope de su inspección: tope_veces
+ * por el precio (Precio::topeCompensacion). Los dos quedan guardados en la inspección al pedirla.
  */
 final class Reclamo
 {
@@ -44,7 +45,7 @@ final class Reclamo
      * Si procede, la compensación es obligatoria y llega hasta el tope. Si no procede, no lleva compensación.
      * @return array{0: array{estado: string, compensacion: ?float, respuesta: string}, 1: array<string, string>}
      */
-    public static function validarResolucion(array $in, float $precioInspeccion): array
+    public static function validarResolucion(array $in, float $precioInspeccion, float $topeVeces): array
     {
         $errores = [];
         $procede = $in['procede'] ?? null;
@@ -63,11 +64,12 @@ final class Reclamo
             if (is_string($c) && is_numeric($c)) {
                 $c = $c + 0;
             }
-            $tope = Precio::topeCompensacion($precioInspeccion);
+            $tope = Precio::topeCompensacion($precioInspeccion, $topeVeces);
             if (!is_int($c) && !is_float($c)) {
                 $errores['compensacion'] = 'Ingresá la compensación en pesos (puede ser 0).';
             } elseif ($c < 0 || $c > $tope) {
-                $errores['compensacion'] = 'Tiene que estar entre $ 0 y $ ' . number_format($tope, 0, ',', '.') . ' (3 veces el precio).';
+                $errores['compensacion'] = 'Tiene que estar entre $ 0 y $ ' . number_format($tope, 0, ',', '.')
+                    . ' (' . $topeVeces . ' veces el precio).';
             } else {
                 $compensacion = (float)$c;
             }

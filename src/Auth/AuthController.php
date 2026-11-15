@@ -18,12 +18,16 @@ final class AuthController
         $pass    = is_string($in['password'] ?? null) ? $in['password'] : '';
         $confirm = is_string($in['password_confirm'] ?? null) ? $in['password_confirm'] : $pass; // opcional
         $errores = Usuario::validarCuenta($nombre, $email, $pass, $confirm);
+        // Se guardan datos personales: sin aceptar la política de privacidad no se crea la cuenta (Ley 25.326)
+        if (($in['acepta_privacidad'] ?? null) !== true) {
+            $errores['acepta_privacidad'] = 'Para crear la cuenta tenés que aceptar la política de privacidad.';
+        }
         if ($errores) {
             Response::error(422, 'validacion', 'Revisá los datos ingresados.', $errores);
         }
 
         try {
-            $id = Usuario::crear($nombre, $email, password_hash($pass, PASSWORD_DEFAULT));
+            $id = Usuario::crear($nombre, $email, password_hash($pass, PASSWORD_DEFAULT), 'usuario', true);
         } catch (PDOException $e) {
             if ($e->getCode() !== '23505') { // 23505 = unique_violation (email duplicado)
                 throw $e;
@@ -87,7 +91,7 @@ final class AuthController
         Response::json([
             'csrf'       => Auth::csrf(),
             'expira_en'  => Auth::ttl(),
-            'usuario'    => Usuario::publico($usuario) + ['permisos' => Auth::permisos()],
+            'usuario'    => Usuario::publico($usuario) + ['permisos' => Auth::permisos()] + Preferencias::paraSesion($usuario),
         ]);
     }
 
@@ -102,6 +106,10 @@ final class AuthController
     {
         // Auth::id() ya verificó que el usuario exista y siga activo
         $u = Auth::usuario();
-        Response::json(['usuario' => Usuario::publico($u) + ['permisos' => Auth::permisos()], 'csrf' => Auth::csrf()]);
+        // preferencias_pendientes: el front no lo deja seguir hasta que conteste "¿Para qué buscás el auto?"
+        Response::json([
+            'usuario' => Usuario::publico($u) + ['permisos' => Auth::permisos()] + Preferencias::paraSesion($u),
+            'csrf'    => Auth::csrf(),
+        ]);
     }
 }

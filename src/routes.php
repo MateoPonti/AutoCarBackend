@@ -21,6 +21,7 @@ use AutoCar\Inspecciones\InspeccionController;
 use AutoCar\Inspecciones\MecanicoController;
 use AutoCar\Inspecciones\SolicitudTallerController;
 use AutoCar\MetaBusqueda\MetaBusquedaController;
+use AutoCar\Parametros\ParametroController;
 use AutoCar\Publicaciones\PublicacionController;
 use AutoCar\Soporte\SoporteController;
 use AutoCar\Core\Router;
@@ -63,6 +64,7 @@ $router->post('/api/conversaciones/{id}/mensajes', [ChatController::class, 'envi
 // Meta-búsqueda: cada usuario ve solo sus búsquedas (las rutas fijas no chocan con {id}, que acepta solo dígitos)
 $router->get('/api/meta-busquedas', [MetaBusquedaController::class, 'index'], 'auth');
 $router->post('/api/meta-busquedas', [MetaBusquedaController::class, 'crear'], 'usuario');
+$router->get('/api/meta-busquedas/conteo', [MetaBusquedaController::class, 'conteo'], 'auth');
 $router->get('/api/meta-busquedas/avisos', [MetaBusquedaController::class, 'avisos'], 'auth');
 $router->get('/api/meta-busquedas/{id}', [MetaBusquedaController::class, 'reporte'], 'auth');
 $router->put('/api/meta-busquedas/{id}', [MetaBusquedaController::class, 'actualizar'], 'auth');
@@ -72,11 +74,14 @@ $router->get('/api/autos-externos', [MetaBusquedaController::class, 'autoExterno
 
 // Inspecciones: el mecánico que firma. El ranking de mecánicos es público.
 $router->get('/api/mecanicos', [InspeccionController::class, 'mecanicos']);
-// Comprador: pide, ve las suyas, cancela antes de que la acepten y reclama hasta 15 días después de la firma.
+// Comprador: pide, ve las suyas, cancela antes de que la acepten y reclama dentro de los días de reclamo (parámetro) después de la firma.
 // El detalle lo ven el comprador, el mecánico asignado y quien resuelve reclamos.
 $router->post('/api/inspecciones', [InspeccionController::class, 'crear'], 'usuario');
 $router->get('/api/mis-inspecciones', [InspeccionController::class, 'mias'], 'auth');
 $router->get('/api/inspecciones/{id}', [InspeccionController::class, 'detalle'], 'auth');
+$router->get('/api/inspecciones/{id}/patente-foto', [InspeccionController::class, 'fotoPatente'], 'auth');
+// Historial de un auto por su patente: las inspecciones firmadas (una patente por vez, con sesión)
+$router->get('/api/historial-patente', [InspeccionController::class, 'historial'], 'auth');
 $router->post('/api/inspecciones/{id}/cancelar', [InspeccionController::class, 'cancelar'], 'auth');
 $router->post('/api/inspecciones/{id}/reclamo', [InspeccionController::class, 'reclamar'], 'auth');
 // Reclamos: los resuelven el moderador y el admin
@@ -97,6 +102,7 @@ $router->put('/api/mecanico/perfil', [MecanicoController::class, 'guardarPerfil'
 $router->get('/api/mecanico/inspecciones', [MecanicoController::class, 'bandeja'], $mecanico);
 $router->patch('/api/mecanico/inspecciones/{id}', [MecanicoController::class, 'cambiarEstado'], $mecanico);
 $router->put('/api/mecanico/inspecciones/{id}/informe', [MecanicoController::class, 'guardarInforme'], $mecanico);
+$router->post('/api/mecanico/inspecciones/{id}/patente-foto', [MecanicoController::class, 'subirFotoPatente'], $mecanico);
 $router->post('/api/mecanico/inspecciones/{id}/firma', [MecanicoController::class, 'firmar'], $mecanico);
 // "Adherí tu taller": el usuario pide sumarse y un admin lo aprueba (pasa a rol mecanico) o lo rechaza.
 // Aprobar le cambia el rol al usuario, por eso pide el mismo permiso que editar usuarios.
@@ -113,6 +119,9 @@ $router->get('/api/me', [AuthController::class, 'me'], 'auth');
 $router->put('/api/me', [PerfilController::class, 'actualizar'], 'auth');
 $router->post('/api/me/foto', [PerfilController::class, 'subirFoto'], 'auth');
 $router->delete('/api/me/foto', [PerfilController::class, 'borrarFoto'], 'auth');
+// "¿Para qué buscás el auto?": obligatoria para las cuentas personales la primera vez que entran (las clasifica)
+$router->get('/api/me/preferencias', [PerfilController::class, 'preferencias'], 'usuario');
+$router->put('/api/me/preferencias', [PerfilController::class, 'guardarPreferencias'], 'usuario');
 $router->get('/api/usuarios/{id}/foto', [PerfilController::class, 'foto']);
 
 // Vehículos: el moderador y el admin revisan las publicaciones; solo el admin las borra. Nadie del panel publica ni edita:
@@ -126,6 +135,12 @@ $router->delete('/api/admin/vehiculos/{id}', [AdminVehiculoController::class, 'e
 // Usuarios (admin): ver datos, editar nombre y rol, baja lógica
 // Métricas de la app (admin)
 $router->get('/api/admin/metricas', [AdminMetricasController::class, 'index'], 'permiso:metricas.ver');
+
+// Parámetros del negocio (comisión, fondo, tope, días de reclamo, precio de la inspección): los cambia el admin.
+// Los valores son públicos: el front muestra el desglose del precio y el rango que acepta el taller.
+$router->get('/api/admin/parametros', [ParametroController::class, 'index'], 'permiso:parametros.editar');
+$router->put('/api/admin/parametros', [ParametroController::class, 'actualizar'], 'permiso:parametros.editar');
+$router->get('/api/parametros', [ParametroController::class, 'publicos']);
 
 $router->get('/api/admin/roles', [AdminUsuarioController::class, 'roles'], 'permiso:usuarios.ver');
 $router->get('/api/admin/usuarios', [AdminUsuarioController::class, 'index'], 'permiso:usuarios.ver');

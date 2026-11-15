@@ -121,6 +121,7 @@ abstract class ApiTestCase extends TestCase
         $email ??= self::emailNuevo();
         $r = $this->pedir('POST', '/api/registro', [
             'nombre' => 'Prueba', 'email' => $email, 'password' => self::PASSWORD, 'password_confirm' => self::PASSWORD,
+            'acepta_privacidad' => true,
         ]);
         self::assertSame(201, $r['status'], json_encode($r['json']));
         return $email;

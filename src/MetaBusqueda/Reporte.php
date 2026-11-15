@@ -23,8 +23,10 @@ final class Reporte
     /**
      * @param array<string, mixed> $b búsqueda
      * @param array<string, mixed> $get filtros del listado que llegan por la URL
+     * @param string|null $uso perfil del comprador (Auth\Preferencias::USOS); con él, cada auto trae "para_vos"
+     *                        y el listado se ordena por ese puntaje si no se pidió otro orden
      */
-    public function construir(array $b, array $get): array
+    public function construir(array $b, array $get, ?string $uso = null): array
     {
         $recolecciones = $this->mercado->ultimasRecolecciones();
         $actuales = array_column($recolecciones, 'actual');
@@ -39,17 +41,28 @@ final class Reporte
             }
         }
 
+        $perfil = $uso !== null && isset(ParaVos::PESOS[$uso]) ? $uso : null;
+        $anioTipico = (float)(Estadistica::mediana(array_column($externos, 'anio')) ?? 0);
         $items = [];
         foreach ($externos as $a) {
             $c = $comparaciones[$a['id']] ?? null;
-            $items[] = self::item($a, $c !== null ? Comparables::etiqueta($a['precio'], $c) : null);
+            $etiqueta = $c !== null ? Comparables::etiqueta($a['precio'], $c) : null;
+            $item = self::item($a, $etiqueta);
+            if ($perfil !== null) {
+                $item['para_vos'] = ParaVos::puntuar($a, $c, $etiqueta, $perfil, $anioTipico);
+            }
+            $items[] = $item;
         }
         foreach ($portal as $a) {
-            $items[] = self::item($a, null);
+            $items[] = self::item($a, null) + ($perfil !== null ? ['para_vos' => null] : []);
+        }
+        if ($perfil !== null && (!is_string($get['orden'] ?? null) || $get['orden'] === '')) {
+            $get['orden'] = 'para_vos';
         }
 
         return [
             'busqueda'      => Busqueda::paraApi($b),
+            'perfil'        => $perfil,
             'actualizado'   => array_map(static fn(array $r): array => ['fuente' => $r['fuente'], 'fecha' => $r['fecha']], $recolecciones),
             'aclaracion'    => self::ACLARACION,
             'referencia'    => self::referencia(array_merge($externos, $portal)),
@@ -265,6 +278,8 @@ final class Reporte
                 'precio' => ($a['precio'] ?? INF) <=> ($b['precio'] ?? INF),
                 'km'     => $a['km'] <=> $b['km'],
                 'nuevos' => strtotime((string)$b['primera_vez']) <=> strtotime((string)$a['primera_vez']),
+                // Mejor puntaje primero; los que no tienen (AutoCar, sin comparables) van al final
+                'para_vos' => ($b['para_vos']['puntaje'] ?? -INF) <=> ($a['para_vos']['puntaje'] ?? -INF),
                 default  => ($a['etiqueta']['diferencia_pct'] ?? INF) <=> ($b['etiqueta']['diferencia_pct'] ?? INF),
             };
             return $r !== 0 ? $r : $a['id'] <=> $b['id'];

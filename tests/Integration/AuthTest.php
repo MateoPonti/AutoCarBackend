@@ -17,7 +17,7 @@ final class AuthTest extends ApiTestCase
         $email = self::emailNuevo();
         $r = $this->pedir('POST', '/api/registro', [
             'nombre' => 'Ana', 'email' => $email, 'password' => self::PASSWORD, 'password_confirm' => self::PASSWORD,
-            'rol' => 'admin', // el cliente no puede elegir el rol
+            'acepta_privacidad' => true, 'rol' => 'admin', // el cliente no puede elegir el rol
         ]);
         self::assertSame(201, $r['status']);
         self::assertSame($email, $r['json']['usuario']['email']);
@@ -40,6 +40,7 @@ final class AuthTest extends ApiTestCase
         $email = $this->registrar();
         $r = $this->pedir('POST', '/api/registro', [
             'nombre' => 'Otra', 'email' => $email, 'password' => self::PASSWORD, 'password_confirm' => self::PASSWORD,
+            'acepta_privacidad' => true,
         ]);
         self::assertSame(422, $r['status']);
         self::assertArrayHasKey('email', $r['json']['errores']);

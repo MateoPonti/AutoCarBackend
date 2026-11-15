@@ -7,6 +7,8 @@ use AutoCar\Auth\Auth;
 use AutoCar\Core\Database;
 use AutoCar\Core\Request;
 use AutoCar\Core\Response;
+use AutoCar\Parametros\Parametros;
+use AutoCar\Publicaciones\Foto;
 use DateTimeImmutable;
 
 /**
@@ -25,7 +27,7 @@ final class MecanicoController
     /** PUT /api/mecanico/perfil {nombre, direccion, localidad, telefono, precio_inspeccion} → {taller} */
     public function guardarPerfil(): void
     {
-        [$datos, $errores] = Taller::validar(Request::json());
+        [$datos, $errores] = Taller::validar(Request::json(), Parametros::valor('precio_minimo'), Parametros::valor('precio_maximo'));
         if ($errores) {
             Response::error(422, 'validacion', 'Revisá los datos del taller.', $errores);
         }
@@ -120,11 +122,22 @@ final class MecanicoController
                 ['resumen' => 'Puede tener hasta ' . Checklist::MAX_RESUMEN . ' caracteres.']);
         }
 
+        // La patente se puede cargar de a poco con el borrador; para firmar es obligatoria
+        $patente = null;
+        $patenteEscrita = $in['patente'] ?? null;
+        if (is_string($patenteEscrita) && trim($patenteEscrita) !== '') {
+            $patente = Patente::normalizar($patenteEscrita);
+            if ($patente === null) {
+                Response::error(422, 'validacion', 'Revisá la patente.',
+                    ['patente' => 'Escribila como está en la chapa: ABC123 o AB123CD.']);
+            }
+        }
+
         $pdo = Database::pdo();
         $pdo->beginTransaction();
         $inspeccion = self::propia($id, true);
         self::exigirAceptada($inspeccion);
-        Inspeccion::guardarInforme($id, $items, $conclusion, $resumen === '' ? null : $resumen);
+        Inspeccion::guardarInforme($id, $items, $conclusion, $resumen === '' ? null : $resumen, $patente);
         $pdo->commit();
         self::responderDetalle($id);
     }
@@ -152,6 +165,12 @@ final class MecanicoController
         }
         [$items, $error] = Checklist::validarItems($guardados, true);
         $error ??= Checklist::validarConclusion($inspeccion['conclusion'], $inspeccion['resumen']);
+        if ($error === null && $inspeccion['patente'] === null) {
+            $error = 'Falta la patente: cargala como está en la chapa.';
+        }
+        if ($error === null && !$inspeccion['tiene_foto_patente']) {
+            $error = 'Falta la foto de la chapa con la patente.';
+        }
         if ($error !== null) {
             self::fallar(422, 'informe_incompleto', $error);
         }
@@ -159,8 +178,27 @@ final class MecanicoController
         $momento = new DateTimeImmutable('@' . time()); // UTC y al segundo, como entra en la huella
         $firmadoPor = (string)(Auth::usuario()['nombre'] ?? '');
         $huella = Huella::calcular($id, $items, $inspeccion['conclusion'], $inspeccion['resumen'],
-            $firmadoPor, $taller['nombre'], Inspeccion::momentoHuella($momento));
+            $firmadoPor, $taller['nombre'], Inspeccion::momentoHuella($momento), $inspeccion['patente']);
         Inspeccion::firmar($id, $firmadoPor, $taller['nombre'], $momento, $huella);
+        $pdo->commit();
+        self::responderDetalle($id);
+    }
+
+    /**
+     * POST /api/mecanico/inspecciones/{id}/patente-foto (multipart: foto) → {inspeccion}. La foto de la chapa,
+     * como control de que la patente es la del auto que revisó. JPG, PNG o WebP de hasta 2 MB; reemplaza la anterior.
+     */
+    public function subirFotoPatente(int $id): void
+    {
+        [$fotos, $error] = Foto::validarSubidas($_FILES['foto'] ?? null);
+        if ($error !== null || count($fotos) !== 1) {
+            Response::error(422, 'validacion', 'Revisá la foto.', ['foto' => $error ?? 'Subí una sola foto.']);
+        }
+        $pdo = Database::pdo();
+        $pdo->beginTransaction();
+        $inspeccion = self::propia($id, true);
+        self::exigirAceptada($inspeccion);
+        Inspeccion::guardarFotoPatente($id, $fotos[0][0], $fotos[0][1]);
         $pdo->commit();
         self::responderDetalle($id);
     }

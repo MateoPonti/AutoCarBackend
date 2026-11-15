@@ -30,8 +30,16 @@
 | 18 | `018-inspeccion-no-realizada.sql` | Estado `no_realizada` de una inspección: el mecánico fue y no la pudo hacer (por ejemplo, el vendedor no dejó revisar el auto); se le devuelve todo al comprador. Correrla **antes** de desplegar el back que la usa |
 | 19 | `019-marca-unica.sql` | Una marca no se repite con otra escritura ("DS" y "Ds"): índice único sobre el nombre en minúsculas. No hace falta desplegar nada antes ni después |
 | 20 | `020-seguridad.sql` | Arreglos de seguridad de la Entrega 4: un solo pedido de inspección en curso por comprador y aviso (columna `url_clave` e índice único, aunque lleguen varios a la vez) y tabla `login_intento` para el límite de 5 intentos de ingreso cada 15 minutos. Correrla **antes** de desplegar el back que la usa |
+| 21 | `021-preferencias-y-parametros.sql` | Lo que pidió el profe el 13/11: tabla `parametro` (comisión, fondo, tope, días de reclamo y rango del precio de la inspección, editables por el admin, con historial en `parametro_cambio` y permiso `parametros.editar`), tope y días de reclamo guardados en cada inspección, `usuario_preferencia` ("¿Para qué buscás el auto?") y `usuario.privacidad_aceptada_at`. Correrla **antes** de desplegar el back que la usa |
+| 22 | `022-patente.sql` | Patente del auto en cada inspección (la carga el mecánico con una foto de la chapa, tabla `inspeccion_patente_foto`; sin patente no se firma) e índice para el historial por patente. A las firmadas que ya existían les inventa una (`AD000DM`…, la misma por aviso). Correrla **antes** de desplegar el back que la usa |
 
 Se copian y pegan enteras en el **SQL Editor de Neon**, primero en el proyecto de Neon de dev y en el de main recién cuando se pasa `dev` → `main` (son dos proyectos separados).
+
+### Estado al 11/11/2026
+
+Verificado con una consulta de solo lectura contra las dos bases: **Neon dev y Neon main tienen corridas todas las migraciones, de la `001` a la `020`**. La próxima migración nueva es la `021`. La `021` (14/11) se corre en dev con el back nuevo y en main en el próximo pase.
+
+La `007` (mecánicos `mecanicoN@demo.autocar.com.ar`) está solo en dev, como corresponde. Main tiene **sus propios talleres de demo**, cargados el 11/11 desde el sitio: 5 talleres aprobados (`*@autocar.test`: Acosta, Benítez, Gómez, Medina y Ferreyra), 3 compradores y 15 inspecciones firmadas (3 por mecánico). No se borran: son los que permiten hacer la demo sobre la URL pública.
 
 ## Reglas para una migración nueva
 
@@ -44,5 +52,7 @@ Se copian y pegan enteras en el **SQL Editor de Neon**, primero en el proyecto d
 ## Historial de la demo (solo dev)
 
 Después de la 007, `php bin/demo-historial.php` carga inspecciones firmadas de meses anteriores de los 5 mecánicos (31 en total, 2 con reclamo que procedió), firmadas con el mismo código que la API. Sin eso, todos figuran como "Nuevo en la red" y en la demo no se ve al mecánico bajar en el ranking. No es una migración: es un script de PHP porque la huella se calcula en PHP. Toma la base de `.env` o de las variables de entorno, como `bin/importar-autos.php`; para Neon dev, con los datos de conexión de esa branch. Se puede correr más de una vez: si un mecánico ya tiene historial, no le agrega nada.
+
+**Ojo:** el script busca los mecánicos por los emails de la `007` (`mecanicoN@demo.autocar.com.ar`). En main esos usuarios no existen (los talleres de demo de main son otros, ver arriba), así que ahí falla sin cargar nada. Al 11/11 tampoco se corrió en dev: ninguna inspección tiene el link `historial.demo.invalid`.
 
 **Lo que no va acá:** los autos de otros sitios (MercadoLibre, Kavak, Autocosmos), las búsquedas guardadas y los avisos del metabuscador están en **Firestore (NoSQL)**, no en Neon. Ver `docs/arquitectura-scraper.md`, sección 6.
