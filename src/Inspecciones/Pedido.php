@@ -81,6 +81,9 @@ final class Pedido
             'kilometraje'      => $km === null ? null : (int)$km,
             'precio_publicado' => $precio === null ? null : (float)$precio,
             'localidad'        => $localidad,
+            // Opcionales: marca y modelo del catálogo (el controlador los valida contra la lista); si no, los completa el mecánico
+            'marca'            => $texto('marca'),
+            'modelo'           => $texto('modelo'),
         ], $errores];
     }
 

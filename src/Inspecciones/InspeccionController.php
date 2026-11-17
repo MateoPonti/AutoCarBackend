@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace AutoCar\Inspecciones;
 
 use AutoCar\Auth\Auth;
+use AutoCar\Catalogo\MarcaModelo;
 use AutoCar\Core\Config;
 use AutoCar\Core\Database;
 use AutoCar\Core\Request;
@@ -50,6 +51,13 @@ final class InspeccionController
             if ($vehiculo === null || $vehiculo['estado'] !== 'disponible') {
                 $errores['url'] = 'Esa publicación de AutoCar no está disponible.';
             }
+        }
+        // Marca y modelo (idea B): de la publicación si es de AutoCar; si no, los que eligió el comprador, del catálogo
+        if ($vehiculo !== null) {
+            $datos['marca'] = $vehiculo['marca'];
+            $datos['modelo'] = $vehiculo['modelo'];
+        } elseif ($datos['marca'] !== null || $datos['modelo'] !== null) {
+            $errores += MarcaModelo::errores((string)$datos['marca'], (string)$datos['modelo']);
         }
         if ($errores) {
             Response::error(422, 'validacion', 'Revisá los datos del pedido.', $errores);
