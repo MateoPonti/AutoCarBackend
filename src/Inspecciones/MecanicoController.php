@@ -181,6 +181,8 @@ final class MecanicoController
             $firmadoPor, $taller['nombre'], Inspeccion::momentoHuella($momento), $inspeccion['patente']);
         Inspeccion::firmar($id, $firmadoPor, $taller['nombre'], $momento, $huella);
         AutoVendido::alFirmar($inspeccion); // si el auto ya se vendió, el comprador recibe el crédito
+        // Idea A: cada arreglo del informe se le pide a otros talleres de la red (nunca a este)
+        Presupuestos::pedir($id, self::yo(), $taller['localidad']);
         $pdo->commit();
         self::responderDetalle($id);
     }

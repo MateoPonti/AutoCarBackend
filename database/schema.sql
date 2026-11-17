@@ -1512,6 +1512,24 @@ CREATE TABLE IF NOT EXISTS reclamo (
 
 CREATE INDEX IF NOT EXISTS idx_reclamo_estado ON reclamo (estado, created_at);
 
+-- Idea A, costo total (025-presupuestos.sql, Inspecciones\Presupuestos): cada arreglo del informe firmado se le pide a
+-- otros talleres de la red, nunca al que inspeccionó. Cada uno responde con un monto, vigente unos días.
+CREATE TABLE IF NOT EXISTS presupuesto (
+  id            INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  inspeccion_id INTEGER       NOT NULL REFERENCES inspeccion(id) ON DELETE CASCADE,
+  item_codigo   VARCHAR(20)   NOT NULL,
+  mecanico_id   INTEGER       NOT NULL REFERENCES usuario(id),   -- el taller al que se le pidió
+  estado        VARCHAR(10)   NOT NULL DEFAULT 'pedido' CHECK (estado IN ('pedido', 'respondido', 'rechazado')),
+  monto         NUMERIC(11,2) CHECK (monto > 0),
+  detalle       VARCHAR(500),
+  vigente_hasta TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  respondido_at TIMESTAMPTZ,
+  UNIQUE (inspeccion_id, item_codigo, mecanico_id),
+  CHECK (estado <> 'respondido' OR (monto IS NOT NULL AND vigente_hasta IS NOT NULL))
+);
+CREATE INDEX IF NOT EXISTS idx_presupuesto_mecanico ON presupuesto (mecanico_id, estado, created_at);
+
 -- Crédito del comprador cuando el auto se vendió (024-auto-vendido-y-fondo.sql, Inspecciones\Creditos).
 -- Se usa solo en su próxima inspección (usado_en) y vuelve si esa inspección se cae, se cancela o se rechaza.
 CREATE TABLE IF NOT EXISTS credito (
@@ -1596,7 +1614,10 @@ INSERT INTO parametro (clave, valor, minimo, maximo, unidad, descripcion, orden)
   ('cotizacion_dolar', 1450,    1,    100000,   'pesos',      'Cotización del dólar: con ella se muestran en pesos los autos publicados en dólares en el metabuscador', 8), -- 023
   ('franquicia',       40,      0,    100,      'porcentaje', 'Parte de lo que cobró el mecánico que paga al fondo si un reclamo procede', 9),  -- 024
   ('credito_vendido',  30,      0,    100,      'porcentaje', 'Crédito para el comprador, en % del precio, si el auto se vendió (firmada con el auto vendido o cupón)', 10),
-  ('horas_cupon',      48,      1,    720,      'horas',      'Horas después de la firma en las que, si el auto se vende con el turno confirmado, el comprador recibe el cupón', 11)
+  ('horas_cupon',      48,      1,    720,      'horas',      'Horas después de la firma en las que, si el auto se vende con el turno confirmado, el comprador recibe el cupón', 11),
+  ('presupuestos_por_arreglo', 3, 1, 10,       'veces',      'A cuántos talleres de la red se les pide presupuesto por cada arreglo del informe', 12),  -- 025
+  ('dias_presupuesto', 15,      1,    90,       'dias',       'Días que vale el presupuesto de un taller', 13),
+  ('comision_arreglos', 6,      0,    50,       'porcentaje', 'Comisión que paga el taller por un arreglo que le llega por AutoCar (todavía no se cobra)', 14)
 ON CONFLICT (clave) DO NOTHING;
 
 -- Preferencias del comprador: "¿Para qué buscás el auto?" (021-preferencias-y-parametros.sql, Auth\Preferencias)

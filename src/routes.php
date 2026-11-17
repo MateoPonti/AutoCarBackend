@@ -19,6 +19,7 @@ use AutoCar\Favoritos\FavoritoController;
 use AutoCar\Inspecciones\AdminReclamoController;
 use AutoCar\Inspecciones\InspeccionController;
 use AutoCar\Inspecciones\MecanicoController;
+use AutoCar\Inspecciones\PresupuestoController;
 use AutoCar\Inspecciones\SolicitudTallerController;
 use AutoCar\MetaBusqueda\MetaBusquedaController;
 use AutoCar\Parametros\ParametroController;
@@ -85,6 +86,8 @@ $router->get('/api/inspecciones/{id}/patente-foto', [InspeccionController::class
 $router->post('/api/inspecciones/{id}/cancelar', [InspeccionController::class, 'cancelar'], 'auth');
 $router->post('/api/inspecciones/{id}/reclamo', [InspeccionController::class, 'reclamar'], 'auth');
 $router->post('/api/inspecciones/{id}/confirmar-turno', [InspeccionController::class, 'confirmarTurno'], 'auth');
+// Idea A, costo total: el comprador pide los presupuestos de un informe firmado antes (los nuevos se piden solos al firmar)
+$router->post('/api/inspecciones/{id}/presupuestos', [PresupuestoController::class, 'pedir'], 'auth');
 // Créditos del comprador (el auto de una inspección anterior se vendió): se descuentan solos al pedir la próxima
 $router->get('/api/mis-creditos', [InspeccionController::class, 'creditos'], 'auth');
 // Reclamos: los resuelven el moderador y el admin
@@ -109,6 +112,9 @@ $router->patch('/api/mecanico/inspecciones/{id}', [MecanicoController::class, 'c
 $router->put('/api/mecanico/inspecciones/{id}/informe', [MecanicoController::class, 'guardarInforme'], $mecanico);
 $router->post('/api/mecanico/inspecciones/{id}/patente-foto', [MecanicoController::class, 'subirFotoPatente'], $mecanico);
 $router->post('/api/mecanico/inspecciones/{id}/firma', [MecanicoController::class, 'firmar'], $mecanico);
+// Presupuestos que le pidieron al taller (idea A): nunca de un auto que revisó él
+$router->get('/api/mecanico/presupuestos', [PresupuestoController::class, 'bandeja'], $mecanico);
+$router->patch('/api/mecanico/presupuestos/{id}', [PresupuestoController::class, 'responder'], $mecanico);
 // "Adherí tu taller": el usuario pide sumarse y un admin lo aprueba (pasa a rol mecanico) o lo rechaza.
 // Aprobar le cambia el rol al usuario, por eso pide el mismo permiso que editar usuarios.
 $router->post('/api/solicitudes-taller', [SolicitudTallerController::class, 'enviar']);

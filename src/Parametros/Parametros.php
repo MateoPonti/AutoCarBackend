@@ -15,7 +15,8 @@ final class Parametros
 {
     /** Los que se pueden cambiar, en el orden del panel. */
     public const CLAVES = ['comision_autocar', 'parte_fondo', 'tope_veces', 'dias_reclamo',
-        'precio_minimo', 'precio_sugerido', 'precio_maximo', 'cotizacion_dolar', 'franquicia', 'credito_vendido', 'horas_cupon'];
+        'precio_minimo', 'precio_sugerido', 'precio_maximo', 'cotizacion_dolar', 'franquicia', 'credito_vendido', 'horas_cupon',
+        'presupuestos_por_arreglo', 'dias_presupuesto', 'comision_arreglos'];
 
     /** @var array<string, float>|null se leen una sola vez por pedido */
     private static ?array $valores = null;

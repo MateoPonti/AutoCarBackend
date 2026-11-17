@@ -34,6 +34,7 @@
 | 22 | `022-patente.sql` | Patente del auto en cada inspección (la carga el mecánico con una foto de la chapa, tabla `inspeccion_patente_foto`; sin patente no se firma) e índice para el historial por patente. A las firmadas que ya existían les inventa una (`AD000DM`…, la misma por aviso). Correrla **antes** de desplegar el back que la usa |
 | 23 | `023-cotizacion-dolar.sql` | Parámetro `cotizacion_dolar` (lo cambia el admin): el metabuscador muestra y ordena en pesos los autos publicados en dólares. Correrla **antes** de desplegar el back que la usa |
 | 24 | `024-auto-vendido-y-fondo.sql` | Auto vendido y fondo de garantía: turno que confirma el vendedor (`turno_confirmado_at`), estado `caida` (la publicación se vendió o se bajó antes del turno), tabla `credito` (crédito del comprador si el auto se vendió) y `inspeccion.credito_usado`, `reclamo.devolucion` y `reclamo.franquicia`, y los parámetros `franquicia`, `credito_vendido` y `horas_cupon`. Correrla **antes** de desplegar el back que la usa |
+| 25 | `025-presupuestos.sql` | Idea A, costo total: tabla `presupuesto` (cada arreglo del informe firmado se le pide a otros talleres de la red, nunca al que inspeccionó) y parámetros `presupuestos_por_arreglo`, `dias_presupuesto` y `comision_arreglos`. Correrla **antes** de desplegar el back que la usa |
 
 Se copian y pegan enteras en el **SQL Editor de Neon**, primero en el proyecto de Neon de dev y en el de main recién cuando se pasa `dev` → `main` (son dos proyectos separados).
 
