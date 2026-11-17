@@ -374,6 +374,15 @@ final class Inspeccion
         if ($items !== null) {
             // Con el detalle va el historial del auto (las otras inspecciones de la misma patente)
             $datos['anteriores'] = self::anteriores((int)$i['id'], $i['patente'], $i['firmada_at']);
+            // Idea A: el costo total (precio del aviso + el presupuesto vigente más barato de cada arreglo)
+            $datos['presupuestos'] = [];
+            $datos['costo_total'] = null;
+            if ($i['estado'] === 'firmada') {
+                $presupuestos = Presupuestos::deLaInspeccion((int)$i['id']);
+                $datos['presupuestos'] = array_map([Presupuestos::class, 'paraApi'], $presupuestos);
+                $datos['costo_total'] = CostoTotal::calcular(CostoTotal::arreglos($items), $presupuestos,
+                    $numero($i['precio_publicado']), new DateTimeImmutable());
+            }
             $datos['items'] = [];
             foreach ($items as $codigo => [$resultado, $nota]) {
                 $datos['items'][] = ['codigo' => $codigo, 'resultado' => $resultado, 'nota' => $nota];
