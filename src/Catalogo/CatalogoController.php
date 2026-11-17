@@ -10,7 +10,8 @@ use AutoCar\Publicaciones\Foto;
 /** API pública: listado con búsqueda y filtros, y detalle. */
 final class CatalogoController
 {
-    public const POR_PAGINA = 9;
+    // 12 se divide por 2, 3 y 4: las filas de la grilla quedan completas en celular, tablet y escritorio
+    public const POR_PAGINA = 12;
 
     public function index(): void
     {
