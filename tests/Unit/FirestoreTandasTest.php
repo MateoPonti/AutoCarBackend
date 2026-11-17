@@ -14,6 +14,16 @@ final class FirestoreTandasTest extends TestCase
         return ['update' => ['name' => 'x', 'fields' => ['autos_json' => ['stringValue' => str_repeat('a', $bytes)]]]];
     }
 
+    public function testReintentaSoloLoQuePuedeAndarDespues(): void
+    {
+        foreach ([0, 429, 500, 503] as $codigo) {
+            self::assertTrue(Firestore::reintentable($codigo), "$codigo se reintenta");
+        }
+        foreach ([400, 401, 403, 404] as $codigo) {
+            self::assertFalse(Firestore::reintentable($codigo), "$codigo no se reintenta: no se arregla esperando");
+        }
+    }
+
     public function testDocumentosGrandesVanEnVariosCommits(): void
     {
         $writes = array_fill(0, 30, self::write(700 * 1024)); // 30 modelos de ~700 KB ≈ 21 MB
