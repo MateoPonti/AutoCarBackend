@@ -11,17 +11,19 @@ use DateTimeImmutable;
  *   pedida → rechazada (el mecánico) o cancelada (el comprador): se le devuelve todo al comprador.
  *   aceptada → no_realizada (el mecánico fue y no la pudo hacer, por ejemplo porque el vendedor no dejó revisar el auto):
  *   también se le devuelve todo al comprador.
+ *   pedida o aceptada → caida: la publicación de AutoCar se vendió, se dio de baja o se rechazó antes del turno
+ *   (la pasa el sistema, ver AutoVendido). También se le devuelve todo al comprador.
  * Firmada no cambia más. Después de firmar, el comprador tiene unos días para reclamar (una sola vez): los que
  * decía el parámetro dias_reclamo cuando pidió la inspección (quedan guardados en inspeccion.dias_reclamo).
  */
 final class Estados
 {
-    public const ESTADOS = ['pedida', 'aceptada', 'rechazada', 'cancelada', 'firmada', 'no_realizada'];
+    public const ESTADOS = ['pedida', 'aceptada', 'rechazada', 'cancelada', 'firmada', 'no_realizada', 'caida'];
     public const PAGOS   = ['retenido', 'liberado', 'reembolsado'];
 
     private const TRANSICIONES = [
-        'pedida'   => ['aceptada', 'rechazada', 'cancelada'],
-        'aceptada' => ['firmada', 'no_realizada'],
+        'pedida'   => ['aceptada', 'rechazada', 'cancelada', 'caida'],
+        'aceptada' => ['firmada', 'no_realizada', 'caida'],
     ];
 
     // estado nuevo => cómo queda el pago
@@ -29,6 +31,7 @@ final class Estados
         'rechazada'    => 'reembolsado',
         'cancelada'    => 'reembolsado',
         'no_realizada' => 'reembolsado',
+        'caida'        => 'reembolsado',
         'firmada'      => 'liberado',
     ];
 

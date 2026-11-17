@@ -41,6 +41,8 @@ $router->get('/api/fotos/{id}', [PublicacionController::class, 'foto']); // cont
 // Comprar y vender (guard 'usuario'): solo cuentas personales. Las del equipo (admin, moderador) y las de los
 // talleres no publican, no piden mecánico, no guardan favoritos ni abren chats: para eso, una cuenta personal.
 $router->get('/api/mis-vehiculos', [PublicacionController::class, 'index'], 'auth');
+// Turnos de inspección de mis publicaciones: el vendedor los confirma (si el auto se vende antes, se caen solos)
+$router->get('/api/mis-vehiculos/turnos', [InspeccionController::class, 'turnos'], 'auth');
 $router->post('/api/mis-vehiculos', [PublicacionController::class, 'crear'], 'usuario');
 $router->get('/api/mis-vehiculos/{id}', [PublicacionController::class, 'detalle'], 'auth');
 $router->put('/api/mis-vehiculos/{id}', [PublicacionController::class, 'actualizar'], 'usuario');
@@ -82,6 +84,9 @@ $router->get('/api/inspecciones/{id}', [InspeccionController::class, 'detalle'],
 $router->get('/api/inspecciones/{id}/patente-foto', [InspeccionController::class, 'fotoPatente'], 'auth');
 $router->post('/api/inspecciones/{id}/cancelar', [InspeccionController::class, 'cancelar'], 'auth');
 $router->post('/api/inspecciones/{id}/reclamo', [InspeccionController::class, 'reclamar'], 'auth');
+$router->post('/api/inspecciones/{id}/confirmar-turno', [InspeccionController::class, 'confirmarTurno'], 'auth');
+// Créditos del comprador (el auto de una inspección anterior se vendió): se descuentan solos al pedir la próxima
+$router->get('/api/mis-creditos', [InspeccionController::class, 'creditos'], 'auth');
 // Reclamos: los resuelven el moderador y el admin
 // Mensajes al equipo: contacto (público) y reportes (con sesión); el admin y el moderador los ven en el panel
 $router->post('/api/contacto', [SoporteController::class, 'contactar']);
@@ -93,6 +98,8 @@ $router->patch('/api/admin/reportes/{id}', [SoporteController::class, 'resolverR
 
 $router->get('/api/admin/reclamos', [AdminReclamoController::class, 'index'], 'permiso:reclamos.resolver');
 $router->patch('/api/admin/reclamos/{id}', [AdminReclamoController::class, 'resolver'], 'permiso:reclamos.resolver');
+// Fondo de garantía: saldo, movimientos y el supuesto de la cuenta (solo paga reclamos)
+$router->get('/api/admin/fondo', [AdminReclamoController::class, 'fondo'], 'permiso:metricas.ver|reclamos.resolver');
 // Lado del mecánico: cada uno ve y toca solo sus inspecciones (las de otro dan 404)
 $mecanico = 'permiso:verificaciones.realizar';
 $router->get('/api/mecanico/perfil', [MecanicoController::class, 'perfil'], $mecanico);

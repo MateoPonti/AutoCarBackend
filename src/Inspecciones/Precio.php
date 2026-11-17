@@ -44,6 +44,24 @@ final class Precio
         return $precio * $veces;
     }
 
+    /**
+     * Franquicia del mecánico si un reclamo procede: un porcentaje de lo que cobró (parámetro franquicia).
+     * Con $ 77.000 y 40 %: $ 30.800. Se redondea al peso.
+     */
+    public static function franquicia(float $montoMecanico, float $porcentaje): float
+    {
+        return round($montoMecanico * $porcentaje / 100);
+    }
+
+    /**
+     * Crédito para el comprador si el auto se vendió: un porcentaje del precio (parámetro credito_vendido), al peso.
+     * Con $ 100.000 y 30 %: $ 30.000.
+     */
+    public static function credito(float $precio, float $porcentaje): float
+    {
+        return round($precio * $porcentaje / 100);
+    }
+
     private static function redondear(float $monto): float
     {
         return round($monto / self::REDONDEO) * self::REDONDEO;

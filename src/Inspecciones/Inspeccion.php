@@ -22,7 +22,8 @@ final class Inspeccion
     private const COLUMNAS = 'i.id, i.comprador_id, i.mecanico_id, i.vehiculo_id, i.url, i.fuente, i.titulo, i.anio,
         i.kilometraje, i.precio_publicado, i.localidad, i.estado, i.fecha_turno, i.motivo_rechazo, i.precio,
         i.monto_mecanico, i.monto_autocar, i.monto_fondo, i.tope_veces, i.dias_reclamo, i.pago, i.conclusion, i.resumen, i.firmado_por,
-        i.taller_firma, i.firmada_at, i.huella, i.patente, i.created_at, i.updated_at,
+        i.taller_firma, i.firmada_at, i.huella, i.patente, i.created_at, i.updated_at, i.turno_confirmado_at, i.credito_usado,
+        c.tipo AS credito_tipo, c.monto AS credito_monto,
         EXISTS (SELECT 1 FROM inspeccion_patente_foto pf WHERE pf.inspeccion_id = i.id) AS tiene_foto_patente, u.nombre AS comprador_nombre,
         (SELECT v.estado FROM vehiculo v WHERE v.id = i.vehiculo_id) AS vehiculo_estado,
         mu.nombre AS mecanico_nombre, t.nombre AS taller_nombre, t.direccion AS taller_direccion, t.localidad AS taller_localidad,
@@ -35,7 +36,8 @@ final class Inspeccion
         JOIN usuario u ON u.id = i.comprador_id
         JOIN usuario mu ON mu.id = i.mecanico_id
         LEFT JOIN taller t ON t.usuario_id = i.mecanico_id
-        LEFT JOIN reclamo r ON r.inspeccion_id = i.id';
+        LEFT JOIN reclamo r ON r.inspeccion_id = i.id
+        LEFT JOIN credito c ON c.inspeccion_id = i.id';
 
     // Cómo se ordena cada pestaña de la bandeja del mecánico
     private const ORDEN = [
@@ -45,6 +47,7 @@ final class Inspeccion
         'rechazada'    => 'i.updated_at DESC',
         'cancelada'    => 'i.updated_at DESC',
         'no_realizada' => 'i.updated_at DESC',
+        'caida'        => 'i.updated_at DESC',
     ];
 
     private static function pdo(): PDO
@@ -175,7 +178,13 @@ final class Inspeccion
         }
         $st = self::pdo()->prepare('UPDATE inspeccion SET ' . implode(', ', $set) . ' WHERE id = :id AND estado = :desde');
         $st->execute($params);
-        return $st->rowCount() === 1;
+        if ($st->rowCount() !== 1) {
+            return false;
+        }
+        if ($pago === 'reembolsado') { // se cayó, se canceló o se rechazó: el crédito que usó vuelve
+            Creditos::liberar($id);
+        }
+        return true;
     }
 
     /** Reemplaza el checklist guardado (borrador). Se llama dentro de una transacción con la fila bloqueada. */
@@ -313,6 +322,13 @@ final class Inspeccion
             'fecha_turno'      => $fecha($i['fecha_turno']),
             'motivo_rechazo'   => $i['motivo_rechazo'],
             'precio'           => (float)$i['precio'],
+            // Crédito del comprador descontado del precio (si el auto de una inspección anterior se vendió)
+            'credito_usado'    => (float)$i['credito_usado'],
+            'a_pagar'          => (float)$i['precio'] - (float)$i['credito_usado'],
+            // El crédito que dio esta inspección: auto_vendido (se firmó con el auto vendido) o cupon (se vendió enseguida)
+            'credito'          => $i['credito_tipo'] === null ? null : ['tipo' => $i['credito_tipo'], 'monto' => (float)$i['credito_monto']],
+            // El vendedor confirmó el turno (solo autos de AutoCar, ver AutoVendido)
+            'turno_confirmado_at' => $fecha($i['turno_confirmado_at']),
             'monto_mecanico'   => (float)$i['monto_mecanico'],
             'monto_autocar'    => (float)$i['monto_autocar'],
             'monto_fondo'      => (float)$i['monto_fondo'],
