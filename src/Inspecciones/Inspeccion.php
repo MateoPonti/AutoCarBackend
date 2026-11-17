@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace AutoCar\Inspecciones;
 
+use AutoCar\Comparador\Clave;
 use AutoCar\Core\Database;
 use AutoCar\Parametros\Parametros;
 use DateTimeImmutable;
@@ -22,7 +23,8 @@ final class Inspeccion
     private const COLUMNAS = 'i.id, i.comprador_id, i.mecanico_id, i.vehiculo_id, i.url, i.fuente, i.titulo, i.anio,
         i.kilometraje, i.precio_publicado, i.localidad, i.estado, i.fecha_turno, i.motivo_rechazo, i.precio,
         i.monto_mecanico, i.monto_autocar, i.monto_fondo, i.tope_veces, i.dias_reclamo, i.pago, i.conclusion, i.resumen, i.firmado_por,
-        i.taller_firma, i.firmada_at, i.huella, i.patente, i.created_at, i.updated_at,
+        i.taller_firma, i.firmada_at, i.huella, i.patente, i.created_at, i.updated_at, i.turno_confirmado_at, i.credito_usado,
+        c.tipo AS credito_tipo, c.monto AS credito_monto, i.marca, i.modelo,
         EXISTS (SELECT 1 FROM inspeccion_patente_foto pf WHERE pf.inspeccion_id = i.id) AS tiene_foto_patente, u.nombre AS comprador_nombre,
         (SELECT v.estado FROM vehiculo v WHERE v.id = i.vehiculo_id) AS vehiculo_estado,
         mu.nombre AS mecanico_nombre, t.nombre AS taller_nombre, t.direccion AS taller_direccion, t.localidad AS taller_localidad,
@@ -35,7 +37,8 @@ final class Inspeccion
         JOIN usuario u ON u.id = i.comprador_id
         JOIN usuario mu ON mu.id = i.mecanico_id
         LEFT JOIN taller t ON t.usuario_id = i.mecanico_id
-        LEFT JOIN reclamo r ON r.inspeccion_id = i.id';
+        LEFT JOIN reclamo r ON r.inspeccion_id = i.id
+        LEFT JOIN credito c ON c.inspeccion_id = i.id';
 
     // Cómo se ordena cada pestaña de la bandeja del mecánico
     private const ORDEN = [
@@ -45,6 +48,7 @@ final class Inspeccion
         'rechazada'    => 'i.updated_at DESC',
         'cancelada'    => 'i.updated_at DESC',
         'no_realizada' => 'i.updated_at DESC',
+        'caida'        => 'i.updated_at DESC',
     ];
 
     private static function pdo(): PDO
@@ -119,8 +123,8 @@ final class Inspeccion
     {
         $st = self::pdo()->prepare(
             'INSERT INTO inspeccion (comprador_id, mecanico_id, vehiculo_id, url, url_clave, fuente, titulo, anio, kilometraje,
-               precio_publicado, localidad, precio, monto_mecanico, monto_autocar, monto_fondo, tope_veces, dias_reclamo)
-             VALUES (:c, :m, :v, :url, :clave, :fuente, :titulo, :anio, :km, :pp, :loc, :precio, :mm, :ma, :mf, :tope, :dias)
+               precio_publicado, localidad, precio, monto_mecanico, monto_autocar, monto_fondo, tope_veces, dias_reclamo, marca, modelo)
+             VALUES (:c, :m, :v, :url, :clave, :fuente, :titulo, :anio, :km, :pp, :loc, :precio, :mm, :ma, :mf, :tope, :dias, :marca, :modelo)
              RETURNING id'
         );
         $st->execute([
@@ -131,6 +135,7 @@ final class Inspeccion
             'precio' => $montos['precio'], 'mm' => $montos['monto_mecanico'], 'ma' => $montos['monto_autocar'],
             'mf' => $montos['monto_fondo'], 'tope' => Parametros::valor('tope_veces'),
             'dias' => (int)Parametros::valor('dias_reclamo'),
+            'marca' => $datos['marca'] ?? null, 'modelo' => $datos['modelo'] ?? null,
         ]);
         return (int)$st->fetchColumn();
     }
@@ -175,11 +180,21 @@ final class Inspeccion
         }
         $st = self::pdo()->prepare('UPDATE inspeccion SET ' . implode(', ', $set) . ' WHERE id = :id AND estado = :desde');
         $st->execute($params);
-        return $st->rowCount() === 1;
+        if ($st->rowCount() !== 1) {
+            return false;
+        }
+        if ($pago === 'reembolsado') { // se cayó, se canceló o se rechazó: el crédito que usó vuelve
+            Creditos::liberar($id);
+        }
+        return true;
     }
 
-    /** Reemplaza el checklist guardado (borrador). Se llama dentro de una transacción con la fila bloqueada. */
-    public static function guardarInforme(int $id, array $items, ?string $conclusion, ?string $resumen, ?string $patente = null): void
+    /**
+     * Reemplaza el checklist guardado (borrador). Se llama dentro de una transacción con la fila bloqueada.
+     * La marca y el modelo solo cambian si vienen (si no, quedan los del pedido).
+     */
+    public static function guardarInforme(int $id, array $items, ?string $conclusion, ?string $resumen, ?string $patente = null,
+        ?string $marca = null, ?string $modelo = null): void
     {
         $pdo = self::pdo();
         $pdo->prepare('DELETE FROM inspeccion_item WHERE inspeccion_id = :id')->execute(['id' => $id]);
@@ -187,8 +202,9 @@ final class Inspeccion
         foreach ($items as $codigo => [$resultado, $nota]) {
             $alta->execute(['id' => $id, 'c' => $codigo, 'r' => $resultado, 'n' => $nota]);
         }
-        $pdo->prepare('UPDATE inspeccion SET conclusion = :c, resumen = :r, patente = :p, updated_at = now() WHERE id = :id')
-            ->execute(['id' => $id, 'c' => $conclusion, 'r' => $resumen, 'p' => $patente]);
+        $pdo->prepare('UPDATE inspeccion SET conclusion = :c, resumen = :r, patente = :p, marca = COALESCE(:marca, marca),
+               modelo = COALESCE(:modelo, modelo), updated_at = now() WHERE id = :id')
+            ->execute(['id' => $id, 'c' => $conclusion, 'r' => $resumen, 'p' => $patente, 'marca' => $marca, 'modelo' => $modelo]);
     }
 
     /** La foto de la chapa (reemplaza la que hubiera). $tmp: archivo ya validado con Foto::validarSubidas. */
@@ -306,6 +322,10 @@ final class Inspeccion
             // sigue valiendo y queda en la patente. null = aviso de otro sitio (no sabemos si sigue publicado).
             'aviso_publicado'  => $i['vehiculo_id'] === null ? null : ($i['vehiculo_estado'] ?? null) === 'disponible',
             'titulo'           => $i['titulo'],
+            // Del catálogo (idea B): con la misma clave que el comparador; null si todavía no se sabe
+            'marca'            => $i['marca'],
+            'modelo'           => $i['modelo'],
+            'modelo_clave'     => $i['marca'] !== null && $i['modelo'] !== null ? Clave::de($i['marca'], $i['modelo']) : null,
             'anio'             => $entero($i['anio']),
             'kilometraje'      => $entero($i['kilometraje']),
             'precio_publicado' => $numero($i['precio_publicado']),
@@ -313,6 +333,13 @@ final class Inspeccion
             'fecha_turno'      => $fecha($i['fecha_turno']),
             'motivo_rechazo'   => $i['motivo_rechazo'],
             'precio'           => (float)$i['precio'],
+            // Crédito del comprador descontado del precio (si el auto de una inspección anterior se vendió)
+            'credito_usado'    => (float)$i['credito_usado'],
+            'a_pagar'          => (float)$i['precio'] - (float)$i['credito_usado'],
+            // El crédito que dio esta inspección: auto_vendido (se firmó con el auto vendido) o cupon (se vendió enseguida)
+            'credito'          => $i['credito_tipo'] === null ? null : ['tipo' => $i['credito_tipo'], 'monto' => (float)$i['credito_monto']],
+            // El vendedor confirmó el turno (solo autos de AutoCar, ver AutoVendido)
+            'turno_confirmado_at' => $fecha($i['turno_confirmado_at']),
             'monto_mecanico'   => (float)$i['monto_mecanico'],
             'monto_autocar'    => (float)$i['monto_autocar'],
             'monto_fondo'      => (float)$i['monto_fondo'],
@@ -358,6 +385,15 @@ final class Inspeccion
         if ($items !== null) {
             // Con el detalle va el historial del auto (las otras inspecciones de la misma patente)
             $datos['anteriores'] = self::anteriores((int)$i['id'], $i['patente'], $i['firmada_at']);
+            // Idea A: el costo total (precio del aviso + el presupuesto vigente más barato de cada arreglo)
+            $datos['presupuestos'] = [];
+            $datos['costo_total'] = null;
+            if ($i['estado'] === 'firmada') {
+                $presupuestos = Presupuestos::deLaInspeccion((int)$i['id']);
+                $datos['presupuestos'] = array_map([Presupuestos::class, 'paraApi'], $presupuestos);
+                $datos['costo_total'] = CostoTotal::calcular(CostoTotal::arreglos($items), $presupuestos,
+                    $numero($i['precio_publicado']), new DateTimeImmutable());
+            }
             $datos['items'] = [];
             foreach ($items as $codigo => [$resultado, $nota]) {
                 $datos['items'][] = ['codigo' => $codigo, 'resultado' => $resultado, 'nota' => $nota];

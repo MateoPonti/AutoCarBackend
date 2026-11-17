@@ -1440,8 +1440,10 @@ CREATE TABLE IF NOT EXISTS inspeccion (
   precio_publicado NUMERIC(13,2) CHECK (precio_publicado > 0),
   localidad        VARCHAR(100),
   estado           VARCHAR(12)   NOT NULL DEFAULT 'pedida'
-                   CHECK (estado IN ('pedida', 'aceptada', 'rechazada', 'cancelada', 'firmada', 'no_realizada')),
+                   CONSTRAINT inspeccion_estado_check
+                   CHECK (estado IN ('pedida', 'aceptada', 'rechazada', 'cancelada', 'firmada', 'no_realizada', 'caida')),
   fecha_turno      TIMESTAMPTZ,
+  turno_confirmado_at TIMESTAMPTZ,           -- el vendedor confirmó el turno (solo autos de AutoCar, 024-auto-vendido-y-fondo.sql)
   motivo_rechazo   VARCHAR(300),
   precio           NUMERIC(11,2) NOT NULL CHECK (precio > 0),
   monto_mecanico   NUMERIC(11,2) NOT NULL,
@@ -1449,6 +1451,9 @@ CREATE TABLE IF NOT EXISTS inspeccion (
   monto_fondo      NUMERIC(11,2) NOT NULL,   -- parte de monto_autocar que va al fondo de garantía
   tope_veces       NUMERIC(6,2)  NOT NULL DEFAULT 3,   -- con los que se pidió (parámetros, 021-preferencias-y-parametros.sql)
   dias_reclamo     SMALLINT      NOT NULL DEFAULT 15,
+  credito_usado    NUMERIC(11,2) NOT NULL DEFAULT 0,   -- crédito del comprador descontado del precio (024)
+  marca            VARCHAR(60),   -- del catálogo, para las fallas típicas por modelo (026); obligatorios para firmar
+  modelo           VARCHAR(60),
   pago             VARCHAR(11)   NOT NULL DEFAULT 'retenido' CHECK (pago IN ('retenido', 'liberado', 'reembolsado')),
   conclusion       VARCHAR(16)   CHECK (conclusion IN ('recomendable', 'con_reparos', 'no_recomendable')),
   resumen          VARCHAR(1000),
@@ -1463,8 +1468,11 @@ CREATE TABLE IF NOT EXISTS inspeccion (
   CHECK (monto_mecanico + monto_autocar = precio),
   CHECK (estado <> 'firmada' OR (conclusion IS NOT NULL AND firmado_por IS NOT NULL AND firmada_at IS NOT NULL AND huella IS NOT NULL)),
   CONSTRAINT inspeccion_patente_formato CHECK (patente IS NULL OR patente ~ '^([A-Z]{3}[0-9]{3}|[A-Z]{2}[0-9]{3}[A-Z]{2})$'),
-  CONSTRAINT inspeccion_firmada_con_patente CHECK (estado <> 'firmada' OR patente IS NOT NULL)
+  CONSTRAINT inspeccion_firmada_con_patente CHECK (estado <> 'firmada' OR patente IS NOT NULL),
+  CONSTRAINT inspeccion_credito_usado_check CHECK (credito_usado >= 0 AND credito_usado <= precio),
+  CONSTRAINT inspeccion_modelo_fk FOREIGN KEY (marca, modelo) REFERENCES modelo (marca, nombre) ON UPDATE CASCADE
 );
+CREATE INDEX IF NOT EXISTS idx_inspeccion_modelo ON inspeccion (marca, modelo) WHERE estado = 'firmada';
 CREATE INDEX IF NOT EXISTS idx_inspeccion_patente ON inspeccion (patente) WHERE patente IS NOT NULL;
 
 -- Foto de la chapa que sube el mecánico antes de firmar (022-patente.sql)
@@ -1498,6 +1506,8 @@ CREATE TABLE IF NOT EXISTS reclamo (
   descripcion   VARCHAR(1000) NOT NULL CHECK (length(descripcion) > 0),
   estado        VARCHAR(10)   NOT NULL DEFAULT 'abierto' CHECK (estado IN ('abierto', 'procede', 'no_procede')),
   compensacion  NUMERIC(11,2) CHECK (compensacion >= 0),
+  devolucion    NUMERIC(11,2) CHECK (devolucion >= 0),   -- lo que pagó el comprador, que le devuelve el fondo (024)
+  franquicia    NUMERIC(11,2) CHECK (franquicia >= 0),   -- lo que el mecánico le paga al fondo (024)
   respuesta     VARCHAR(1000),
   resuelto_por  INTEGER       REFERENCES usuario(id),
   created_at    TIMESTAMPTZ   NOT NULL DEFAULT now(),
@@ -1505,6 +1515,64 @@ CREATE TABLE IF NOT EXISTS reclamo (
 );
 
 CREATE INDEX IF NOT EXISTS idx_reclamo_estado ON reclamo (estado, created_at);
+
+-- Idea A, costo total (025-presupuestos.sql, Inspecciones\Presupuestos): cada arreglo del informe firmado se le pide a
+-- otros talleres de la red, nunca al que inspeccionó. Cada uno responde con un monto, vigente unos días.
+CREATE TABLE IF NOT EXISTS presupuesto (
+  id            INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  inspeccion_id INTEGER       NOT NULL REFERENCES inspeccion(id) ON DELETE CASCADE,
+  item_codigo   VARCHAR(20)   NOT NULL,
+  mecanico_id   INTEGER       NOT NULL REFERENCES usuario(id),   -- el taller al que se le pidió
+  estado        VARCHAR(10)   NOT NULL DEFAULT 'pedido' CHECK (estado IN ('pedido', 'respondido', 'rechazado')),
+  monto         NUMERIC(11,2) CHECK (monto > 0),
+  detalle       VARCHAR(500),
+  vigente_hasta TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  respondido_at TIMESTAMPTZ,
+  UNIQUE (inspeccion_id, item_codigo, mecanico_id),
+  CHECK (estado <> 'respondido' OR (monto IS NOT NULL AND vigente_hasta IS NOT NULL))
+);
+CREATE INDEX IF NOT EXISTS idx_presupuesto_mecanico ON presupuesto (mecanico_id, estado, created_at);
+
+-- Idea B, fallas típicas por modelo (026-fallas-tipicas.sql, Inspecciones\FallasTipicas). Origen 'internet' (la carga
+-- el admin con la fuente) o 'mecanicos' (la propone uno); 'medido' sale de las inspecciones firmadas, no se guarda.
+CREATE TABLE IF NOT EXISTS falla_tipica (
+  id          INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  marca       VARCHAR(60)  NOT NULL,
+  modelo      VARCHAR(60)  NOT NULL,
+  item_codigo VARCHAR(20)  NOT NULL,
+  titulo      VARCHAR(120) NOT NULL,
+  descripcion VARCHAR(500),
+  origen      VARCHAR(10)  NOT NULL CHECK (origen IN ('internet', 'mecanicos')),
+  fuente_url  VARCHAR(500),
+  creada_por  INTEGER      REFERENCES usuario(id) ON DELETE SET NULL,
+  created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  FOREIGN KEY (marca, modelo) REFERENCES modelo (marca, nombre) ON UPDATE CASCADE,
+  CHECK (origen <> 'internet' OR fuente_url IS NOT NULL)
+);
+CREATE INDEX IF NOT EXISTS idx_falla_tipica_modelo ON falla_tipica (marca, modelo);
+
+CREATE TABLE IF NOT EXISTS falla_voto (
+  falla_id    INTEGER     NOT NULL REFERENCES falla_tipica(id) ON DELETE CASCADE,
+  mecanico_id INTEGER     NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+  confirma    BOOLEAN     NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (falla_id, mecanico_id)
+);
+
+-- Crédito del comprador cuando el auto se vendió (024-auto-vendido-y-fondo.sql, Inspecciones\Creditos).
+-- Se usa solo en su próxima inspección (usado_en) y vuelve si esa inspección se cae, se cancela o se rechaza.
+CREATE TABLE IF NOT EXISTS credito (
+  id            INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  usuario_id    INTEGER       NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+  inspeccion_id INTEGER       NOT NULL REFERENCES inspeccion(id) ON DELETE CASCADE,  -- la que lo generó
+  tipo          VARCHAR(12)   NOT NULL CHECK (tipo IN ('auto_vendido', 'cupon')),
+  monto         NUMERIC(11,2) NOT NULL CHECK (monto > 0),
+  usado_en      INTEGER       REFERENCES inspeccion(id) ON DELETE SET NULL,          -- NULL = disponible
+  created_at    TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  UNIQUE (inspeccion_id)   -- una inspección da un solo crédito
+);
+CREATE INDEX IF NOT EXISTS idx_credito_usuario ON credito (usuario_id, created_at) WHERE usado_en IS NULL;
 
 -- Los autos de otras plataformas (MercadoLibre, Kavak, Autocosmos), su historial, las búsquedas guardadas y sus avisos
 -- NO están en esta base: van en Firestore (NoSQL). Ver docs/arquitectura-scraper.md y src/MetaBusqueda/Documentos.php.
@@ -1546,7 +1614,7 @@ CREATE TABLE IF NOT EXISTS parametro (
   valor        NUMERIC(14,4) NOT NULL,
   minimo       NUMERIC(14,4) NOT NULL,   -- lo que se puede poner, para que nadie escriba 770 en vez de 77
   maximo       NUMERIC(14,4) NOT NULL,
-  unidad       VARCHAR(10)   NOT NULL CHECK (unidad IN ('porcentaje', 'pesos', 'dias', 'veces')),
+  unidad       VARCHAR(10)   NOT NULL CONSTRAINT parametro_unidad_check CHECK (unidad IN ('porcentaje', 'pesos', 'dias', 'veces', 'horas')),
   descripcion  VARCHAR(200)  NOT NULL,
   orden        SMALLINT      NOT NULL,   -- en qué orden se muestran en el panel
   updated_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
@@ -1573,7 +1641,16 @@ INSERT INTO parametro (clave, valor, minimo, maximo, unidad, descripcion, orden)
   ('precio_minimo',    70000,   1000, 10000000, 'pesos',      'Precio mínimo que puede cobrar un taller por la inspección', 5),
   ('precio_sugerido',  100000,  1000, 10000000, 'pesos',      'Precio que se le sugiere al taller', 6),
   ('precio_maximo',    150000,  1000, 10000000, 'pesos',      'Precio máximo que puede cobrar un taller por la inspección', 7),
-  ('cotizacion_dolar', 1450,    1,    100000,   'pesos',      'Cotización del dólar: con ella se muestran en pesos los autos publicados en dólares en el metabuscador', 8) -- 023
+  ('cotizacion_dolar', 1450,    1,    100000,   'pesos',      'Cotización del dólar: con ella se muestran en pesos los autos publicados en dólares en el metabuscador', 8), -- 023
+  ('franquicia',       40,      0,    100,      'porcentaje', 'Parte de lo que cobró el mecánico que paga al fondo si un reclamo procede', 9),  -- 024
+  ('credito_vendido',  30,      0,    100,      'porcentaje', 'Crédito para el comprador, en % del precio, si el auto se vendió (firmada con el auto vendido o cupón)', 10),
+  ('horas_cupon',      48,      1,    720,      'horas',      'Horas después de la firma en las que, si el auto se vende con el turno confirmado, el comprador recibe el cupón', 11),
+  ('presupuestos_por_arreglo', 3, 1, 10,       'veces',      'A cuántos talleres de la red se les pide presupuesto por cada arreglo del informe', 12),  -- 025
+  ('dias_presupuesto', 15,      1,    90,       'dias',       'Días que vale el presupuesto de un taller', 13),
+  ('comision_arreglos', 6,      0,    50,       'porcentaje', 'Comisión que paga el taller por un arreglo que le llega por AutoCar (todavía no se cobra)', 14),
+  ('fallas_minimo_inspecciones', 20, 1, 1000,  'veces',      'Inspecciones firmadas de un modelo que hacen falta para mostrar cuánto se midió cada falla', 15),  -- 026
+  ('fallas_votos_confirmar', 3,  1,    50,       'veces',      'Votos de mecánicos que hacen falta para confirmar o descartar una falla típica', 16),
+  ('fallas_porcentaje_medido', 20, 1,  100,      'porcentaje', 'Desde qué % de inspecciones con el ítem observado o con falla se lo muestra como falla medida', 17)
 ON CONFLICT (clave) DO NOTHING;
 
 -- Preferencias del comprador: "¿Para qué buscás el auto?" (021-preferencias-y-parametros.sql, Auth\Preferencias)

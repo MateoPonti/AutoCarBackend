@@ -5,6 +5,7 @@ namespace AutoCar\Admin;
 
 use AutoCar\Auth\Preferencias;
 use AutoCar\Core\Database;
+use AutoCar\Inspecciones\Fondo;
 use AutoCar\Core\Response;
 use PDO;
 
@@ -104,42 +105,50 @@ final class AdminMetricasController
     }
 
     /**
-     * Lo que dejan las inspecciones, el ingreso de AutoCar (ver Precio.php: 23 % de comisión, un tercio va al fondo
+     * Lo que dejan las inspecciones, el ingreso de AutoCar (ver Precio.php: comisión de AutoCar, una parte va al fondo
      * de garantía). El pago es SIMULADO hasta que haya Mercado Pago: queda retenido al pedir, se libera al firmar
-     * y se reembolsa si el mecánico rechaza o el comprador cancela. Los reclamos que proceden salen del fondo.
+     * y se reembolsa si el mecánico rechaza, el comprador cancela o el auto se vende antes del turno.
+     * Los créditos que usan los compradores (un auto anterior se vendió) los pone AutoCar de su parte.
+     * El fondo solo paga reclamos (ver Fondo).
      */
     private static function ganancias(): array
     {
         $pdo = Database::pdo();
         $g = $pdo->query(
-            "SELECT COALESCE(SUM(precio) FILTER (WHERE pago = 'liberado'), 0)                        AS facturado,
-                    COALESCE(SUM(monto_autocar - monto_fondo) FILTER (WHERE pago = 'liberado'), 0)   AS autocar,
-                    COALESCE(SUM(monto_fondo) FILTER (WHERE pago = 'liberado'), 0)                   AS fondo,
-                    COALESCE(SUM(monto_mecanico) FILTER (WHERE pago = 'liberado'), 0)                AS mecanicos,
-                    COALESCE(SUM(precio) FILTER (WHERE pago = 'retenido'), 0)                        AS retenido,
-                    COALESCE(SUM(precio) FILTER (WHERE pago = 'reembolsado'), 0)                     AS reembolsado,
-                    COALESCE(SUM(monto_autocar - monto_fondo) FILTER (WHERE pago = 'liberado'
-                             AND created_at > now() - interval '30 days'), 0)                         AS autocar_30d
+            "SELECT COALESCE(SUM(precio - credito_usado) FILTER (WHERE pago = 'liberado'), 0)                AS facturado,
+                    COALESCE(SUM(monto_autocar - monto_fondo - credito_usado) FILTER (WHERE pago = 'liberado'), 0) AS autocar,
+                    COALESCE(SUM(credito_usado) FILTER (WHERE pago = 'liberado'), 0)                         AS creditos_usados,
+                    COALESCE(SUM(monto_mecanico) FILTER (WHERE pago = 'liberado'), 0)                        AS mecanicos,
+                    COALESCE(SUM(precio - credito_usado) FILTER (WHERE pago = 'retenido'), 0)                AS retenido,
+                    COALESCE(SUM(precio - credito_usado) FILTER (WHERE pago = 'reembolsado'), 0)             AS reembolsado,
+                    COALESCE(SUM(monto_autocar - monto_fondo - credito_usado) FILTER (WHERE pago = 'liberado'
+                             AND created_at > now() - interval '30 days'), 0)                                 AS autocar_30d
                FROM inspeccion"
         )->fetch();
-        $compensado = (float)$pdo->query("SELECT COALESCE(SUM(compensacion), 0) FROM reclamo WHERE estado = 'procede'")->fetchColumn();
+        $creditosPendientes = (float)$pdo->query('SELECT COALESCE(SUM(monto), 0) FROM credito WHERE usado_en IS NULL')->fetchColumn();
         $porEstado = $pdo->query('SELECT estado, COUNT(*) FROM inspeccion GROUP BY estado')->fetchAll(PDO::FETCH_KEY_PAIR);
+        $fondo = Fondo::resumen(0);
         return [
             'disponible'       => true,
             'simulado'         => true,
             'aclaracion'       => 'Pago simulado: todavía no hay cobros reales (Mercado Pago está pendiente).',
             'inspecciones'     => array_map('intval', $porEstado),
             'facturado'        => (float)$g['facturado'],   // lo que pagaron los compradores (inspecciones firmadas)
-            'autocar'          => (float)$g['autocar'],     // ganancia de AutoCar: la comisión menos lo del fondo
+            'autocar'          => (float)$g['autocar'],     // ganancia de AutoCar: la comisión menos lo del fondo y los créditos
             'autocar_30d'      => (float)$g['autocar_30d'],
             'mecanicos'        => (float)$g['mecanicos'],   // pagado a los mecánicos
+            'creditos'         => [
+                'usados'     => (float)$g['creditos_usados'], // descontados del precio (los pone AutoCar)
+                'pendientes' => $creditosPendientes,          // dados y todavía sin usar
+            ],
             'fondo'            => [
-                'acumulado'  => (float)$g['fondo'],
-                'usado'      => $compensado,                // compensaciones de reclamos que procedieron
-                'disponible' => (float)$g['fondo'] - $compensado,
+                'acumulado'   => $fondo['aportes'],                                  // la parte de cada inspección firmada
+                'franquicias' => $fondo['franquicias'],                              // lo que pagaron los mecánicos por reclamos
+                'usado'       => $fondo['devoluciones'] + $fondo['compensaciones'], // devoluciones y compensaciones de reclamos
+                'disponible'  => $fondo['saldo'],
             ],
             'retenido'         => (float)$g['retenido'],    // pedidos en curso: se libera al firmar
-            'reembolsado'      => (float)$g['reembolsado'], // rechazadas, canceladas o no realizadas: vuelve al comprador
+            'reembolsado'      => (float)$g['reembolsado'], // rechazadas, canceladas, no realizadas o caídas: vuelve al comprador
         ];
     }
 

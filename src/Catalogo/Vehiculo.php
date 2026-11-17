@@ -5,6 +5,7 @@ namespace AutoCar\Catalogo;
 
 use AutoCar\Core\Database;
 use AutoCar\Core\Request;
+use AutoCar\Inspecciones\AutoVendido;
 use PDO;
 
 /** Entidad principal. Consultas parametrizadas + validación del lado del servidor. */
@@ -185,7 +186,12 @@ final class Vehiculo
         }
         $st = Database::pdo()->prepare($sql);
         $st->execute($params);
-        return $st->rowCount() === 1;
+        if ($st->rowCount() !== 1) {
+            return false;
+        }
+        // Vendida, eliminada o rechazada: los turnos de inspección que no pasaron se caen (ver AutoVendido)
+        AutoVendido::alCambiarElAviso($id, $estado);
+        return true;
     }
 
     /** $usuarioId: el vendedor, dueño de la publicación (obligatorio: la base tampoco acepta un vehículo sin vendedor). */

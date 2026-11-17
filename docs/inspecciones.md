@@ -132,11 +132,11 @@ Los números son los del `PLAN.md`. Los controladores son `InspeccionController`
 
 Todavía no está decidido y no afecta a esta base:
 - Qué datos del auto externo se completan solos con lo que juntó el scraper y cuáles carga el comprador.
-- El precio de referencia ($ 130.000), el plazo para reclamar y el tope de la compensación. Son constantes (`Precio`, `Estados`): se cambian en un solo lugar.
+- Los pagos al mecánico (a los 10 y a los 15 días) y Mercado Pago: se deciden al final.
 
 ## 8. Reglas de negocio (resumen)
 
-Todas están en el back (el front repite algunas para avisar antes, pero la que vale es la del back). Las constantes se cambian en un solo lugar.
+Todas están en el back (el front repite algunas para avisar antes, pero la que vale es la del back). Los números (porcentajes, montos y días) están en la tabla `parametro` y los cambia el admin desde su panel (migración `021`); cada inspección guarda el tope y los días con los que se pidió.
 
 **Cuenta del taller ("Adherí tu taller")**
 - La cuenta del taller es **aparte** de la cuenta personal. Se crea con la solicitud, sin sesión (`POST /api/solicitudes-taller`).
@@ -154,7 +154,7 @@ Todas están en el back (el front repite algunas para avisar antes, pero la que 
 - 409 si hay interés propio: el mecánico no se pide una a sí mismo (`mecanico_propio`), el vendedor no la pide para su auto (`vehiculo_propio`), no se elige al mecánico que publicó el auto (`mecanico_vendedor`), y no se pide dos veces el mismo link mientras hay una en curso (`duplicada`).
 
 **Plata (`Precio`, el pago todavía es simulado)**
-- Precio de referencia **$ 130.000** (cada taller pone el suyo). **77 %** para el mecánico y **23 %** para AutoCar (`COMISION`); de lo de AutoCar, **un tercio** va al fondo de garantía que paga los reclamos (`PARTE_FONDO`). Se redondea a $ 1.000.
+- Precio sugerido **$ 100.000**; cada taller pone el suyo entre **$ 70.000 y $ 150.000** (parámetros `precio_minimo`, `precio_sugerido` y `precio_maximo`). **77 %** para el mecánico y **23 %** para AutoCar (`comision_autocar`); de lo de AutoCar, **un tercio** va al fondo de garantía que paga los reclamos (`parte_fondo`). Se redondea a $ 1.000.
 - Los montos se guardan al pedirla: si el taller cambia el precio después, no afecta a las pedidas.
 - Pago: `retenido` al pedir → `liberado` al firmar, o `reembolsado` si el mecánico la rechaza, el comprador la cancela o el reclamo procede.
 
@@ -163,8 +163,27 @@ Todas están en el back (el front repite algunas para avisar antes, pero la que 
 - Checklist de **10 ítems** (`ok`, `observado` o `falla`); lo que no está `ok` exige nota. Conclusión: `recomendable`, `con_reparos` o `no_recomendable`.
 - Para firmar hacen falta los 10 ítems y la conclusión. La firma guarda el nombre del mecánico y del taller, el momento y la **huella SHA-256**. Firmada, **no cambia más** (409).
 
-**Reclamos y ranking**
-- El comprador tiene **15 días** desde la firma para reclamar, **una sola vez** (`DIAS_RECLAMO`).
+**Auto vendido (solo autos de AutoCar, `AutoVendido`; migración `024`)**
+- El vendedor confirma el turno que dio el mecánico (`POST /api/inspecciones/{id}/confirmar-turno`). No sabe qué mecánico es.
+- Si la publicación pasa a vendida, eliminada o rechazada **antes del turno**, la inspección queda `caida` y se le devuelve todo al comprador. Una edición (vuelve a `pendiente`) no la hace caer.
+- Si el turno ya pasó (el mecánico fue), **se firma igual**: el informe queda en la patente. Si al firmar el auto ya está vendido, el comprador recibe un **crédito** del `credito_vendido` % del precio (30 %), no la devolución completa.
+- **Cupón:** turno confirmado y auto vendido dentro de `horas_cupon` (48 h) después de la firma → el mismo crédito. Las dos condiciones se comprueban en la base.
+- Un aviso de otro sitio que desaparece no siempre es un auto vendido: ahí no se hace nada solo.
+- El crédito lo pone AutoCar de su parte, se descuenta solo en la próxima inspección del comprador y vuelve si esa se cae, se cancela o se rechaza.
+
+**Idea A, costo total (`CostoTotal`, `Presupuestos`; migración `025`)**
+- Al firmar, cada arreglo del informe (ítem observado o con falla; kilometraje e identificación no tienen arreglo) se le pide a `presupuestos_por_arreglo` (3) talleres de la red. **El taller que inspeccionó nunca recibe el pedido.** Primero los de su localidad, en el orden del ranking.
+- Cada taller responde con un monto y un detalle (vale `dias_presupuesto`, 15 días) o rechaza; una sola vez.
+- Costo total = precio del aviso + el presupuesto **vigente más barato** de cada arreglo. Si algún arreglo no tiene ninguno, se avisa que está incompleto.
+
+**Idea B, fallas típicas por modelo (`FallaTipica`, `FallasTipicas`; migración `026`)**
+- La inspección guarda marca y modelo del catálogo (la misma clave que el comparador). Obligatorios para firmar.
+- Cada falla tiene su origen: **internet** (la carga el admin con la fuente) o **mecánicos** (la propone uno). El tercero, **medido**, sale de las inspecciones firmadas: qué % de los autos del modelo tuvo ese ítem observado o con falla.
+- El voto de los mecánicos cambia el estado: con `fallas_votos_confirmar` (3) de un lado, y más que del otro, queda confirmada o descartada. Las descartadas no se le muestran al comprador.
+- **No se muestra el porcentaje con menos de `fallas_minimo_inspecciones` (20)** inspecciones firmadas del modelo.
+
+**Reclamos, fondo y ranking**
+- El comprador tiene **15 días** desde la firma para reclamar, **una sola vez** (parámetro `dias_reclamo`).
 - Lo resuelve un moderador o admin (`reclamos.resolver`), nunca alguien con interés en esa inspección (`interes_propio`).
-- Si procede: se devuelve el pago y la compensación llega hasta **3 veces** el precio (`TOPE_VECES`).
+- Si procede: se devuelve el pago y la compensación llega hasta **3 veces** el precio (parámetro `tope_veces`). Las dos salen del **fondo de garantía**, que solo paga reclamos; el mecánico le paga al fondo una **franquicia** del 40 % de lo que cobró (parámetro `franquicia`). El saldo y los movimientos están en `GET /api/admin/fondo` (`Fondo`).
 - Ranking: `5 × (1 − 2 × procedentes ÷ firmadas)`, mínimo 0; con **menos de 3** firmadas, "Nuevo en la red" (§ 5). Nadie paga para subir.

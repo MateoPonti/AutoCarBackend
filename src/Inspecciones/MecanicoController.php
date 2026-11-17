@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace AutoCar\Inspecciones;
 
 use AutoCar\Auth\Auth;
+use AutoCar\Catalogo\MarcaModelo;
 use AutoCar\Core\Database;
 use AutoCar\Core\Request;
 use AutoCar\Core\Response;
@@ -133,11 +134,21 @@ final class MecanicoController
             }
         }
 
+        // Marca y modelo del catálogo (idea B): si vienen, se validan; si no, quedan los del pedido
+        $marca = is_string($in['marca'] ?? null) && trim($in['marca']) !== '' ? trim($in['marca']) : null;
+        $modelo = is_string($in['modelo'] ?? null) && trim($in['modelo']) !== '' ? trim($in['modelo']) : null;
+        if ($marca !== null || $modelo !== null) {
+            $error = MarcaModelo::errores((string)$marca, (string)$modelo);
+            if ($error) {
+                Response::error(422, 'validacion', 'Revisá la marca y el modelo.', $error);
+            }
+        }
+
         $pdo = Database::pdo();
         $pdo->beginTransaction();
         $inspeccion = self::propia($id, true);
         self::exigirAceptada($inspeccion);
-        Inspeccion::guardarInforme($id, $items, $conclusion, $resumen === '' ? null : $resumen, $patente);
+        Inspeccion::guardarInforme($id, $items, $conclusion, $resumen === '' ? null : $resumen, $patente, $marca, $modelo);
         $pdo->commit();
         self::responderDetalle($id);
     }
@@ -171,6 +182,9 @@ final class MecanicoController
         if ($error === null && !$inspeccion['tiene_foto_patente']) {
             $error = 'Falta la foto de la chapa con la patente.';
         }
+        if ($error === null && ($inspeccion['marca'] === null || $inspeccion['modelo'] === null)) {
+            $error = 'Falta la marca y el modelo del auto: elegilos de la lista.'; // las fallas típicas se miden por modelo
+        }
         if ($error !== null) {
             self::fallar(422, 'informe_incompleto', $error);
         }
@@ -180,6 +194,9 @@ final class MecanicoController
         $huella = Huella::calcular($id, $items, $inspeccion['conclusion'], $inspeccion['resumen'],
             $firmadoPor, $taller['nombre'], Inspeccion::momentoHuella($momento), $inspeccion['patente']);
         Inspeccion::firmar($id, $firmadoPor, $taller['nombre'], $momento, $huella);
+        AutoVendido::alFirmar($inspeccion); // si el auto ya se vendió, el comprador recibe el crédito
+        // Idea A: cada arreglo del informe se le pide a otros talleres de la red (nunca a este)
+        Presupuestos::pedir($id, self::yo(), $taller['localidad']);
         $pdo->commit();
         self::responderDetalle($id);
     }

@@ -55,7 +55,8 @@ trait ConInspecciones
     {
         self::assertSame(200, $this->pedir('PATCH', "/api/mecanico/inspecciones/$id", ['accion' => 'aceptar', 'fecha_turno' => self::turno()])['status']);
         self::assertSame(200, $this->pedir('PUT', "/api/mecanico/inspecciones/$id/informe",
-            ['items' => self::checklistCompleto(), 'conclusion' => 'recomendable', 'patente' => $patente])['status']);
+            ['items' => self::checklistCompleto(), 'conclusion' => 'recomendable', 'patente' => $patente,
+             'marca' => 'Volkswagen', 'modelo' => 'Gol Trend'])['status']);
         self::assertSame(200, $this->pedirFormulario("/api/mecanico/inspecciones/$id/patente-foto", [], 1, 'foto')['status']);
         $firma = $this->pedir('POST', "/api/mecanico/inspecciones/$id/firma", []);
         self::assertSame(200, $firma['status'], json_encode($firma['json']));

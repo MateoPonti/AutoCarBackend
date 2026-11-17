@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace AutoCar\Inspecciones;
 
 use AutoCar\Auth\Auth;
+use AutoCar\Catalogo\MarcaModelo;
 use AutoCar\Core\Config;
 use AutoCar\Core\Database;
 use AutoCar\Core\Request;
@@ -51,6 +52,13 @@ final class InspeccionController
                 $errores['url'] = 'Esa publicación de AutoCar no está disponible.';
             }
         }
+        // Marca y modelo (idea B): de la publicación si es de AutoCar; si no, los que eligió el comprador, del catálogo
+        if ($vehiculo !== null) {
+            $datos['marca'] = $vehiculo['marca'];
+            $datos['modelo'] = $vehiculo['modelo'];
+        } elseif ($datos['marca'] !== null || $datos['modelo'] !== null) {
+            $errores += MarcaModelo::errores((string)$datos['marca'], (string)$datos['modelo']);
+        }
         if ($errores) {
             Response::error(422, 'validacion', 'Revisá los datos del pedido.', $errores);
         }
@@ -71,10 +79,16 @@ final class InspeccionController
             $datos['localidad'] ??= $vehiculo['localidad'];
         }
 
-        // Dos pedidos a la vez pasan juntos el chequeo de arriba: el índice único de la base deja entrar solo uno
+        // Dos pedidos a la vez pasan juntos el chequeo de arriba: el índice único de la base deja entrar solo uno.
+        // Si el comprador tiene un crédito (un auto anterior se vendió), se descuenta solo en la misma transacción.
+        $pdo = Database::pdo();
+        $pdo->beginTransaction();
         try {
             $id = Inspeccion::crear($yo, $datos, Precio::desgloseActual((float)$taller['precio_inspeccion']));
+            Creditos::usarEn($yo, $id, (float)$taller['precio_inspeccion']);
+            $pdo->commit();
         } catch (PDOException $e) {
+            $pdo->rollBack();
             if ($e->getCode() !== '23505') { // 23505 = unique_violation
                 throw $e;
             }
@@ -164,6 +178,32 @@ final class InspeccionController
             Response::error(409, 'reclamo_existente', 'Ya hiciste un reclamo por esta inspección.');
         }
         Response::json(['inspeccion' => Inspeccion::paraApi(Inspeccion::porId($id), Inspeccion::items($id))], 201);
+    }
+
+    /** GET /api/mis-creditos → {items, total}: los créditos que el comprador todavía no usó (se descuentan solos al pedir). */
+    public function creditos(): void
+    {
+        $items = Creditos::disponibles((int)Auth::id());
+        Response::json(['items' => $items, 'total' => array_sum(array_column($items, 'monto'))]);
+    }
+
+    /**
+     * GET /api/mis-vehiculos/turnos → {items}: los turnos de inspección de las publicaciones del vendedor, para que
+     * los confirme. No dice qué mecánico es: solo el día y la localidad del taller.
+     */
+    public function turnos(): void
+    {
+        Response::json(['items' => AutoVendido::turnosDelVendedor((int)Auth::id())]);
+    }
+
+    /** POST /api/inspecciones/{id}/confirmar-turno: el vendedor (dueño de la publicación) confirma el turno. → {turno} */
+    public function confirmarTurno(int $id): void
+    {
+        [$turno, $error] = AutoVendido::confirmar($id, (int)Auth::id());
+        if ($error !== null) {
+            Response::error(...$error);
+        }
+        Response::json(['turno' => $turno]);
     }
 
     /** La inspección si la pidió este usuario; si no, 404. */

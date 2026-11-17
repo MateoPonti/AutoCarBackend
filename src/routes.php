@@ -17,8 +17,10 @@ use AutoCar\Chat\ChatController;
 use AutoCar\Comparador\ComparadorController;
 use AutoCar\Favoritos\FavoritoController;
 use AutoCar\Inspecciones\AdminReclamoController;
+use AutoCar\Inspecciones\FallaTipicaController;
 use AutoCar\Inspecciones\InspeccionController;
 use AutoCar\Inspecciones\MecanicoController;
+use AutoCar\Inspecciones\PresupuestoController;
 use AutoCar\Inspecciones\SolicitudTallerController;
 use AutoCar\MetaBusqueda\MetaBusquedaController;
 use AutoCar\Parametros\ParametroController;
@@ -41,6 +43,8 @@ $router->get('/api/fotos/{id}', [PublicacionController::class, 'foto']); // cont
 // Comprar y vender (guard 'usuario'): solo cuentas personales. Las del equipo (admin, moderador) y las de los
 // talleres no publican, no piden mecánico, no guardan favoritos ni abren chats: para eso, una cuenta personal.
 $router->get('/api/mis-vehiculos', [PublicacionController::class, 'index'], 'auth');
+// Turnos de inspección de mis publicaciones: el vendedor los confirma (si el auto se vende antes, se caen solos)
+$router->get('/api/mis-vehiculos/turnos', [InspeccionController::class, 'turnos'], 'auth');
 $router->post('/api/mis-vehiculos', [PublicacionController::class, 'crear'], 'usuario');
 $router->get('/api/mis-vehiculos/{id}', [PublicacionController::class, 'detalle'], 'auth');
 $router->put('/api/mis-vehiculos/{id}', [PublicacionController::class, 'actualizar'], 'usuario');
@@ -74,6 +78,9 @@ $router->get('/api/autos-externos', [MetaBusquedaController::class, 'autoExterno
 
 // Inspecciones: el mecánico que firma. El ranking de mecánicos es público.
 $router->get('/api/mecanicos', [InspeccionController::class, 'mecanicos']);
+// Idea B, fallas típicas por modelo (público): de internet, de los mecánicos y medidas en las inspecciones
+$router->get('/api/fallas-tipicas', [FallaTipicaController::class, 'index']);
+$router->post('/api/admin/fallas-tipicas', [FallaTipicaController::class, 'cargar'], 'permiso:parametros.editar');
 // Comprador: pide, ve las suyas, cancela antes de que la acepten y reclama dentro de los días de reclamo (parámetro) después de la firma.
 // El detalle lo ven el comprador, el mecánico asignado y quien resuelve reclamos.
 $router->post('/api/inspecciones', [InspeccionController::class, 'crear'], 'usuario');
@@ -82,6 +89,11 @@ $router->get('/api/inspecciones/{id}', [InspeccionController::class, 'detalle'],
 $router->get('/api/inspecciones/{id}/patente-foto', [InspeccionController::class, 'fotoPatente'], 'auth');
 $router->post('/api/inspecciones/{id}/cancelar', [InspeccionController::class, 'cancelar'], 'auth');
 $router->post('/api/inspecciones/{id}/reclamo', [InspeccionController::class, 'reclamar'], 'auth');
+$router->post('/api/inspecciones/{id}/confirmar-turno', [InspeccionController::class, 'confirmarTurno'], 'auth');
+// Idea A, costo total: el comprador pide los presupuestos de un informe firmado antes (los nuevos se piden solos al firmar)
+$router->post('/api/inspecciones/{id}/presupuestos', [PresupuestoController::class, 'pedir'], 'auth');
+// Créditos del comprador (el auto de una inspección anterior se vendió): se descuentan solos al pedir la próxima
+$router->get('/api/mis-creditos', [InspeccionController::class, 'creditos'], 'auth');
 // Reclamos: los resuelven el moderador y el admin
 // Mensajes al equipo: contacto (público) y reportes (con sesión); el admin y el moderador los ven en el panel
 $router->post('/api/contacto', [SoporteController::class, 'contactar']);
@@ -93,6 +105,8 @@ $router->patch('/api/admin/reportes/{id}', [SoporteController::class, 'resolverR
 
 $router->get('/api/admin/reclamos', [AdminReclamoController::class, 'index'], 'permiso:reclamos.resolver');
 $router->patch('/api/admin/reclamos/{id}', [AdminReclamoController::class, 'resolver'], 'permiso:reclamos.resolver');
+// Fondo de garantía: saldo, movimientos y el supuesto de la cuenta (solo paga reclamos)
+$router->get('/api/admin/fondo', [AdminReclamoController::class, 'fondo'], 'permiso:metricas.ver|reclamos.resolver');
 // Lado del mecánico: cada uno ve y toca solo sus inspecciones (las de otro dan 404)
 $mecanico = 'permiso:verificaciones.realizar';
 $router->get('/api/mecanico/perfil', [MecanicoController::class, 'perfil'], $mecanico);
@@ -102,6 +116,13 @@ $router->patch('/api/mecanico/inspecciones/{id}', [MecanicoController::class, 'c
 $router->put('/api/mecanico/inspecciones/{id}/informe', [MecanicoController::class, 'guardarInforme'], $mecanico);
 $router->post('/api/mecanico/inspecciones/{id}/patente-foto', [MecanicoController::class, 'subirFotoPatente'], $mecanico);
 $router->post('/api/mecanico/inspecciones/{id}/firma', [MecanicoController::class, 'firmar'], $mecanico);
+// Presupuestos que le pidieron al taller (idea A): nunca de un auto que revisó él
+$router->get('/api/mecanico/presupuestos', [PresupuestoController::class, 'bandeja'], $mecanico);
+// Fallas típicas: el mecánico propone las que vio y vota las de los demás (confirmar o descartar)
+$router->get('/api/mecanico/fallas-tipicas', [FallaTipicaController::class, 'delMecanico'], $mecanico);
+$router->post('/api/mecanico/fallas-tipicas', [FallaTipicaController::class, 'proponer'], $mecanico);
+$router->put('/api/mecanico/fallas-tipicas/{id}/voto', [FallaTipicaController::class, 'votar'], $mecanico);
+$router->patch('/api/mecanico/presupuestos/{id}', [PresupuestoController::class, 'responder'], $mecanico);
 // "Adherí tu taller": el usuario pide sumarse y un admin lo aprueba (pasa a rol mecanico) o lo rechaza.
 // Aprobar le cambia el rol al usuario, por eso pide el mismo permiso que editar usuarios.
 $router->post('/api/solicitudes-taller', [SolicitudTallerController::class, 'enviar']);
