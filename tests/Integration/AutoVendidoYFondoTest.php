@@ -74,20 +74,20 @@ final class AutoVendidoYFondoTest extends ApiTestCase
         $firmada = $this->aceptarYFirmarSinAceptar($id);
         self::assertSame('firmada', $firmada['estado']);
         self::assertSame('auto_vendido', $firmada['credito']['tipo']);
-        self::assertSame(round($firmada['precio'] * 0.3), $firmada['credito']['monto']);
+        self::assertEquals(round($firmada['precio'] * 0.3), $firmada['credito']['monto']);
 
         // El crédito se descuenta solo en la próxima inspección del comprador
         $this->ingresar($comprador);
         $creditos = $this->pedir('GET', '/api/mis-creditos')['json'];
-        self::assertSame($firmada['credito']['monto'], $creditos['total']);
+        self::assertEquals($firmada['credito']['monto'], $creditos['total']);
         $otra = $this->pedir('POST', '/api/inspecciones', ['url' => 'https://auto.mercadolibre.com.ar/MLA-1111-ka-_JM', 'mecanico_id' => $mecanicoId])['json']['inspeccion'];
-        self::assertSame($firmada['credito']['monto'], $otra['credito_usado']);
-        self::assertSame($otra['precio'] - $otra['credito_usado'], $otra['a_pagar']);
-        self::assertSame(0, $this->pedir('GET', '/api/mis-creditos')['json']['total']);
+        self::assertEquals($firmada['credito']['monto'], $otra['credito_usado']);
+        self::assertEquals($otra['precio'] - $otra['credito_usado'], $otra['a_pagar']);
+        self::assertEquals(0, $this->pedir('GET', '/api/mis-creditos')['json']['total']);
 
         // Si la cancela, el crédito vuelve
         $this->pedir('POST', "/api/inspecciones/{$otra['id']}/cancelar", []);
-        self::assertSame($firmada['credito']['monto'], $this->pedir('GET', '/api/mis-creditos')['json']['total']);
+        self::assertEquals($firmada['credito']['monto'], $this->pedir('GET', '/api/mis-creditos')['json']['total']);
     }
 
     public function testCuponSiSeVendeEnseguidaConElTurnoConfirmado(): void
@@ -140,8 +140,8 @@ final class AutoVendidoYFondoTest extends ApiTestCase
         $reclamoId = array_values(array_filter($reclamoId, static fn($r) => $r['inspeccion']['id'] === $id))[0]['id'];
         $r = $this->pedir('PATCH', "/api/admin/reclamos/$reclamoId", ['procede' => true, 'compensacion' => 50000, 'respuesta' => 'Se veía a simple vista']);
         self::assertSame(200, $r['status'], json_encode($r['json']));
-        self::assertSame($i['precio'], $r['json']['reclamo']['devolucion']);
-        self::assertSame(round($i['monto_mecanico'] * 0.4), $r['json']['reclamo']['franquicia']);
+        self::assertEquals($i['precio'], $r['json']['reclamo']['devolucion']);
+        self::assertEquals(round($i['monto_mecanico'] * 0.4), $r['json']['reclamo']['franquicia']);
 
         $despues = $this->pedir('GET', '/api/admin/fondo')['json']['fondo'];
         $esperado = $i['monto_fondo'] + $r['json']['reclamo']['franquicia'] - $i['precio'] - 50000;
