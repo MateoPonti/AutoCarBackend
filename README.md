@@ -313,6 +313,8 @@ Marca y modelo coinciden por la clave del modelo, que no distingue mayúsculas, 
 
 ## Seguridad aplicada
 
+El detalle completo (cookie, CSRF, permisos, archivos, encabezados del front, HTTPS, secretos y lo que falta) está en [`docs/seguridad.md`](docs/seguridad.md).
+
 - **Validación en el backend** de todo lo que entra: cuerpos JSON (`Vehiculo::validar`, `AuthController`), filtros de la URL y tipos de datos.
 - **Consultas parametrizadas** con PDO (`ATTR_EMULATE_PREPARES` desactivado); los comodines `%` y `_` de la búsqueda se escapan.
 - **Contraseñas** con `password_hash` / `password_verify` (bcrypt); nunca se guardan ni se devuelven en claro.
