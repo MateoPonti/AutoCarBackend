@@ -30,7 +30,7 @@ El workflow **Scraper** (`.github/workflows/scraper.yml`) hace lo mismo que `dia
   php -d memory_limit=1G bin/importar-autos.php storage/mercado/kavak/AAAA-MM-DD.json
   ```
 
-  No correrlo mientras el workflow está cargando (los dos escriben el índice). En prod, Kavak entra al metabuscador pero no al comparador: `armar-modelos` en Actions solo ve las corridas de ese día.
+  No correrlo mientras el workflow está cargando (los dos escriben el índice). Si `importar-autos` dice "No se importó", no se cargó nada: volver a correr solo el segundo comando (el JSON del día ya está). Un 429 de Firestore se reintenta solo. En prod, Kavak entra al metabuscador pero no al comparador: `armar-modelos` en Actions solo ve las corridas de ese día.
 - Si otro sitio bloquea los servidores de GitHub, pasa lo mismo: se corre desde la PC.
 
 ## Formato común
