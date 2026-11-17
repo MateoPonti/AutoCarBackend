@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace AutoCar\Inspecciones;
 
 use AutoCar\Core\Database;
+use AutoCar\Parametros\Parametros;
 
 /** Acceso a la base de los reclamos (tabla reclamo). Las reglas están en Reclamo. */
 final class Reclamos
@@ -11,7 +12,7 @@ final class Reclamos
     public const POR_PAGINA = 100;
 
     private const COLUMNAS = 'r.id, r.inspeccion_id, r.item_codigo, r.descripcion, r.estado, r.compensacion, r.respuesta,
-        r.resuelto_por, r.created_at, r.resuelto_at, i.precio, i.tope_veces, i.titulo, i.url, i.fuente, i.firmada_at, i.conclusion,
+        r.resuelto_por, r.created_at, r.resuelto_at, r.devolucion, r.franquicia, i.precio, i.tope_veces, i.monto_mecanico, i.credito_usado, i.titulo, i.url, i.fuente, i.firmada_at, i.conclusion,
         i.mecanico_id, i.comprador_id, mu.nombre AS mecanico_nombre, i.taller_firma, u.nombre AS comprador_nombre,
         ru.nombre AS resuelto_por_nombre';
 
@@ -52,19 +53,26 @@ final class Reclamos
         return $st->fetchAll();
     }
 
-    /** Se llama dentro de una transacción con el reclamo bloqueado y todavía abierto. */
+    /**
+     * Se llama dentro de una transacción con el reclamo bloqueado y todavía abierto.
+     * Si procede, el fondo de garantía le devuelve al comprador lo que pagó (el precio menos el crédito que usó) y le
+     * paga la compensación; el mecánico le paga al fondo la franquicia (parámetro franquicia, % de lo que cobró).
+     */
     public static function resolver(array $reclamo, array $resolucion, int $resueltoPor): void
     {
+        $procede = $resolucion['estado'] === 'procede';
         $pdo = Database::pdo();
         $pdo->prepare(
-            'UPDATE reclamo SET estado = :e, compensacion = :c, respuesta = :r, resuelto_por = :por, resuelto_at = now()
+            'UPDATE reclamo SET estado = :e, compensacion = :c, respuesta = :r, resuelto_por = :por, resuelto_at = now(),
+               devolucion = :dev, franquicia = :fr
              WHERE id = :id AND estado = \'abierto\''
         )->execute([
             'id' => $reclamo['id'], 'e' => $resolucion['estado'], 'c' => $resolucion['compensacion'],
             'r' => $resolucion['respuesta'], 'por' => $resueltoPor,
+            'dev' => $procede ? (float)$reclamo['precio'] - (float)$reclamo['credito_usado'] : null,
+            'fr'  => $procede ? Precio::franquicia((float)$reclamo['monto_mecanico'], Parametros::valor('franquicia')) : null,
         ]);
-        // Si procede, al comprador se le devuelve lo que pagó (el mecánico lo devuelve de sus próximas inspecciones)
-        if ($resolucion['estado'] === 'procede') {
+        if ($procede) {
             $pdo->prepare("UPDATE inspeccion SET pago = 'reembolsado', updated_at = now() WHERE id = :id")
                 ->execute(['id' => $reclamo['inspeccion_id']]);
         }
@@ -79,6 +87,9 @@ final class Reclamos
             'item_codigo'  => $r['item_codigo'],
             'descripcion'  => $r['descripcion'],
             'compensacion' => $r['compensacion'] === null ? null : (float)$r['compensacion'],
+            // Si procedió: lo que el fondo le devolvió al comprador y lo que el mecánico le pagó al fondo
+            'devolucion'   => $r['devolucion'] === null ? null : (float)$r['devolucion'],
+            'franquicia'   => $r['franquicia'] === null ? null : (float)$r['franquicia'],
             'tope'         => Precio::topeCompensacion((float)$r['precio'], (float)$r['tope_veces']),
             'respuesta'    => $r['respuesta'],
             'created_at'   => $fecha($r['created_at']),

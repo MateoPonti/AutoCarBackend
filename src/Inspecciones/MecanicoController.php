@@ -180,6 +180,7 @@ final class MecanicoController
         $huella = Huella::calcular($id, $items, $inspeccion['conclusion'], $inspeccion['resumen'],
             $firmadoPor, $taller['nombre'], Inspeccion::momentoHuella($momento), $inspeccion['patente']);
         Inspeccion::firmar($id, $firmadoPor, $taller['nombre'], $momento, $huella);
+        AutoVendido::alFirmar($inspeccion); // si el auto ya se vendió, el comprador recibe el crédito
         $pdo->commit();
         self::responderDetalle($id);
     }

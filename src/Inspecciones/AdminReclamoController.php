@@ -51,6 +51,12 @@ final class AdminReclamoController
         Response::json(['reclamo' => Reclamos::paraApi(Reclamos::porId($id))]);
     }
 
+    /** GET /api/admin/fondo → saldo del fondo de garantía, totales, supuesto y últimos movimientos (ver Fondo). */
+    public function fondo(): void
+    {
+        Response::json(['fondo' => Fondo::resumen()]);
+    }
+
     private static function fallar(int $status, string $codigo, string $mensaje, array $errores = []): never
     {
         $pdo = Database::pdo();

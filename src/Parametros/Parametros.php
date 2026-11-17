@@ -7,14 +7,15 @@ use AutoCar\Core\Database;
 
 /**
  * Los números del negocio que el admin cambia sin tocar código (tabla parametro): la comisión de AutoCar, la parte
- * que va al fondo, el tope de la compensación, los días para reclamar y el precio de la inspección.
+ * que va al fondo, el tope de la compensación, los días para reclamar, el precio de la inspección, la franquicia del
+ * mecánico y el crédito del comprador si el auto se vendió.
  * Las reglas (por ejemplo, "sin patente no se firma") quedan en el código: acá solo hay números.
  */
 final class Parametros
 {
     /** Los que se pueden cambiar, en el orden del panel. */
     public const CLAVES = ['comision_autocar', 'parte_fondo', 'tope_veces', 'dias_reclamo',
-        'precio_minimo', 'precio_sugerido', 'precio_maximo', 'cotizacion_dolar'];
+        'precio_minimo', 'precio_sugerido', 'precio_maximo', 'cotizacion_dolar', 'franquicia', 'credito_vendido', 'horas_cupon'];
 
     /** @var array<string, float>|null se leen una sola vez por pedido */
     private static ?array $valores = null;
@@ -111,7 +112,7 @@ final class Parametros
                 $errores[$clave] = 'Tiene que estar entre ' . self::numero($p['minimo']) . ' y ' . self::numero($p['maximo']) . '.';
                 continue;
             }
-            if (in_array($p['unidad'], ['dias', 'pesos'], true) && floor($valor) !== $valor) {
+            if (in_array($p['unidad'], ['dias', 'pesos', 'horas'], true) && floor($valor) !== $valor) {
                 $errores[$clave] = 'Ingresá un número sin decimales.';
                 continue;
             }

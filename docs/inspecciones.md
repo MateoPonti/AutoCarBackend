@@ -132,7 +132,6 @@ Los números son los del `PLAN.md`. Los controladores son `InspeccionController`
 
 Todavía no está decidido y no afecta a esta base:
 - Qué datos del auto externo se completan solos con lo que juntó el scraper y cuáles carga el comprador.
-- Las reglas de auto vendido (turno que confirma el vendedor, crédito del 30 % y cupón de 48 h), la franquicia del mecánico (40 %) y el fondo de garantía con saldo: decididas el 14/11, todavía sin programar.
 - Los pagos al mecánico (a los 10 y a los 15 días) y Mercado Pago: se deciden al final.
 
 ## 8. Reglas de negocio (resumen)
@@ -164,8 +163,16 @@ Todas están en el back (el front repite algunas para avisar antes, pero la que 
 - Checklist de **10 ítems** (`ok`, `observado` o `falla`); lo que no está `ok` exige nota. Conclusión: `recomendable`, `con_reparos` o `no_recomendable`.
 - Para firmar hacen falta los 10 ítems y la conclusión. La firma guarda el nombre del mecánico y del taller, el momento y la **huella SHA-256**. Firmada, **no cambia más** (409).
 
-**Reclamos y ranking**
+**Auto vendido (solo autos de AutoCar, `AutoVendido`; migración `024`)**
+- El vendedor confirma el turno que dio el mecánico (`POST /api/inspecciones/{id}/confirmar-turno`). No sabe qué mecánico es.
+- Si la publicación pasa a vendida, eliminada o rechazada **antes del turno**, la inspección queda `caida` y se le devuelve todo al comprador. Una edición (vuelve a `pendiente`) no la hace caer.
+- Si el turno ya pasó (el mecánico fue), **se firma igual**: el informe queda en la patente. Si al firmar el auto ya está vendido, el comprador recibe un **crédito** del `credito_vendido` % del precio (30 %), no la devolución completa.
+- **Cupón:** turno confirmado y auto vendido dentro de `horas_cupon` (48 h) después de la firma → el mismo crédito. Las dos condiciones se comprueban en la base.
+- Un aviso de otro sitio que desaparece no siempre es un auto vendido: ahí no se hace nada solo.
+- El crédito lo pone AutoCar de su parte, se descuenta solo en la próxima inspección del comprador y vuelve si esa se cae, se cancela o se rechaza.
+
+**Reclamos, fondo y ranking**
 - El comprador tiene **15 días** desde la firma para reclamar, **una sola vez** (parámetro `dias_reclamo`).
 - Lo resuelve un moderador o admin (`reclamos.resolver`), nunca alguien con interés en esa inspección (`interes_propio`).
-- Si procede: se devuelve el pago y la compensación llega hasta **3 veces** el precio (parámetro `tope_veces`).
+- Si procede: se devuelve el pago y la compensación llega hasta **3 veces** el precio (parámetro `tope_veces`). Las dos salen del **fondo de garantía**, que solo paga reclamos; el mecánico le paga al fondo una **franquicia** del 40 % de lo que cobró (parámetro `franquicia`). El saldo y los movimientos están en `GET /api/admin/fondo` (`Fondo`).
 - Ranking: `5 × (1 − 2 × procedentes ÷ firmadas)`, mínimo 0; con **menos de 3** firmadas, "Nuevo en la red" (§ 5). Nadie paga para subir.
