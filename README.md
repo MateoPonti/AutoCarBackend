@@ -26,7 +26,7 @@ Todas las respuestas son JSON. Los errores tienen la forma `{"error": "codigo", 
 | `GET /api/me/preferencias` | cuenta personal | `{preferencias, usos, tipos}`: lo que contestó (o `null`) y las opciones |
 | `PUT /api/me/preferencias` | cuenta personal | "¿Para qué buscás el auto?": `{uso, tipo?, presupuesto?, localidad?, acepta_privacidad?}` → `{preferencias}`. `uso`: `personal`, `familia`, `trabajo` o `aplicacion`. Una cuenta que todavía no aceptó la política de privacidad manda `acepta_privacidad: true` |
 | `GET /api/usuarios/{id}/foto` | público | La foto de perfil (se ve en el detalle de sus publicaciones y en el chat). 404 si no tiene. `usuario.foto`, `vendedor.foto` y `con.foto` traen esta ruta con `?v=` (o `null`) |
-| `GET /api/vehiculos` | público | Listado. Filtros: `q`, `marca`, `combustible`, `precio_max`, `page` |
+| `GET /api/vehiculos` | público | Listado, 12 por página (`{items, total, pagina, por_pagina, paginas}`). Filtros: `q`, `marca`, `combustible`, `precio_max`, `page` |
 | `GET /api/marcas-modelos` | público | Marcas y modelos que se pueden publicar: `{marcas: [{marca, modelos: [...]}]}`. Publicar o corregir con una marca o un modelo que no está en la lista → 422 (y la base tampoco lo acepta) |
 | `GET /api/vehiculos/{id}` | público | Detalle con fotos y `vendedor: {nombre, desde}` (sin el email: es una página pública) |
 | `GET /api/vehiculos/{id}/comparacion` | público | Precio frente a autos iguales de MercadoLibre, Kavak y Autocosmos: `buen_precio`, `en_precio`, `caro` o `sin_datos`, con mediana, ahorro y autos parecidos. Detalle en [docs/arquitectura-scraper.md](docs/arquitectura-scraper.md#5-cómo-decide-el-comparador). 503 si el almacén no responde |

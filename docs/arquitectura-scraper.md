@@ -49,6 +49,7 @@ En vez de guardar una comparación ya calculada por cada publicación, se guarda
 - **1 lectura por ficha vista.** Con 50.000 lecturas gratis por día alcanza para 50.000 fichas.
 - **Funciona para publicaciones nuevas** sin esperar a la corrida del día siguiente.
 - **Pocas escrituras:** Firestore cuenta documentos, no autos, y cada documento es un modelo con todos sus autos. En el comparador solo se reescriben los modelos que cambiaron (huella); en el metabuscador se reescriben todos los que vinieron en la corrida, porque `ultima_vez` cambia cada día. Igual son ~2.000 a 4.000 escrituras por día y por proyecto, lejos de las 20.000 del plan gratis.
+- **Commits que Firestore frena:** si un commit responde 429 (mucho de golpe) o 5xx, `Firestore::commit()` espera 5, 15 y 45 s y lo vuelve a mandar; reintentar es seguro porque cada escritura reemplaza el documento entero. Si igual falla, el error trae el mensaje de Firestore. Pasó el 17/11 con Kavak a prod: el mismo commit entró a los minutos.
 - **El metabuscador usa el mismo documento:** buscar "Gol Trend" es leer `volkswagen_gol_trend`.
 - Si mañana se suma un sitio, solo se agrega su recolector: el documento suma autos con otra `fuente`.
 
