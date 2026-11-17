@@ -72,12 +72,46 @@ final class Firestore implements Documentos
             $writes[] = ['update' => ['name' => $nombre . $ruta, 'fields' => self::aCampos($campos)]];
         }
         foreach (self::tandas($writes) as $tanda) {
+            $this->commit($tanda);
+        }
+    }
+
+    /** Esperas (segundos) antes de cada reintento de un commit que Firestore frenó o no pudo atender. */
+    public const ESPERAS_REINTENTO = [5, 15, 45];
+
+    /**
+     * Manda un commit y, si Firestore responde 429 (frená, mucho de golpe) o 5xx, espera y lo vuelve a mandar.
+     * Reintentar es seguro: cada escritura reemplaza el documento entero. El 17/11 Kavak a prod cortó con un 429
+     * y a los minutos el mismo commit entró.
+     *
+     * @param list<array<string, mixed>> $tanda
+     */
+    private function commit(array $tanda): void
+    {
+        [$codigo, $datos, $error] = [0, [], ''];
+        foreach ([0, ...self::ESPERAS_REINTENTO] as $espera) {
+            if ($espera > 0) {
+                error_log("Firestore commit respondió $codigo: reintento en $espera s");
+                sleep($espera);
+            }
             // Un commit de varios MB tarda más que una lectura: 120 s en vez de 30
-            [$codigo, , $error] = $this->pedir('POST', $this->base() . ':commit', ['writes' => $tanda], 120);
-            if ($codigo !== 200) {
-                throw new RuntimeException("Firestore commit respondió $codigo" . ($error !== '' ? " ($error)" : ''));
+            [$codigo, $datos, $error] = $this->pedir('POST', $this->base() . ':commit', ['writes' => $tanda], 120);
+            if ($codigo === 200) {
+                return;
+            }
+            if (!self::reintentable($codigo)) {
+                break;
             }
         }
+        // El mensaje de Firestore dice la causa (cuota del día, demasiadas escrituras, documento muy grande...)
+        $detalle = $datos['error']['message'] ?? $error;
+        throw new RuntimeException("Firestore commit respondió $codigo" . ($detalle !== '' ? " ($detalle)" : ''));
+    }
+
+    /** 429 o 5xx, o sin respuesta (0, por ejemplo un corte por tiempo): conviene esperar y reintentar. */
+    public static function reintentable(int $codigo): bool
+    {
+        return $codigo === 0 || $codigo === 429 || $codigo >= 500;
     }
 
     /**
