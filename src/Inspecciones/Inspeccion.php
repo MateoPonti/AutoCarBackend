@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace AutoCar\Inspecciones;
 
+use AutoCar\Comparador\Clave;
 use AutoCar\Core\Database;
 use AutoCar\Parametros\Parametros;
 use DateTimeImmutable;
@@ -23,7 +24,7 @@ final class Inspeccion
         i.kilometraje, i.precio_publicado, i.localidad, i.estado, i.fecha_turno, i.motivo_rechazo, i.precio,
         i.monto_mecanico, i.monto_autocar, i.monto_fondo, i.tope_veces, i.dias_reclamo, i.pago, i.conclusion, i.resumen, i.firmado_por,
         i.taller_firma, i.firmada_at, i.huella, i.patente, i.created_at, i.updated_at, i.turno_confirmado_at, i.credito_usado,
-        c.tipo AS credito_tipo, c.monto AS credito_monto,
+        c.tipo AS credito_tipo, c.monto AS credito_monto, i.marca, i.modelo,
         EXISTS (SELECT 1 FROM inspeccion_patente_foto pf WHERE pf.inspeccion_id = i.id) AS tiene_foto_patente, u.nombre AS comprador_nombre,
         (SELECT v.estado FROM vehiculo v WHERE v.id = i.vehiculo_id) AS vehiculo_estado,
         mu.nombre AS mecanico_nombre, t.nombre AS taller_nombre, t.direccion AS taller_direccion, t.localidad AS taller_localidad,
@@ -122,8 +123,8 @@ final class Inspeccion
     {
         $st = self::pdo()->prepare(
             'INSERT INTO inspeccion (comprador_id, mecanico_id, vehiculo_id, url, url_clave, fuente, titulo, anio, kilometraje,
-               precio_publicado, localidad, precio, monto_mecanico, monto_autocar, monto_fondo, tope_veces, dias_reclamo)
-             VALUES (:c, :m, :v, :url, :clave, :fuente, :titulo, :anio, :km, :pp, :loc, :precio, :mm, :ma, :mf, :tope, :dias)
+               precio_publicado, localidad, precio, monto_mecanico, monto_autocar, monto_fondo, tope_veces, dias_reclamo, marca, modelo)
+             VALUES (:c, :m, :v, :url, :clave, :fuente, :titulo, :anio, :km, :pp, :loc, :precio, :mm, :ma, :mf, :tope, :dias, :marca, :modelo)
              RETURNING id'
         );
         $st->execute([
@@ -134,6 +135,7 @@ final class Inspeccion
             'precio' => $montos['precio'], 'mm' => $montos['monto_mecanico'], 'ma' => $montos['monto_autocar'],
             'mf' => $montos['monto_fondo'], 'tope' => Parametros::valor('tope_veces'),
             'dias' => (int)Parametros::valor('dias_reclamo'),
+            'marca' => $datos['marca'] ?? null, 'modelo' => $datos['modelo'] ?? null,
         ]);
         return (int)$st->fetchColumn();
     }
@@ -187,8 +189,12 @@ final class Inspeccion
         return true;
     }
 
-    /** Reemplaza el checklist guardado (borrador). Se llama dentro de una transacción con la fila bloqueada. */
-    public static function guardarInforme(int $id, array $items, ?string $conclusion, ?string $resumen, ?string $patente = null): void
+    /**
+     * Reemplaza el checklist guardado (borrador). Se llama dentro de una transacción con la fila bloqueada.
+     * La marca y el modelo solo cambian si vienen (si no, quedan los del pedido).
+     */
+    public static function guardarInforme(int $id, array $items, ?string $conclusion, ?string $resumen, ?string $patente = null,
+        ?string $marca = null, ?string $modelo = null): void
     {
         $pdo = self::pdo();
         $pdo->prepare('DELETE FROM inspeccion_item WHERE inspeccion_id = :id')->execute(['id' => $id]);
@@ -196,8 +202,9 @@ final class Inspeccion
         foreach ($items as $codigo => [$resultado, $nota]) {
             $alta->execute(['id' => $id, 'c' => $codigo, 'r' => $resultado, 'n' => $nota]);
         }
-        $pdo->prepare('UPDATE inspeccion SET conclusion = :c, resumen = :r, patente = :p, updated_at = now() WHERE id = :id')
-            ->execute(['id' => $id, 'c' => $conclusion, 'r' => $resumen, 'p' => $patente]);
+        $pdo->prepare('UPDATE inspeccion SET conclusion = :c, resumen = :r, patente = :p, marca = COALESCE(:marca, marca),
+               modelo = COALESCE(:modelo, modelo), updated_at = now() WHERE id = :id')
+            ->execute(['id' => $id, 'c' => $conclusion, 'r' => $resumen, 'p' => $patente, 'marca' => $marca, 'modelo' => $modelo]);
     }
 
     /** La foto de la chapa (reemplaza la que hubiera). $tmp: archivo ya validado con Foto::validarSubidas. */
@@ -315,6 +322,10 @@ final class Inspeccion
             // sigue valiendo y queda en la patente. null = aviso de otro sitio (no sabemos si sigue publicado).
             'aviso_publicado'  => $i['vehiculo_id'] === null ? null : ($i['vehiculo_estado'] ?? null) === 'disponible',
             'titulo'           => $i['titulo'],
+            // Del catálogo (idea B): con la misma clave que el comparador; null si todavía no se sabe
+            'marca'            => $i['marca'],
+            'modelo'           => $i['modelo'],
+            'modelo_clave'     => $i['marca'] !== null && $i['modelo'] !== null ? Clave::de($i['marca'], $i['modelo']) : null,
             'anio'             => $entero($i['anio']),
             'kilometraje'      => $entero($i['kilometraje']),
             'precio_publicado' => $numero($i['precio_publicado']),

@@ -157,7 +157,7 @@ final class AutoVendidoYFondoTest extends ApiTestCase
     private function aceptarYFirmarSinAceptar(int $id): array
     {
         self::assertSame(200, $this->pedir('PUT', "/api/mecanico/inspecciones/$id/informe",
-            ['items' => self::checklistCompleto(), 'conclusion' => 'recomendable', 'patente' => 'AC123DE'])['status']);
+            ['items' => self::checklistCompleto(), 'conclusion' => 'recomendable', 'patente' => 'AC123DE'])['status']); // marca y modelo: los de la publicación
         self::assertSame(200, $this->pedirFormulario("/api/mecanico/inspecciones/$id/patente-foto", [], 1, 'foto')['status']);
         $firma = $this->pedir('POST', "/api/mecanico/inspecciones/$id/firma", []);
         self::assertSame(200, $firma['status'], json_encode($firma['json']));

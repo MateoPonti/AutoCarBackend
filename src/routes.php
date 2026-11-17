@@ -17,6 +17,7 @@ use AutoCar\Chat\ChatController;
 use AutoCar\Comparador\ComparadorController;
 use AutoCar\Favoritos\FavoritoController;
 use AutoCar\Inspecciones\AdminReclamoController;
+use AutoCar\Inspecciones\FallaTipicaController;
 use AutoCar\Inspecciones\InspeccionController;
 use AutoCar\Inspecciones\MecanicoController;
 use AutoCar\Inspecciones\PresupuestoController;
@@ -77,6 +78,9 @@ $router->get('/api/autos-externos', [MetaBusquedaController::class, 'autoExterno
 
 // Inspecciones: el mecánico que firma. El ranking de mecánicos es público.
 $router->get('/api/mecanicos', [InspeccionController::class, 'mecanicos']);
+// Idea B, fallas típicas por modelo (público): de internet, de los mecánicos y medidas en las inspecciones
+$router->get('/api/fallas-tipicas', [FallaTipicaController::class, 'index']);
+$router->post('/api/admin/fallas-tipicas', [FallaTipicaController::class, 'cargar'], 'permiso:parametros.editar');
 // Comprador: pide, ve las suyas, cancela antes de que la acepten y reclama dentro de los días de reclamo (parámetro) después de la firma.
 // El detalle lo ven el comprador, el mecánico asignado y quien resuelve reclamos.
 $router->post('/api/inspecciones', [InspeccionController::class, 'crear'], 'usuario');
@@ -114,6 +118,10 @@ $router->post('/api/mecanico/inspecciones/{id}/patente-foto', [MecanicoControlle
 $router->post('/api/mecanico/inspecciones/{id}/firma', [MecanicoController::class, 'firmar'], $mecanico);
 // Presupuestos que le pidieron al taller (idea A): nunca de un auto que revisó él
 $router->get('/api/mecanico/presupuestos', [PresupuestoController::class, 'bandeja'], $mecanico);
+// Fallas típicas: el mecánico propone las que vio y vota las de los demás (confirmar o descartar)
+$router->get('/api/mecanico/fallas-tipicas', [FallaTipicaController::class, 'delMecanico'], $mecanico);
+$router->post('/api/mecanico/fallas-tipicas', [FallaTipicaController::class, 'proponer'], $mecanico);
+$router->put('/api/mecanico/fallas-tipicas/{id}/voto', [FallaTipicaController::class, 'votar'], $mecanico);
 $router->patch('/api/mecanico/presupuestos/{id}', [PresupuestoController::class, 'responder'], $mecanico);
 // "Adherí tu taller": el usuario pide sumarse y un admin lo aprueba (pasa a rol mecanico) o lo rechaza.
 // Aprobar le cambia el rol al usuario, por eso pide el mismo permiso que editar usuarios.

@@ -171,6 +171,17 @@ Todas están en el back (el front repite algunas para avisar antes, pero la que 
 - Un aviso de otro sitio que desaparece no siempre es un auto vendido: ahí no se hace nada solo.
 - El crédito lo pone AutoCar de su parte, se descuenta solo en la próxima inspección del comprador y vuelve si esa se cae, se cancela o se rechaza.
 
+**Idea A, costo total (`CostoTotal`, `Presupuestos`; migración `025`)**
+- Al firmar, cada arreglo del informe (ítem observado o con falla; kilometraje e identificación no tienen arreglo) se le pide a `presupuestos_por_arreglo` (3) talleres de la red. **El taller que inspeccionó nunca recibe el pedido.** Primero los de su localidad, en el orden del ranking.
+- Cada taller responde con un monto y un detalle (vale `dias_presupuesto`, 15 días) o rechaza; una sola vez.
+- Costo total = precio del aviso + el presupuesto **vigente más barato** de cada arreglo. Si algún arreglo no tiene ninguno, se avisa que está incompleto.
+
+**Idea B, fallas típicas por modelo (`FallaTipica`, `FallasTipicas`; migración `026`)**
+- La inspección guarda marca y modelo del catálogo (la misma clave que el comparador). Obligatorios para firmar.
+- Cada falla tiene su origen: **internet** (la carga el admin con la fuente) o **mecánicos** (la propone uno). El tercero, **medido**, sale de las inspecciones firmadas: qué % de los autos del modelo tuvo ese ítem observado o con falla.
+- El voto de los mecánicos cambia el estado: con `fallas_votos_confirmar` (3) de un lado, y más que del otro, queda confirmada o descartada. Las descartadas no se le muestran al comprador.
+- **No se muestra el porcentaje con menos de `fallas_minimo_inspecciones` (20)** inspecciones firmadas del modelo.
+
 **Reclamos, fondo y ranking**
 - El comprador tiene **15 días** desde la firma para reclamar, **una sola vez** (parámetro `dias_reclamo`).
 - Lo resuelve un moderador o admin (`reclamos.resolver`), nunca alguien con interés en esa inspección (`interes_propio`).

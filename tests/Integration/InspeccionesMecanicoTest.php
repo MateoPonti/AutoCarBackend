@@ -170,6 +170,18 @@ final class InspeccionesMecanicoTest extends ApiTestCase
         self::assertNotNull($foto['json']['inspeccion']['patente_foto']);
         self::assertSame(200, $this->pedir('GET', $foto['json']['inspeccion']['patente_foto'])['status']);
 
+        // Sin marca y modelo del catálogo tampoco (las fallas típicas se miden por modelo)
+        $sinModelo = $this->pedir('POST', "/api/mecanico/inspecciones/$id/firma", []);
+        self::assertSame(422, $sinModelo['status']);
+        self::assertStringContainsString('modelo', $sinModelo['json']['mensaje']);
+        $inventado = $this->pedir('PUT', "/api/mecanico/inspecciones/$id/informe", ['items' => self::checklistCompleto(),
+            'conclusion' => 'recomendable', 'resumen' => 'Buen estado general.', 'patente' => 'AC456BD', 'marca' => 'Pepita', 'modelo' => '21021']);
+        self::assertSame(422, $inventado['status']);
+        $conModelo = $this->pedir('PUT', "/api/mecanico/inspecciones/$id/informe", ['items' => self::checklistCompleto(),
+            'conclusion' => 'recomendable', 'resumen' => 'Buen estado general.', 'patente' => 'AC456BD', 'marca' => 'Volkswagen', 'modelo' => 'Gol Trend']);
+        self::assertSame(['Volkswagen', 'Gol Trend', 'volkswagen_gol_trend'], [$conModelo['json']['inspeccion']['marca'],
+            $conModelo['json']['inspeccion']['modelo'], $conModelo['json']['inspeccion']['modelo_clave']]);
+
         $firma = $this->pedir('POST', "/api/mecanico/inspecciones/$id/firma", []);
         self::assertSame(200, $firma['status'], json_encode($firma['json']));
         $i = $firma['json']['inspeccion'];
