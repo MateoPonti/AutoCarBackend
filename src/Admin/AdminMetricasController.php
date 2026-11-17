@@ -142,9 +142,10 @@ final class AdminMetricasController
                 'pendientes' => $creditosPendientes,          // dados y todavía sin usar
             ],
             'fondo'            => [
-                'acumulado'  => $fondo['aportes'] + $fondo['franquicias'],          // lo que entró: aportes y franquicias
-                'usado'      => $fondo['devoluciones'] + $fondo['compensaciones'], // devoluciones y compensaciones de reclamos
-                'disponible' => $fondo['saldo'],
+                'acumulado'   => $fondo['aportes'],                                  // la parte de cada inspección firmada
+                'franquicias' => $fondo['franquicias'],                              // lo que pagaron los mecánicos por reclamos
+                'usado'       => $fondo['devoluciones'] + $fondo['compensaciones'], // devoluciones y compensaciones de reclamos
+                'disponible'  => $fondo['saldo'],
             ],
             'retenido'         => (float)$g['retenido'],    // pedidos en curso: se libera al firmar
             'reembolsado'      => (float)$g['reembolsado'], // rechazadas, canceladas, no realizadas o caídas: vuelve al comprador
