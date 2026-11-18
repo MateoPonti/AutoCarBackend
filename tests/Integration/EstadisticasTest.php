@@ -55,6 +55,22 @@ final class EstadisticasTest extends ApiTestCase
         self::assertSame($antes['serie']['puntos'][6]['pagaron'] + 1, $despues['serie']['puntos'][6]['pagaron']);
     }
 
+    public function testElInformeDePlataTraeGananciaPerdidaYNeta(): void
+    {
+        $m = $this->metricas(90);
+        foreach (['actual', 'anterior'] as $periodo) {
+            $t = $m['resumen'][$periodo];
+            foreach (['ingresos', 'perdida', 'neta', 'por_cobrar', 'reclamos_procedieron'] as $clave) {
+                self::assertArrayHasKey($clave, $t);
+            }
+            self::assertEqualsWithDelta($t['ingresos'] - $t['perdida'], $t['neta'], 0.01);
+            self::assertEqualsWithDelta($t['reclamos'], $t['perdida'], 0.01);
+        }
+        foreach ($m['serie']['puntos'] as $p) {
+            self::assertEqualsWithDelta($p['ingresos'] - $p['reclamos'], $p['neta'], 0.01);
+        }
+    }
+
     public function testLosEventosSonSoloDeCuentasPersonalesYElPeriodoSeValida(): void
     {
         $this->ingresarComoAdmin();
