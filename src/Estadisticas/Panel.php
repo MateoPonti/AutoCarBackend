@@ -27,6 +27,10 @@ final class Panel
     /**
      * Totales del período y del anterior: nuevos usuarios, inspecciones pagadas, compradores, firmadas,
      * facturado, ganancia de AutoCar y lo que el fondo pagó por reclamos (neto de franquicias).
+     * El informe de plata: ingresos = la comisión completa de AutoCar (con la parte del fondo, que es plata de AutoCar
+     * apartada para reclamos) de las firmadas ya cobradas o reembolsadas por un reclamo, menos los créditos usados;
+     * pérdida = lo que costaron los reclamos que procedieron (devolución + compensación − franquicia);
+     * neta = ingresos − pérdida; por cobrar = la comisión de las firmadas que todavía están en el plazo de reclamo.
      * @return array{actual: array<string, float|int>, anterior: array<string, float|int>}
      */
     public static function resumen(int $dias): array
@@ -50,7 +54,14 @@ final class Panel
                     (SELECT COALESCE(SUM(monto_autocar - monto_fondo - credito_usado), 0) FROM inspeccion, r
                       WHERE pago = 'liberado' AND firmada_at >= r.desde AND firmada_at < r.hasta) AS ganancia,
                     (SELECT COALESCE(SUM(COALESCE(devolucion, 0) + COALESCE(compensacion, 0) - COALESCE(franquicia, 0)), 0)
-                       FROM reclamo, r WHERE estado = 'procede' AND resuelto_at >= r.desde AND resuelto_at < r.hasta) AS reclamos"
+                       FROM reclamo, r WHERE estado = 'procede' AND resuelto_at >= r.desde AND resuelto_at < r.hasta) AS reclamos,
+                    (SELECT COUNT(*) FROM reclamo, r
+                      WHERE estado = 'procede' AND resuelto_at >= r.desde AND resuelto_at < r.hasta) AS reclamos_procedieron,
+                    (SELECT COALESCE(SUM(monto_autocar - credito_usado), 0) FROM inspeccion, r
+                      WHERE estado = 'firmada' AND pago IN ('liberado', 'reembolsado')
+                        AND firmada_at >= r.desde AND firmada_at < r.hasta) AS ingresos,
+                    (SELECT COALESCE(SUM(monto_autocar - credito_usado), 0) FROM inspeccion, r
+                      WHERE estado = 'firmada' AND pago = 'retenido' AND firmada_at >= r.desde AND firmada_at < r.hasta) AS por_cobrar"
         );
         $t = $st->fetch();
         return [
@@ -61,6 +72,11 @@ final class Panel
             'facturado'       => (float)$t['facturado'],
             'ganancia'        => (float)$t['ganancia'],
             'reclamos'        => (float)$t['reclamos'],
+            'reclamos_procedieron' => (int)$t['reclamos_procedieron'],
+            'ingresos'        => (float)$t['ingresos'],
+            'perdida'         => (float)$t['reclamos'],
+            'neta'            => (float)$t['ingresos'] - (float)$t['reclamos'],
+            'por_cobrar'      => (float)$t['por_cobrar'],
         ];
     }
 
@@ -83,14 +99,17 @@ final class Panel
              p AS (SELECT {$grupo('created_at')} AS fecha, COUNT(*) AS n FROM inspeccion GROUP BY 1),
              g AS (SELECT {$grupo('firmada_at')} AS fecha, COUNT(*) AS firmadas,
                           SUM(precio - credito_usado) FILTER (WHERE pago = 'liberado') AS facturado,
-                          SUM(monto_autocar - monto_fondo - credito_usado) FILTER (WHERE pago = 'liberado') AS ganancia
+                          SUM(monto_autocar - monto_fondo - credito_usado) FILTER (WHERE pago = 'liberado') AS ganancia,
+                          SUM(monto_autocar - credito_usado)
+                            FILTER (WHERE estado = 'firmada' AND pago IN ('liberado', 'reembolsado')) AS ingresos
                      FROM inspeccion WHERE firmada_at IS NOT NULL GROUP BY 1),
              r AS (SELECT {$grupo('resuelto_at')} AS fecha,
                           SUM(COALESCE(devolucion, 0) + COALESCE(compensacion, 0) - COALESCE(franquicia, 0)) AS reclamos
                      FROM reclamo WHERE estado = 'procede' AND resuelto_at IS NOT NULL GROUP BY 1)
              SELECT to_char(f.fecha, 'YYYY-MM-DD') AS fecha,
                     COALESCE(u.n, 0) AS nuevos_usuarios, COALESCE(p.n, 0) AS pagaron, COALESCE(g.firmadas, 0) AS firmadas,
-                    COALESCE(g.facturado, 0) AS facturado, COALESCE(g.ganancia, 0) AS ganancia, COALESCE(r.reclamos, 0) AS reclamos
+                    COALESCE(g.facturado, 0) AS facturado, COALESCE(g.ganancia, 0) AS ganancia, COALESCE(r.reclamos, 0) AS reclamos,
+                    COALESCE(g.ingresos, 0) AS ingresos
                FROM f LEFT JOIN u USING (fecha) LEFT JOIN p USING (fecha) LEFT JOIN g USING (fecha) LEFT JOIN r USING (fecha)
               ORDER BY f.fecha"
         );
@@ -102,6 +121,8 @@ final class Panel
             'facturado'       => (float)$x['facturado'],
             'ganancia'        => (float)$x['ganancia'],
             'reclamos'        => (float)$x['reclamos'],
+            'ingresos'        => (float)$x['ingresos'],
+            'neta'            => (float)$x['ingresos'] - (float)$x['reclamos'],
         ], $st->fetchAll());
         return ['unidad' => $unidad === 'day' ? 'dia' : 'semana', 'puntos' => $puntos];
     }
