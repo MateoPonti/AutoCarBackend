@@ -40,6 +40,7 @@
 | 28 | `028-estadisticas.sql` | Estadísticas del admin: `inspeccion.origen` (desde dónde se pidió) y tabla `evento` (recomendaciones mostradas y tocadas). "Compró" = pagó la inspección. Correrla **antes** de desplegar el back que la usa |
 | 29 | `029-estadisticas-por-perfil.sql` | Estadísticas por tipo de usuario: eventos `busco` (abrió los resultados de una búsqueda del metabuscador) y `orden` (eligió "Menor precio", "Menos km", "Más nuevos" o "Recomendado"). El panel cruza el perfil del comprador con la plata, las recomendaciones, la búsqueda y el orden. Correrla **antes** de desplegar el back que la usa |
 | 30 | `030-ranking-en-parametros.sql` | Ranking de mecánicos en Parámetros: `ranking_veces_reclamo` (2), `ranking_minimo_firmadas` (3) y `ranking_especialidad_buena` (2,5), los mismos valores que tenía el código. Sin correrla el back usa esos mismos valores |
+| 31 | `031-cobro-mercado-pago.sql` | Cobro de la inspección con Mercado Pago (Checkout Pro, API de Orders): tabla `cobro` (order, link de pago y estado: pendiente, pagado, cancelado o devuelto). Solo se usa con `MP_ACTIVO=true`: con `false` el pago sigue simulado y el back no toca la tabla. Correrla **antes** de prender `MP_ACTIVO` |
 
 Se copian y pegan enteras en el **SQL Editor de Neon**, primero en el proyecto de Neon de dev y en el de main recién cuando se pasa `dev` → `main` (son dos proyectos separados).
 

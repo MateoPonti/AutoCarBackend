@@ -23,6 +23,7 @@ use AutoCar\Inspecciones\InspeccionController;
 use AutoCar\Inspecciones\MecanicoController;
 use AutoCar\Inspecciones\PresupuestoController;
 use AutoCar\Inspecciones\SolicitudTallerController;
+use AutoCar\Pagos\PagoController;
 use AutoCar\MetaBusqueda\MetaBusquedaController;
 use AutoCar\Parametros\ParametroController;
 use AutoCar\Publicaciones\PublicacionController;
@@ -94,6 +95,10 @@ $router->get('/api/inspecciones/{id}/item-foto', [InspeccionController::class, '
 $router->post('/api/inspecciones/{id}/cancelar', [InspeccionController::class, 'cancelar'], 'auth');
 $router->post('/api/inspecciones/{id}/reclamo', [InspeccionController::class, 'reclamar'], 'auth');
 $router->post('/api/inspecciones/{id}/confirmar-turno', [InspeccionController::class, 'confirmarTurno'], 'auth');
+// Mercado Pago (solo con MP_ACTIVO=true): el comprador paga y, al volver, pregunta cómo quedó. El aviso lo llama Mercado Pago.
+$router->post('/api/inspecciones/{id}/pago', [PagoController::class, 'pagar'], 'auth');
+$router->post('/api/inspecciones/{id}/pago/estado', [PagoController::class, 'estado'], 'auth');
+$router->post('/api/pagos/mercadopago', [PagoController::class, 'aviso']);
 // Idea A, costo total: el comprador pide los presupuestos de un informe firmado antes (los nuevos se piden solos al firmar)
 $router->post('/api/inspecciones/{id}/presupuestos', [PresupuestoController::class, 'pedir'], 'auth');
 // Créditos del comprador (el auto de una inspección anterior se vendió): se descuentan solos al pedir la próxima
