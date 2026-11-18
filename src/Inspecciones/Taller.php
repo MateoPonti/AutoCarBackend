@@ -47,7 +47,7 @@ final class Taller
             $f['firmadas'] = (int)$f['firmadas'];
             $f['procedentes'] = (int)$f['procedentes'];
             return $f;
-        }, $st->fetchAll()));
+        }, $st->fetchAll()), Ranking::valores());
     }
 
     /**

@@ -159,6 +159,17 @@ final class InspeccionesTest extends TestCase
         self::assertSame(0.0, Ranking::puntaje(3, 3)); // nunca negativo
     }
 
+    public function testElRankingUsaLosValoresDeParametros(): void
+    {
+        $v = ['veces_reclamo' => 1.0, 'minimo_firmadas' => 5, 'especialidad_buena' => 4.0];
+        self::assertNull(Ranking::puntaje(4, 0, $v)); // con 5 de mínimo, 4 firmadas es nuevo
+        self::assertSame(4.5, Ranking::puntaje(10, 1, $v)); // 5 × (1 − 1 × 1 ÷ 10)
+        $e = Ranking::especialidad(['modelo' => 10, 'reclamos_modelo' => 2, 'marca' => 0, 'reclamos_marca' => 0], $v);
+        self::assertSame(4.0, $e['puntaje']);
+        self::assertTrue($e['buena']);
+        self::assertSame(Ranking::deFabrica(), ['veces_reclamo' => 2.0, 'minimo_firmadas' => 3, 'especialidad_buena' => 2.5]);
+    }
+
     public function testOrdenPorPuntajeDespuesPorCantidadYLosNuevosAlFinal(): void
     {
         $orden = Ranking::ordenar([

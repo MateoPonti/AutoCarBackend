@@ -22,7 +22,9 @@ final class Parametros
         'peso_personal_precio', 'peso_personal_km', 'peso_personal_dias', 'peso_personal_anio',
         'peso_familia_precio', 'peso_familia_km', 'peso_familia_dias', 'peso_familia_anio',
         'peso_trabajo_precio', 'peso_trabajo_km', 'peso_trabajo_dias', 'peso_trabajo_anio',
-        'peso_aplicacion_precio', 'peso_aplicacion_km', 'peso_aplicacion_dias', 'peso_aplicacion_anio'];
+        'peso_aplicacion_precio', 'peso_aplicacion_km', 'peso_aplicacion_dias', 'peso_aplicacion_anio',
+        // El ranking de los mecánicos (ver Inspecciones\Ranking)
+        'ranking_veces_reclamo', 'ranking_minimo_firmadas', 'ranking_especialidad_buena'];
 
     /** @var array<string, float>|null se leen una sola vez por pedido */
     private static ?array $valores = null;
