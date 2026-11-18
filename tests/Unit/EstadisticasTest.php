@@ -67,9 +67,13 @@ final class EstadisticasTest extends TestCase
                 ['uso' => 'familia', 'origen' => 'destacado', 'tipo' => 'mostrado', 'n' => '4'],
                 ['uso' => 'familia', 'origen' => 'destacado', 'tipo' => 'tocado', 'n' => '2'],
             ],
-            [['uso' => 'familia', 'origen' => 'para_vos', 'n' => '2'], ['uso' => 'familia', 'origen' => 'destacado', 'n' => '2']]
+            [['uso' => 'familia', 'origen' => 'para_vos', 'n' => '2', 'firmadas' => '1'], ['uso' => 'familia', 'origen' => 'destacado', 'n' => '2']]
         );
         $familia = $embudo[1];
+        self::assertSame(1, $familia['origenes'][0]['firmadas']);
+        self::assertSame(0, $familia['origenes'][1]['firmadas']); // sin el dato, 0
+        $conOrden = PorPerfil::filasEmbudo([], [], [['uso' => 'trabajo', 'origen' => 'para_vos', 'orden' => 'precio', 'n' => '3']]);
+        self::assertSame(['precio' => 3, 'km' => 0, 'nuevos' => 0], $conOrden[2]['origenes'][0]['ordenaron']);
         self::assertSame('destacado', $familia['mejor']); // 50 % contra 20 %
         self::assertSame(20.0, $familia['origenes'][0]['conversion']);
         self::assertNull($embudo[0]['mejor']); // sin pagos no hay "mejor"
