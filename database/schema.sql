@@ -1585,26 +1585,6 @@ CREATE TABLE IF NOT EXISTS credito (
 );
 CREATE INDEX IF NOT EXISTS idx_credito_usuario ON credito (usuario_id, created_at) WHERE usado_en IS NULL;
 
--- Fórmula de "para vos" (028): cuánto pesa cada cosa en cada perfil, editable en Parámetros.
-INSERT INTO parametro (clave, valor, minimo, maximo, unidad, descripcion, orden) VALUES
-  ('peso_personal_precio', 3, 0, 5, 'puntos', 'Para vos (uso personal): cuánto pesa el precio', 18),
-  ('peso_personal_km', 2, 0, 5, 'puntos', 'Para vos (uso personal): cuánto pesan los kilómetros', 19),
-  ('peso_personal_dias', 2, 0, 5, 'puntos', 'Para vos (uso personal): cuánto pesan los días publicado', 20),
-  ('peso_personal_anio', 0, 0, 5, 'puntos', 'Para vos (uso personal): cuánto pesa el año', 21),
-  ('peso_familia_precio', 2, 0, 5, 'puntos', 'Para vos (familia): cuánto pesa el precio', 22),
-  ('peso_familia_km', 3, 0, 5, 'puntos', 'Para vos (familia): cuánto pesan los kilómetros', 23),
-  ('peso_familia_dias', 1, 0, 5, 'puntos', 'Para vos (familia): cuánto pesan los días publicado', 24),
-  ('peso_familia_anio', 1, 0, 5, 'puntos', 'Para vos (familia): cuánto pesa el año', 25),
-  ('peso_trabajo_precio', 3, 0, 5, 'puntos', 'Para vos (trabajo): cuánto pesa el precio', 26),
-  ('peso_trabajo_km', 1, 0, 5, 'puntos', 'Para vos (trabajo): cuánto pesan los kilómetros', 27),
-  ('peso_trabajo_dias', 1, 0, 5, 'puntos', 'Para vos (trabajo): cuánto pesan los días publicado', 28),
-  ('peso_trabajo_anio', 0, 0, 5, 'puntos', 'Para vos (trabajo): cuánto pesa el año', 29),
-  ('peso_aplicacion_precio', 2, 0, 5, 'puntos', 'Para vos (aplicación (Uber, Cabify)): cuánto pesa el precio', 30),
-  ('peso_aplicacion_km', 2, 0, 5, 'puntos', 'Para vos (aplicación (Uber, Cabify)): cuánto pesan los kilómetros', 31),
-  ('peso_aplicacion_dias', 1, 0, 5, 'puntos', 'Para vos (aplicación (Uber, Cabify)): cuánto pesan los días publicado', 32),
-  ('peso_aplicacion_anio', 3, 0, 5, 'puntos', 'Para vos (aplicación (Uber, Cabify)): cuánto pesa el año', 33)
-ON CONFLICT (clave) DO NOTHING;
-
 -- Estadísticas del admin (028): de dónde vino cada inspección y qué recomendaciones vio cada comprador.
 -- "Compró" en las estadísticas = pagó la inspección.
 ALTER TABLE inspeccion ADD COLUMN IF NOT EXISTS origen VARCHAR(15)
@@ -1696,6 +1676,26 @@ INSERT INTO parametro (clave, valor, minimo, maximo, unidad, descripcion, orden)
   ('fallas_minimo_inspecciones', 20, 1, 1000,  'veces',      'Inspecciones firmadas de un modelo que hacen falta para mostrar cuánto se midió cada falla', 15),  -- 026
   ('fallas_votos_confirmar', 3,  1,    50,       'veces',      'Votos de mecánicos que hacen falta para confirmar o descartar una falla típica', 16),
   ('fallas_porcentaje_medido', 20, 1,  100,      'porcentaje', 'Desde qué % de inspecciones con el ítem observado o con falla se lo muestra como falla medida', 17)
+ON CONFLICT (clave) DO NOTHING;
+
+-- Fórmula de "para vos" (028): cuánto pesa cada cosa en cada perfil, editable en Parámetros.
+INSERT INTO parametro (clave, valor, minimo, maximo, unidad, descripcion, orden) VALUES
+  ('peso_personal_precio', 3, 0, 5, 'puntos', 'Para vos (uso personal): cuánto pesa el precio', 18),
+  ('peso_personal_km', 2, 0, 5, 'puntos', 'Para vos (uso personal): cuánto pesan los kilómetros', 19),
+  ('peso_personal_dias', 2, 0, 5, 'puntos', 'Para vos (uso personal): cuánto pesan los días publicado', 20),
+  ('peso_personal_anio', 0, 0, 5, 'puntos', 'Para vos (uso personal): cuánto pesa el año', 21),
+  ('peso_familia_precio', 2, 0, 5, 'puntos', 'Para vos (familia): cuánto pesa el precio', 22),
+  ('peso_familia_km', 3, 0, 5, 'puntos', 'Para vos (familia): cuánto pesan los kilómetros', 23),
+  ('peso_familia_dias', 1, 0, 5, 'puntos', 'Para vos (familia): cuánto pesan los días publicado', 24),
+  ('peso_familia_anio', 1, 0, 5, 'puntos', 'Para vos (familia): cuánto pesa el año', 25),
+  ('peso_trabajo_precio', 3, 0, 5, 'puntos', 'Para vos (trabajo): cuánto pesa el precio', 26),
+  ('peso_trabajo_km', 1, 0, 5, 'puntos', 'Para vos (trabajo): cuánto pesan los kilómetros', 27),
+  ('peso_trabajo_dias', 1, 0, 5, 'puntos', 'Para vos (trabajo): cuánto pesan los días publicado', 28),
+  ('peso_trabajo_anio', 0, 0, 5, 'puntos', 'Para vos (trabajo): cuánto pesa el año', 29),
+  ('peso_aplicacion_precio', 2, 0, 5, 'puntos', 'Para vos (aplicación (Uber, Cabify)): cuánto pesa el precio', 30),
+  ('peso_aplicacion_km', 2, 0, 5, 'puntos', 'Para vos (aplicación (Uber, Cabify)): cuánto pesan los kilómetros', 31),
+  ('peso_aplicacion_dias', 1, 0, 5, 'puntos', 'Para vos (aplicación (Uber, Cabify)): cuánto pesan los días publicado', 32),
+  ('peso_aplicacion_anio', 3, 0, 5, 'puntos', 'Para vos (aplicación (Uber, Cabify)): cuánto pesa el año', 33)
 ON CONFLICT (clave) DO NOTHING;
 
 -- Preferencias del comprador: "¿Para qué buscás el auto?" (021-preferencias-y-parametros.sql, Auth\Preferencias)
