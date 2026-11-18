@@ -215,6 +215,15 @@ final class InspeccionesTest extends TestCase
         self::assertNotNull(Checklist::validarConclusion('recomendable', str_repeat('a', Checklist::MAX_RESUMEN + 1)));
     }
 
+    public function testCadaFallaNecesitaFotoParaFirmar(): void
+    {
+        $items = ['motor' => ['falla', 'Pierde aceite'], 'frenos' => ['observado', 'Pastillas al 30 %'], 'luces' => ['ok', null]];
+        self::assertStringContainsString('motor', (string)Checklist::faltanFotos($items, []));
+        self::assertStringNotContainsString('frenos', (string)Checklist::faltanFotos($items, [])); // "observado": opcional
+        self::assertNull(Checklist::faltanFotos($items, ['motor']));
+        self::assertNull(Checklist::faltanFotos(['luces' => ['ok', null]], []));
+    }
+
     // --- Huella
 
     public function testHuellaNoDependeDelOrdenDeLosItemsPeroSiDelContenido(): void

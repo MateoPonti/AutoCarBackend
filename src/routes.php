@@ -87,6 +87,7 @@ $router->post('/api/inspecciones', [InspeccionController::class, 'crear'], 'usua
 $router->get('/api/mis-inspecciones', [InspeccionController::class, 'mias'], 'auth');
 $router->get('/api/inspecciones/{id}', [InspeccionController::class, 'detalle'], 'auth');
 $router->get('/api/inspecciones/{id}/patente-foto', [InspeccionController::class, 'fotoPatente'], 'auth');
+$router->get('/api/inspecciones/{id}/item-foto', [InspeccionController::class, 'fotoItem'], 'auth');
 $router->post('/api/inspecciones/{id}/cancelar', [InspeccionController::class, 'cancelar'], 'auth');
 $router->post('/api/inspecciones/{id}/reclamo', [InspeccionController::class, 'reclamar'], 'auth');
 $router->post('/api/inspecciones/{id}/confirmar-turno', [InspeccionController::class, 'confirmarTurno'], 'auth');
@@ -115,6 +116,7 @@ $router->get('/api/mecanico/inspecciones', [MecanicoController::class, 'bandeja'
 $router->patch('/api/mecanico/inspecciones/{id}', [MecanicoController::class, 'cambiarEstado'], $mecanico);
 $router->put('/api/mecanico/inspecciones/{id}/informe', [MecanicoController::class, 'guardarInforme'], $mecanico);
 $router->post('/api/mecanico/inspecciones/{id}/patente-foto', [MecanicoController::class, 'subirFotoPatente'], $mecanico);
+$router->post('/api/mecanico/inspecciones/{id}/item-foto', [MecanicoController::class, 'subirFotoItem'], $mecanico);
 $router->post('/api/mecanico/inspecciones/{id}/firma', [MecanicoController::class, 'firmar'], $mecanico);
 // Presupuestos que le pidieron al taller (idea A): nunca de un auto que revisó él
 $router->get('/api/mecanico/presupuestos', [PresupuestoController::class, 'bandeja'], $mecanico);

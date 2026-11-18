@@ -208,6 +208,41 @@ final class InspeccionesMecanicoTest extends ApiTestCase
         self::assertSame(1, $this->pedir('GET', '/api/mecanico/inspecciones?estado=firmada')['json']['conteos']['firmada']);
     }
 
+    public function testUnaFallaSinFotoNoSeFirma(): void
+    {
+        $mecanicoId = $this->ingresarComoMecanico();
+        [$id, $comprador] = $this->pedidaA($mecanicoId);
+        self::assertSame(200, $this->pedir('PATCH', "/api/mecanico/inspecciones/$id", ['accion' => 'aceptar', 'fecha_turno' => self::turno()])['status']);
+
+        $items = self::checklistCompleto();
+        $items[2] = ['codigo' => 'motor', 'resultado' => 'falla', 'nota' => 'Pierde aceite por el cárter'];
+        self::assertSame(200, $this->pedir('PUT', "/api/mecanico/inspecciones/$id/informe", ['items' => $items,
+            'conclusion' => 'con_reparos', 'patente' => 'AC456BD', 'marca' => 'Volkswagen', 'modelo' => 'Gol Trend'])['status']);
+        self::assertSame(200, $this->pedirFormulario("/api/mecanico/inspecciones/$id/patente-foto", [], 1, 'foto')['status']);
+
+        // Sin la foto de la falla no firma (la carrocería está "observado": esa no la necesita)
+        $sinFoto = $this->pedir('POST', "/api/mecanico/inspecciones/$id/firma", []);
+        self::assertSame(422, $sinFoto['status']);
+        self::assertStringContainsString('motor', $sinFoto['json']['mensaje']);
+
+        // Un ítem que no existe no se acepta
+        self::assertSame(422, $this->pedirFormulario("/api/mecanico/inspecciones/$id/item-foto", ['codigo' => 'radio'], 1, 'foto')['status']);
+
+        $foto = $this->pedirFormulario("/api/mecanico/inspecciones/$id/item-foto", ['codigo' => 'motor'], 1, 'foto');
+        self::assertSame(200, $foto['status'], json_encode($foto['json']));
+        $motor = array_values(array_filter($foto['json']['inspeccion']['items'], static fn(array $item): bool => $item['codigo'] === 'motor'))[0];
+        self::assertNotNull($motor['foto']);
+
+        $firma = $this->pedir('POST', "/api/mecanico/inspecciones/$id/firma", []);
+        self::assertSame(200, $firma['status'], json_encode($firma['json']));
+
+        // El comprador ve la foto; después de firmar no se cambia
+        self::assertSame(409, $this->pedirFormulario("/api/mecanico/inspecciones/$id/item-foto", ['codigo' => 'motor'], 1, 'foto')['status']);
+        self::assertSame(200, $this->ingresar($comprador)['status']);
+        self::assertSame(200, $this->pedir('GET', $motor['foto'])['status']);
+        self::assertSame(404, $this->pedir('GET', "/api/inspecciones/$id/item-foto?codigo=frenos")['status']);
+    }
+
     public function testRechazarPideMotivoYReembolsa(): void
     {
         $mecanicoId = $this->ingresarComoMecanico();

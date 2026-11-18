@@ -1498,6 +1498,17 @@ CREATE TABLE IF NOT EXISTS inspeccion_item (
   PRIMARY KEY (inspeccion_id, codigo)
 );
 
+-- Foto de un ítem del checklist (027-foto-de-falla.sql): obligatoria para firmar si el ítem tiene "falla",
+-- opcional si está "observado". Una por ítem.
+CREATE TABLE IF NOT EXISTS inspeccion_item_foto (
+  inspeccion_id INTEGER     NOT NULL REFERENCES inspeccion(id) ON DELETE CASCADE,
+  codigo        VARCHAR(20) NOT NULL,
+  mime          VARCHAR(20) NOT NULL,
+  datos         BYTEA       NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (inspeccion_id, codigo)
+);
+
 -- Un solo reclamo por inspección. Si procede, el pago se reembolsa y el mecánico baja en el ranking.
 CREATE TABLE IF NOT EXISTS reclamo (
   id            INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
