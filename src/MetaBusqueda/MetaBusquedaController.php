@@ -9,6 +9,7 @@ use AutoCar\Core\Database;
 use AutoCar\Core\Logger;
 use AutoCar\Core\Request;
 use AutoCar\Core\Response;
+use AutoCar\Estadisticas\Eventos;
 use AutoCar\Parametros\Cotizacion;
 use Throwable;
 
@@ -132,7 +133,12 @@ final class MetaBusquedaController
         // El perfil del comprador ordena los resultados "para vos" (las cuentas del equipo no tienen)
         $uso = Preferencias::delUsuario((int)Auth::id())['uso'] ?? null;
         $cotizacion = Cotizacion::actual(); // dólar blue, se actualiza solo cada 12 horas
-        Response::json(self::intentar(static fn() => $reporte->construir($b, $_GET, $uso, $cotizacion)));
+        $respuesta = self::intentar(static fn() => $reporte->construir($b, $_GET, $uso, $cotizacion));
+        // Para las estadísticas del admin: buscó en el metabuscador (la primera página, con el orden elegido)
+        if ((int)($_GET['page'] ?? 1) <= 1 && (Auth::usuario()['rol'] ?? null) === 'usuario') {
+            Eventos::busco((int)Auth::id(), $_GET['orden'] ?? null);
+        }
+        Response::json($respuesta);
     }
 
     /** GET /api/autos-externos?id=fuente~modelo~id: el id viene en la query porque es texto (las rutas solo aceptan números). */

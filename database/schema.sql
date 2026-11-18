@@ -1592,12 +1592,16 @@ ALTER TABLE inspeccion ADD COLUMN IF NOT EXISTS origen VARCHAR(15)
 CREATE TABLE IF NOT EXISTS evento (
   id          BIGINT       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   usuario_id  INTEGER      NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
-  tipo        VARCHAR(8)   NOT NULL CHECK (tipo IN ('mostrado', 'tocado')),
+  tipo        VARCHAR(8)   NOT NULL,
   origen      VARCHAR(15)  NOT NULL CHECK (origen IN ('para_vos', 'destacado', 'metabuscador', 'publicacion')),
   ref         VARCHAR(500),
   created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_evento_origen ON evento (origen, tipo, created_at);
+-- 029: busco (abrió los resultados de una búsqueda) y orden (eligió un orden), para las estadísticas por tipo de usuario
+ALTER TABLE evento DROP CONSTRAINT IF EXISTS evento_tipo_check;
+ALTER TABLE evento ADD CONSTRAINT evento_tipo_check CHECK (tipo IN ('mostrado', 'tocado', 'busco', 'orden'));
+CREATE INDEX IF NOT EXISTS idx_evento_tipo ON evento (tipo, created_at, usuario_id);
 
 -- Los autos de otras plataformas (MercadoLibre, Kavak, Autocosmos), su historial, las búsquedas guardadas y sus avisos
 -- NO están en esta base: van en Firestore (NoSQL). Ver docs/arquitectura-scraper.md y src/MetaBusqueda/Documentos.php.
