@@ -8,7 +8,7 @@ use AutoCar\Core\Database;
 /**
  * Los números del negocio que el admin cambia sin tocar código (tabla parametro): la comisión de AutoCar, la parte
  * que va al fondo, el tope de la compensación, los días para reclamar, el precio de la inspección, la franquicia del
- * mecánico y el crédito del comprador si el auto se vendió.
+ * mecánico, el crédito del comprador si el auto se vendió y los pesos de la fórmula de "para vos".
  * Las reglas (por ejemplo, "sin patente no se firma") quedan en el código: acá solo hay números.
  */
 final class Parametros
@@ -17,7 +17,12 @@ final class Parametros
     public const CLAVES = ['comision_autocar', 'parte_fondo', 'tope_veces', 'dias_reclamo',
         'precio_minimo', 'precio_sugerido', 'precio_maximo', 'cotizacion_dolar', 'franquicia', 'credito_vendido', 'horas_cupon',
         'presupuestos_por_arreglo', 'dias_presupuesto', 'comision_arreglos',
-        'fallas_minimo_inspecciones', 'fallas_votos_confirmar', 'fallas_porcentaje_medido'];
+        'fallas_minimo_inspecciones', 'fallas_votos_confirmar', 'fallas_porcentaje_medido',
+        // La fórmula de "para vos" (ver MetaBusqueda\ParaVos): peso_<perfil>_<criterio>
+        'peso_personal_precio', 'peso_personal_km', 'peso_personal_dias', 'peso_personal_anio',
+        'peso_familia_precio', 'peso_familia_km', 'peso_familia_dias', 'peso_familia_anio',
+        'peso_trabajo_precio', 'peso_trabajo_km', 'peso_trabajo_dias', 'peso_trabajo_anio',
+        'peso_aplicacion_precio', 'peso_aplicacion_km', 'peso_aplicacion_dias', 'peso_aplicacion_anio'];
 
     /** @var array<string, float>|null se leen una sola vez por pedido */
     private static ?array $valores = null;
