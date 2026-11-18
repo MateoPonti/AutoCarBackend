@@ -80,6 +80,61 @@ final class EstadisticasTest extends ApiTestCase
         self::assertSame('semana', $this->pedir('GET', '/api/admin/metricas?dias=90')['json']['serie']['unidad']);
     }
 
+    /** La fila de un tipo de usuario en una lista de por_perfil */
+    private static function delUso(array $filas, string $uso): array
+    {
+        return array_values(array_filter($filas, static fn(array $f): bool => $f['uso'] === $uso))[0];
+    }
+
+    public function testPorTipoDeUsuarioCuentaLaBusquedaElOrdenLaRecomendacionYLaPlata(): void
+    {
+        $antes = $this->metricas()['por_perfil'];
+        self::assertSame(['personal', 'familia', 'trabajo', 'aplicacion', 'sin_perfil'], array_keys($antes['usos']));
+
+        [$mecanicoId] = $this->ingresarComoMecanico();
+        $this->ingresarComoUsuario();
+        self::assertSame(200, $this->pedir('PUT', '/api/me/preferencias', ['uso' => 'trabajo'])['status']);
+        $busqueda = $this->pedir('POST', '/api/meta-busquedas', ['marca' => 'Toyota', 'modelo' => 'Hilux']);
+        self::assertSame(201, $busqueda['status'], json_encode($busqueda['json']));
+        $id = $busqueda['json']['busqueda']['id'];
+
+        // Abrir los resultados cuenta como búsqueda (la página 2 no); elegir "Menos km" cuenta como orden
+        self::assertSame(200, $this->pedir('GET', "/api/meta-busquedas/$id?orden=km")['status']);
+        self::assertSame(200, $this->pedir('GET', "/api/meta-busquedas/$id?orden=km&page=2")['status']);
+        $url = 'https://auto.mercadolibre.com.ar/MLA-' . random_int(1000000000, 9999999999) . '-hilux-_JM';
+        self::assertSame(204, $this->pedir('POST', '/api/eventos', ['eventos' => [
+            ['tipo' => 'orden', 'origen' => 'metabuscador', 'ref' => 'km'],
+            ['tipo' => 'orden', 'origen' => 'metabuscador', 'ref' => 'inventado'], // se ignora
+            ['tipo' => 'orden', 'origen' => 'destacado', 'ref' => 'precio'],      // se ignora: solo en el metabuscador
+            ['tipo' => 'busco', 'origen' => 'metabuscador'],                     // se ignora: lo anota el back
+            ['tipo' => 'mostrado', 'origen' => 'metabuscador', 'ref' => $url],
+        ]])['status']);
+        $pedido = $this->pedir('POST', '/api/inspecciones', ['url' => $url, 'mecanico_id' => $mecanicoId, 'origen' => 'metabuscador']);
+        self::assertSame(201, $pedido['status'], json_encode($pedido['json']));
+
+        $despues = $this->metricas()['por_perfil'];
+        $mAntes = self::delUso($antes['metabuscador']['por_uso'], 'trabajo');
+        $m = self::delUso($despues['metabuscador']['por_uso'], 'trabajo');
+        self::assertSame($mAntes['buscaron'] + 1, $m['buscaron']);
+        self::assertSame($mAntes['compraron'] + 1, $m['compraron']);
+        self::assertSame($mAntes['desde_metabuscador'] + 1, $m['desde_metabuscador']);
+        self::assertSame($antes['metabuscador']['total']['buscaron'] + 1, $despues['metabuscador']['total']['buscaron']);
+
+        $o = self::delUso($despues['ordenes'], 'trabajo')['ordenes'];
+        $oAntes = self::delUso($antes['ordenes'], 'trabajo')['ordenes'];
+        self::assertSame($oAntes['km']['usuarios'] + 1, $o['km']['usuarios']);
+        self::assertSame($oAntes['precio']['veces'], $o['precio']['veces']);
+
+        $e = self::origen(self::delUso($despues['embudo'], 'trabajo'), 'metabuscador');
+        $eAntes = self::origen(self::delUso($antes['embudo'], 'trabajo'), 'metabuscador');
+        self::assertSame($eAntes['vieron'] + 1, $e['vieron']);
+        self::assertSame($eAntes['pagaron'] + 1, $e['pagaron']);
+
+        $p = self::delUso($despues['plata'], 'trabajo');
+        self::assertSame(self::delUso($antes['plata'], 'trabajo')['pagaron'] + 1, $p['pagaron']);
+        self::assertEqualsWithDelta($p['ingresos'] - $p['perdida'], $p['neta'], 0.01);
+    }
+
     public function testLasInspeccionesDelPeriodoTraenEstadosReclamosYMecanicos(): void
     {
         $i = $this->metricas(30)['inspecciones'];

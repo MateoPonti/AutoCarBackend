@@ -6,6 +6,7 @@ namespace AutoCar\Admin;
 use AutoCar\Auth\Preferencias;
 use AutoCar\Core\Database;
 use AutoCar\Estadisticas\Panel;
+use AutoCar\Estadisticas\PorPerfil;
 use AutoCar\Inspecciones\Fondo;
 use AutoCar\Core\Response;
 use PDO;
@@ -25,6 +26,8 @@ final class AdminMetricasController
             'resumen'       => Panel::resumen($dias),
             'serie'         => Panel::serie($dias),
             'embudo'        => Panel::embudo($dias),
+            // Plata, recomendaciones, búsquedas y órdenes separados por tipo de usuario ("¿Para qué buscás el auto?")
+            'por_perfil'    => PorPerfil::todo($dias),
             'inspecciones'  => Panel::inspecciones($dias),
             'recurrentes'   => Panel::recurrentes(),
             'usuarios'      => self::usuarios(),

@@ -97,6 +97,7 @@ final class Panel
              ),
              u AS (SELECT {$grupo('created_at')} AS fecha, COUNT(*) AS n FROM usuario GROUP BY 1),
              p AS (SELECT {$grupo('created_at')} AS fecha, COUNT(*) AS n FROM inspeccion GROUP BY 1),
+             b AS (SELECT {$grupo('created_at')} AS fecha, COUNT(DISTINCT usuario_id) AS n FROM evento WHERE tipo = 'busco' GROUP BY 1),
              g AS (SELECT {$grupo('firmada_at')} AS fecha, COUNT(*) AS firmadas,
                           SUM(precio - credito_usado) FILTER (WHERE pago = 'liberado') AS facturado,
                           SUM(monto_autocar - monto_fondo - credito_usado) FILTER (WHERE pago = 'liberado') AS ganancia,
@@ -109,8 +110,8 @@ final class Panel
              SELECT to_char(f.fecha, 'YYYY-MM-DD') AS fecha,
                     COALESCE(u.n, 0) AS nuevos_usuarios, COALESCE(p.n, 0) AS pagaron, COALESCE(g.firmadas, 0) AS firmadas,
                     COALESCE(g.facturado, 0) AS facturado, COALESCE(g.ganancia, 0) AS ganancia, COALESCE(r.reclamos, 0) AS reclamos,
-                    COALESCE(g.ingresos, 0) AS ingresos
-               FROM f LEFT JOIN u USING (fecha) LEFT JOIN p USING (fecha) LEFT JOIN g USING (fecha) LEFT JOIN r USING (fecha)
+                    COALESCE(g.ingresos, 0) AS ingresos, COALESCE(b.n, 0) AS buscaron
+               FROM f LEFT JOIN u USING (fecha) LEFT JOIN p USING (fecha) LEFT JOIN b USING (fecha) LEFT JOIN g USING (fecha) LEFT JOIN r USING (fecha)
               ORDER BY f.fecha"
         );
         $puntos = array_map(static fn(array $x): array => [
@@ -123,6 +124,7 @@ final class Panel
             'reclamos'        => (float)$x['reclamos'],
             'ingresos'        => (float)$x['ingresos'],
             'neta'            => (float)$x['ingresos'] - (float)$x['reclamos'],
+            'buscaron'        => (int)$x['buscaron'], // compradores distintos que abrieron una búsqueda del metabuscador
         ], $st->fetchAll());
         return ['unidad' => $unidad === 'day' ? 'dia' : 'semana', 'puntos' => $puntos];
     }
