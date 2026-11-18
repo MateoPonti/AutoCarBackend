@@ -54,7 +54,8 @@ final class InspeccionController
 
     /**
      * POST /api/inspecciones {url, mecanico_id, titulo?, anio?, kilometraje?, precio_publicado?, localidad?} → 201
-     * El link puede ser de cualquier sitio. Si es de AutoCar, los datos del auto salen de la publicación.
+     * El link puede ser de cualquier sitio. Si es de AutoCar, los datos del auto salen siempre de la publicación
+     * (lo que mande el comprador no cuenta: así el precio del informe es el publicado).
      * El precio es el del taller en ese momento y queda fijo en la inspección. El pago es simulado (retenido).
      */
     public function crear(): void
@@ -92,12 +93,12 @@ final class InspeccionController
             Response::error(409, 'duplicada', self::DUPLICADA);
         }
 
-        if ($vehiculo !== null) { // lo que no completó el comprador sale de la publicación
-            $datos['titulo'] ??= trim("{$vehiculo['marca']} {$vehiculo['modelo']} " . ($vehiculo['version'] ?? ''));
-            $datos['anio'] ??= (int)$vehiculo['anio'];
-            $datos['kilometraje'] ??= (int)$vehiculo['kilometraje'];
-            $datos['precio_publicado'] ??= (float)$vehiculo['precio'];
-            $datos['localidad'] ??= $vehiculo['localidad'];
+        if ($vehiculo !== null) { // los datos del auto son los de la publicación, no los que mande el comprador
+            $datos['titulo'] = trim("{$vehiculo['marca']} {$vehiculo['modelo']} " . ($vehiculo['version'] ?? ''));
+            $datos['anio'] = (int)$vehiculo['anio'];
+            $datos['kilometraje'] = (int)$vehiculo['kilometraje'];
+            $datos['precio_publicado'] = (float)$vehiculo['precio'];
+            $datos['localidad'] = $vehiculo['localidad'];
         }
 
         // Dos pedidos a la vez pasan juntos el chequeo de arriba: el índice único de la base deja entrar solo uno.
