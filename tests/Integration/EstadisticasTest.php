@@ -63,4 +63,14 @@ final class EstadisticasTest extends ApiTestCase
         self::assertSame(30, $this->pedir('GET', '/api/admin/metricas?dias=5')['json']['periodo']['dias']);
         self::assertSame('semana', $this->pedir('GET', '/api/admin/metricas?dias=90')['json']['serie']['unidad']);
     }
+
+    public function testLasInspeccionesDelPeriodoTraenEstadosReclamosYMecanicos(): void
+    {
+        $i = $this->metricas(30)['inspecciones'];
+        foreach (['pedidas', 'precio_promedio', 'horas_hasta_firma', 'por_estado', 'conclusiones', 'reclamos', 'top_mecanicos'] as $clave) {
+            self::assertArrayHasKey($clave, $i);
+        }
+        self::assertSame(array_sum($i['por_estado']), $i['pedidas']);
+        self::assertLessThanOrEqual(5, count($i['top_mecanicos']));
+    }
 }

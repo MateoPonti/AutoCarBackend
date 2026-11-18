@@ -140,6 +140,65 @@ final class Panel
         return ['origenes' => $origenes, 'total' => $total, 'sin_origen' => $sinOrigen];
     }
 
+    /**
+     * Cómo anduvieron las inspecciones pedidas en el período: en qué estado están, cuánto se tardó de pagar a
+     * firmar (mediana, en horas), el precio promedio, qué concluyó el mecánico, los reclamos y los mecánicos
+     * que más firmaron. Sirve para ver si el servicio funciona, no solo cuánto se vende.
+     * @return array<string, mixed>
+     */
+    public static function inspecciones(int $dias): array
+    {
+        $pdo = Database::pdo();
+        $desde = "now() - make_interval(days => $dias)"; // $dias es uno de PERIODOS (entero validado)
+        $t = $pdo->query(
+            "SELECT COUNT(*) AS pedidas,
+                    COALESCE(ROUND(AVG(precio)), 0) AS precio_promedio,
+                    ROUND((percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM firmada_at - created_at) / 3600)
+                           FILTER (WHERE estado = 'firmada'))::numeric) AS horas_hasta_firma
+               FROM inspeccion WHERE created_at >= $desde"
+        )->fetch();
+        $porEstado = $pdo->query(
+            "SELECT estado, COUNT(*) FROM inspeccion WHERE created_at >= $desde GROUP BY estado"
+        )->fetchAll(PDO::FETCH_KEY_PAIR);
+        $conclusiones = $pdo->query(
+            "SELECT conclusion, COUNT(*) FROM inspeccion
+              WHERE estado = 'firmada' AND firmada_at >= $desde GROUP BY conclusion"
+        )->fetchAll(PDO::FETCH_KEY_PAIR);
+        $reclamos = $pdo->query(
+            "SELECT COUNT(*) AS abiertos_en_periodo,
+                    COUNT(*) FILTER (WHERE estado = 'procede') AS proceden,
+                    COUNT(*) FILTER (WHERE estado = 'no_procede') AS no_proceden,
+                    COUNT(*) FILTER (WHERE estado = 'abierto') AS sin_resolver
+               FROM reclamo WHERE created_at >= $desde"
+        )->fetch();
+        // Los que más firmaron en el período, con sus reclamos que procedieron (de esas mismas inspecciones)
+        $mecanicos = $pdo->query(
+            "SELECT COALESCE(t.nombre, u.nombre) AS nombre, COUNT(*) AS firmadas,
+                    COUNT(r.id) FILTER (WHERE r.estado = 'procede') AS reclamos,
+                    COALESCE(SUM(i.monto_mecanico), 0) AS cobrado
+               FROM inspeccion i
+               JOIN usuario u ON u.id = i.mecanico_id
+               LEFT JOIN taller t ON t.usuario_id = i.mecanico_id
+               LEFT JOIN reclamo r ON r.inspeccion_id = i.id
+              WHERE i.estado = 'firmada' AND i.firmada_at >= $desde
+              GROUP BY 1 ORDER BY firmadas DESC, nombre LIMIT 5"
+        )->fetchAll();
+        return [
+            'pedidas'           => (int)$t['pedidas'],
+            'precio_promedio'   => (float)$t['precio_promedio'],
+            'horas_hasta_firma' => $t['horas_hasta_firma'] !== null ? (int)$t['horas_hasta_firma'] : null,
+            'por_estado'        => array_map('intval', $porEstado),
+            'conclusiones'      => array_map('intval', $conclusiones),
+            'reclamos'          => array_map('intval', $reclamos),
+            'top_mecanicos'     => array_map(static fn(array $m): array => [
+                'nombre'   => $m['nombre'],
+                'firmadas' => (int)$m['firmadas'],
+                'reclamos' => (int)$m['reclamos'],
+                'cobrado'  => (float)$m['cobrado'],
+            ], $mecanicos),
+        ];
+    }
+
     /** Compradores que pidieron más de una inspección (en toda la historia): los que vuelven. */
     public static function recurrentes(): array
     {
