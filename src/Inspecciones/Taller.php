@@ -50,6 +50,37 @@ final class Taller
         }, $st->fetchAll()));
     }
 
+    /**
+     * Cuántas inspecciones firmadas de esa marca hizo cada mecánico y en cuántas procedió un reclamo:
+     * "modelo" = del mismo modelo, "marca" = de otros modelos de la marca (los autos parecidos).
+     * Con eso sale la especialidad (Ranking::especialidad): haber revisado muchos no alcanza si salieron mal.
+     * @return array<int, array{modelo: int, reclamos_modelo: int, marca: int, reclamos_marca: int}> por mecanico_id
+     */
+    public static function revisados(string $marca, ?string $modelo): array
+    {
+        $st = Database::pdo()->prepare(
+            "SELECT i.mecanico_id,
+                    COUNT(*) FILTER (WHERE lower(i.modelo) = lower(:m1)) AS modelo,
+                    COUNT(*) FILTER (WHERE lower(i.modelo) = lower(:m2) AND r.inspeccion_id IS NOT NULL) AS reclamos_modelo,
+                    COUNT(*) FILTER (WHERE lower(i.modelo) IS DISTINCT FROM lower(:m3)) AS marca,
+                    COUNT(*) FILTER (WHERE lower(i.modelo) IS DISTINCT FROM lower(:m4) AND r.inspeccion_id IS NOT NULL) AS reclamos_marca
+             FROM inspeccion i
+             LEFT JOIN (SELECT DISTINCT inspeccion_id FROM reclamo WHERE estado = 'procede') r ON r.inspeccion_id = i.id
+             WHERE i.estado = 'firmada' AND lower(i.marca) = lower(:marca)
+             GROUP BY i.mecanico_id"
+        );
+        $m = $modelo ?? '';
+        $st->execute(['marca' => $marca, 'm1' => $m, 'm2' => $m, 'm3' => $m, 'm4' => $m]);
+        $porMecanico = [];
+        foreach ($st->fetchAll() as $f) {
+            $porMecanico[(int)$f['mecanico_id']] = [
+                'modelo' => (int)$f['modelo'], 'reclamos_modelo' => (int)$f['reclamos_modelo'],
+                'marca'  => (int)$f['marca'],  'reclamos_marca'  => (int)$f['reclamos_marca'],
+            ];
+        }
+        return $porMecanico;
+    }
+
     /** Localidades con al menos un mecánico en la red (para el filtro). */
     public static function localidades(): array
     {

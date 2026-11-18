@@ -171,6 +171,39 @@ final class InspeccionesTest extends TestCase
         self::assertSame(4.0, $orden[2]['puntaje']);
     }
 
+    public function testLaEspecialidadSaleDelModeloYSiNoDeLaMarcaYCuentaLosReclamos(): void
+    {
+        $e = Ranking::especialidad(['modelo' => 4, 'reclamos_modelo' => 1, 'marca' => 9, 'reclamos_marca' => 0]);
+        self::assertSame(['en' => 'modelo', 'revisados' => 4, 'reclamos' => 1, 'puntaje' => 2.5, 'buena' => true], $e);
+
+        $e = Ranking::especialidad(['modelo' => 0, 'reclamos_modelo' => 0, 'marca' => 2, 'reclamos_marca' => 1]);
+        self::assertSame('marca', $e['en']);
+        self::assertSame(0.0, $e['puntaje']);
+        self::assertFalse($e['buena']);
+
+        self::assertNull(Ranking::especialidad(['modelo' => 0, 'reclamos_modelo' => 0, 'marca' => 0, 'reclamos_marca' => 0]));
+    }
+
+    public function testPorEspecialidadBuenaEnElModeloDespuesLaMarcaDespuesSinExperienciaYLaMalaAlFinal(): void
+    {
+        $esp = static fn(int $modelo, int $reclamosModelo, int $marca = 0, int $reclamosMarca = 0): ?array =>
+            Ranking::especialidad(['modelo' => $modelo, 'reclamos_modelo' => $reclamosModelo, 'marca' => $marca, 'reclamos_marca' => $reclamosMarca]);
+        // En el orden del ranking general
+        $orden = Ranking::porEspecialidad([
+            ['id' => 'mejor-ranking-sin-experiencia', 'especialidad' => $esp(0, 0)],
+            ['id' => 'mala-en-el-modelo', 'especialidad' => $esp(3, 2)],
+            ['id' => 'buena-en-la-marca', 'especialidad' => $esp(0, 0, 6, 0)],
+            ['id' => 'modelo-pocos', 'especialidad' => $esp(2, 0)],
+            ['id' => 'modelo-muchos', 'especialidad' => $esp(7, 0)],
+            ['id' => 'modelo-con-un-reclamo', 'especialidad' => $esp(8, 1)],
+            ['id' => 'otro-sin-experiencia', 'especialidad' => null],
+        ]);
+        self::assertSame([
+            'modelo-muchos', 'modelo-pocos', 'modelo-con-un-reclamo', 'buena-en-la-marca',
+            'mejor-ranking-sin-experiencia', 'otro-sin-experiencia', 'mala-en-el-modelo',
+        ], array_column($orden, 'id'));
+    }
+
     // --- Checklist
 
     private static function checklistCompleto(): array

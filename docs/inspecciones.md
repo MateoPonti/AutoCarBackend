@@ -112,7 +112,7 @@ Los números son los del `PLAN.md`. Los controladores son `InspeccionController`
 | Tarea | Endpoint | Componentes que usa | Estado |
 |---|---|---|---|
 | B2 | `GET/PUT /api/mecanico/perfil` | `Taller` | ✅ |
-| B3 | `GET /api/mecanicos?localidad=` | `Ranking`, `Taller::red` | ✅ |
+| B3 | `GET /api/mecanicos?localidad=&marca=&modelo=&orden=` | `Ranking` (`especialidad`, `porEspecialidad`), `Taller::red`, `Taller::revisados` | ✅ |
 | B4 | `POST /api/inspecciones` | `Pedido`, `Fuente`, `Precio` | ✅ |
 | B5 | `GET /api/mis-inspecciones`, `GET /api/inspecciones/{id}`, `POST .../cancelar` | `Estados` | ✅ |
 | B6 | `GET/PATCH /api/mecanico/inspecciones...` | `Estados` (+ `validarTurno`, `validarMotivo`) | ✅ |
