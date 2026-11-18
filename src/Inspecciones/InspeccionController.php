@@ -20,15 +20,36 @@ final class InspeccionController
 {
     private const DUPLICADA = 'Ya tenés una inspección en curso para ese auto.';
 
-    /** GET /api/mecanicos?localidad= (público) → {items: [mecánico con puntaje], localidades} */
+    /**
+     * GET /api/mecanicos?localidad=&marca=&modelo=&orden=especialidad|ranking (público)
+     * → {items: [mecánico con puntaje], localidades, orden}
+     * Con marca (la del auto que se quiere revisar), cada mecánico trae "revisados" (cuántas firmó de ese modelo y
+     * de otros de la marca, y en cuántas procedió un reclamo) y "especialidad" (Ranking::especialidad, o null).
+     * Así, el orden por defecto es por especialidad (Ranking::porEspecialidad); con orden=ranking, el ranking general.
+     */
     public function mecanicos(): void
     {
-        $localidad = is_string($_GET['localidad'] ?? null) && trim($_GET['localidad']) !== ''
-            ? mb_substr(trim($_GET['localidad']), 0, 100) : null;
-        Response::json([
-            'items'       => array_map([Taller::class, 'paraRanking'], Taller::red($localidad)),
-            'localidades' => Taller::localidades(),
-        ]);
+        $texto = static fn(string $clave, int $largo): ?string => is_string($_GET[$clave] ?? null) && trim($_GET[$clave]) !== ''
+            ? mb_substr(trim($_GET[$clave]), 0, $largo) : null;
+        $localidad = $texto('localidad', 100);
+        $marca = $texto('marca', 50);
+        $modelo = $marca !== null ? $texto('modelo', 60) : null;
+        $orden = $marca !== null && ($_GET['orden'] ?? '') !== 'ranking' ? 'especialidad' : 'ranking';
+
+        $items = array_map([Taller::class, 'paraRanking'], Taller::red($localidad));
+        if ($marca !== null) {
+            $revisados = Taller::revisados($marca, $modelo);
+            $nada = ['modelo' => 0, 'reclamos_modelo' => 0, 'marca' => 0, 'reclamos_marca' => 0];
+            foreach ($items as &$m) {
+                $m['revisados'] = $revisados[$m['id']] ?? $nada;
+                $m['especialidad'] = Ranking::especialidad($m['revisados']);
+            }
+            unset($m);
+            if ($orden === 'especialidad') {
+                $items = Ranking::porEspecialidad($items);
+            }
+        }
+        Response::json(['items' => $items, 'localidades' => Taller::localidades(), 'orden' => $orden]);
     }
 
     /**
