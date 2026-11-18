@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace AutoCar\Inspecciones;
 
+use AutoCar\Estadisticas\Eventos;
+
 /**
  * Reglas del pedido de una inspección (POST /api/inspecciones, B4). Funciones puras: no tocan la base.
  * El comprador pega el link del auto (de cualquier sitio), elige el mecánico y puede completar datos del auto.
@@ -84,6 +86,8 @@ final class Pedido
             // Opcionales: marca y modelo del catálogo (el controlador los valida contra la lista); si no, los completa el mecánico
             'marca'            => $texto('marca'),
             'modelo'           => $texto('modelo'),
+            // Para las estadísticas: desde dónde tocó "Mandale un mecánico" (si no es uno conocido, sin dato)
+            'origen'           => Eventos::esOrigen($in['origen'] ?? null) ? $in['origen'] : null,
         ], $errores];
     }
 

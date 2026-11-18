@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace AutoCar\MetaBusqueda;
 
+use AutoCar\Parametros\Parametros;
+
 /**
  * "Para vos": un puntaje de conveniencia de cada auto del metabuscador según el perfil del comprador
  * ("¿Para qué buscás el auto?", ver Auth\Preferencias::USOS). Son las mismas cosas para todos, pero cada perfil
@@ -14,7 +16,10 @@ namespace AutoCar\MetaBusqueda;
  */
 final class ParaVos
 {
-    /** Peso de cada cosa por perfil: 3 = alto, 2 = medio, 1 = bajo, 0 = no cuenta */
+    /**
+     * Peso de cada cosa por perfil: 3 = alto, 2 = medio, 1 = bajo, 0 = no cuenta. Son los valores de fábrica:
+     * los que se usan salen de los parámetros peso_<perfil>_<criterio> (el admin los cambia, ver pesosActuales).
+     */
     public const PESOS = [
         'personal'   => ['precio' => 3, 'km' => 2, 'dias' => 2, 'anio' => 0], // presupuesto justo
         'familia'    => ['precio' => 2, 'km' => 3, 'dias' => 1, 'anio' => 1], // que no se rompa
@@ -30,16 +35,38 @@ final class ParaVos
     private const ANIOS_TOPE = 5;
 
     /**
+     * Los pesos que configuró el admin en Parámetros (migración 028). Si todavía no están en la base, los de fábrica.
+     * @return array<string, array<string, float>>
+     */
+    public static function pesosActuales(): array
+    {
+        try {
+            $pesos = [];
+            foreach (self::PESOS as $uso => $criterios) {
+                foreach (array_keys($criterios) as $criterio) {
+                    $pesos[$uso][$criterio] = Parametros::valor("peso_{$uso}_{$criterio}");
+                }
+            }
+            return $pesos;
+        } catch (\RuntimeException) {
+            return self::PESOS;
+        }
+    }
+
+    /**
      * @param array<string, mixed> $auto
      * @param array<string, mixed>|null $comparacion la de Comparables::elegir (null si no tiene precio)
      * @param array<string, mixed>|null $etiqueta la de Comparables::etiqueta
      * @param float $anioTipico mediana de los años de los resultados
-     * @return array{puntaje: float, motivo: string}|null null si el perfil no existe o no hay con qué comparar
+     * @param array<string, array<string, float>>|null $pesosPorPerfil los de pesosActuales (sin indicar, los de fábrica)
+     * @return array{puntaje: float, motivo: string}|null null si el perfil no existe, no hay con qué comparar o
+     *         el admin puso todos los pesos de ese perfil en 0
      */
-    public static function puntuar(array $auto, ?array $comparacion, ?array $etiqueta, string $uso, float $anioTipico): ?array
+    public static function puntuar(array $auto, ?array $comparacion, ?array $etiqueta, string $uso, float $anioTipico,
+        ?array $pesosPorPerfil = null): ?array
     {
-        $pesos = self::PESOS[$uso] ?? null;
-        if ($pesos === null || $comparacion === null || !$comparacion['suficientes']) {
+        $pesos = ($pesosPorPerfil ?? self::PESOS)[$uso] ?? null;
+        if ($pesos === null || array_sum($pesos) <= 0 || $comparacion === null || !$comparacion['suficientes']) {
             return null;
         }
 

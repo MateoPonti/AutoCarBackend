@@ -37,6 +37,7 @@
 | 25 | `025-presupuestos.sql` | Idea A, costo total: tabla `presupuesto` (cada arreglo del informe firmado se le pide a otros talleres de la red, nunca al que inspeccionó) y parámetros `presupuestos_por_arreglo`, `dias_presupuesto` y `comision_arreglos`. Correrla **antes** de desplegar el back que la usa |
 | 26 | `026-fallas-tipicas.sql` | Idea B, fallas típicas por modelo: `inspeccion.marca` y `modelo` (del catálogo; a las que ya existen se les completan con la publicación o el título), tablas `falla_tipica` (origen internet o mecánicos) y `falla_voto`, y parámetros `fallas_minimo_inspecciones`, `fallas_votos_confirmar` y `fallas_porcentaje_medido`. Correrla **antes** de desplegar el back que la usa |
 | 27 | `027-foto-de-falla.sql` | Foto de cada ítem del checklist: tabla `inspeccion_item_foto` (una por ítem). Si un ítem tiene "falla", sin foto no se firma; en "observado" es opcional. Correrla **antes** de desplegar el back que la usa |
+| 28 | `028-estadisticas.sql` | Estadísticas del admin: `inspeccion.origen` (desde dónde se pidió) y tabla `evento` (recomendaciones mostradas y tocadas). "Compró" = pagó la inspección. Correrla **antes** de desplegar el back que la usa |
 
 Se copian y pegan enteras en el **SQL Editor de Neon**, primero en el proyecto de Neon de dev y en el de main recién cuando se pasa `dev` → `main` (son dos proyectos separados).
 
