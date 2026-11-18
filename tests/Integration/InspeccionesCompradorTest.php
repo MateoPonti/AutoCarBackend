@@ -188,13 +188,14 @@ final class InspeccionesCompradorTest extends ApiTestCase
         self::assertSame(409, $propio['status']);
         self::assertSame('vehiculo_propio', $propio['json']['error']);
 
-        // Otro comprador sí, y los datos del auto salen de la publicación
+        // Otro comprador sí, y los datos del auto salen de la publicación aunque mande otros
         $this->ingresarComoUsuario();
-        $r = $this->pedir('POST', '/api/inspecciones', ['url' => $url, 'mecanico_id' => $mecanicoId]);
+        $r = $this->pedir('POST', '/api/inspecciones', ['url' => $url, 'mecanico_id' => $mecanicoId,
+            'titulo' => 'Otro auto', 'anio' => 2010, 'kilometraje' => 1, 'precio_publicado' => 1000, 'localidad' => 'Otra']);
         self::assertSame(201, $r['status'], json_encode($r['json']));
         $i = $r['json']['inspeccion'];
-        self::assertSame(['autocar', $vehiculo, 'Fiat Cronos Drive', 2022, 60000, 'Luján'],
-            [$i['fuente'], $i['vehiculo_id'], $i['titulo'], $i['anio'], $i['kilometraje'], $i['localidad']]);
+        self::assertSame(['autocar', $vehiculo, 'Fiat Cronos Drive', 2022, 60000, 21000000, 'Luján'],
+            [$i['fuente'], $i['vehiculo_id'], $i['titulo'], $i['anio'], $i['kilometraje'], $i['precio_publicado'], $i['localidad']]);
 
         // Una publicación que no está disponible no se puede inspeccionar
         Entorno::pdo()->prepare("UPDATE vehiculo SET estado = 'vendido' WHERE id = :id")->execute(['id' => $vehiculo]);
