@@ -108,7 +108,8 @@ final class Panel
 
     /**
      * Embudo de las recomendaciones en el período, por origen: cuántos compradores la vieron, cuántos tocaron
-     * "Mandale un mecánico" y cuántos pagaron la inspección desde ahí (y cuántas quedaron firmadas).
+     * "Mandale un mecánico", cuántos pagaron la inspección desde ahí y cuántos ya la tienen firmada. Todo cuenta
+     * compradores distintos (un comprador con dos inspecciones cuenta una vez), así ningún paso supera al anterior.
      * "total" junta todos los orígenes; "sin_origen" son las inspecciones pedidas sin dato (anteriores a medirlo).
      * @return array{origenes: list<array<string, mixed>>, total: array<string, int>, sin_origen: int}
      */
@@ -121,7 +122,7 @@ final class Panel
             "SELECT (SELECT COUNT(DISTINCT usuario_id) FROM evento WHERE origen = :o1 AND tipo = 'mostrado' AND created_at >= $desde) AS vieron,
                     (SELECT COUNT(DISTINCT usuario_id) FROM evento WHERE origen = :o2 AND tipo = 'tocado' AND created_at >= $desde) AS tocaron,
                     (SELECT COUNT(DISTINCT comprador_id) FROM inspeccion WHERE origen = :o3 AND created_at >= $desde) AS pagaron,
-                    (SELECT COUNT(*) FROM inspeccion WHERE origen = :o4 AND estado = 'firmada' AND created_at >= $desde) AS firmadas"
+                    (SELECT COUNT(DISTINCT comprador_id) FROM inspeccion WHERE origen = :o4 AND estado = 'firmada' AND created_at >= $desde) AS firmadas"
         );
         foreach (Eventos::ORIGENES as $origen) {
             $st->execute(['o1' => $origen, 'o2' => $origen, 'o3' => $origen, 'o4' => $origen]);
@@ -131,7 +132,7 @@ final class Panel
             "SELECT (SELECT COUNT(DISTINCT usuario_id) FROM evento WHERE tipo = 'mostrado' AND created_at >= $desde) AS vieron,
                     (SELECT COUNT(DISTINCT usuario_id) FROM evento WHERE tipo = 'tocado' AND created_at >= $desde) AS tocaron,
                     (SELECT COUNT(DISTINCT comprador_id) FROM inspeccion WHERE origen IS NOT NULL AND created_at >= $desde) AS pagaron,
-                    (SELECT COUNT(*) FROM inspeccion WHERE origen IS NOT NULL AND estado = 'firmada' AND created_at >= $desde) AS firmadas,
+                    (SELECT COUNT(DISTINCT comprador_id) FROM inspeccion WHERE origen IS NOT NULL AND estado = 'firmada' AND created_at >= $desde) AS firmadas,
                     (SELECT COUNT(*) FROM inspeccion WHERE origen IS NULL AND created_at >= $desde) AS sin_origen"
         )->fetch(PDO::FETCH_ASSOC));
         $sinOrigen = $total['sin_origen'];
