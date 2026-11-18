@@ -60,7 +60,7 @@ final class EstadisticasTest extends ApiTestCase
         $m = $this->metricas(90);
         foreach (['actual', 'anterior'] as $periodo) {
             $t = $m['resumen'][$periodo];
-            foreach (['ingresos', 'perdida', 'neta', 'por_cobrar', 'reclamos_procedieron'] as $clave) {
+            foreach (['ingresos', 'perdida', 'neta', 'por_cobrar', 'reclamos_procedieron', 'mecanicos'] as $clave) {
                 self::assertArrayHasKey($clave, $t);
             }
             self::assertEqualsWithDelta($t['ingresos'] - $t['perdida'], $t['neta'], 0.01);
