@@ -22,6 +22,13 @@ final class Importador
     private const CORRIDAS_GUARDADAS = 30;
     /** Cuántas marcas y modelos que faltan en el catálogo se anotan por corrida (los de más autos). */
     private const FALTANTES_GUARDADOS = 100;
+    /**
+     * Precios que son un error de carga del vendedor (pesos marcados como dólares o al revés): ningún auto se
+     * vende en Argentina por menos de $500.000 ni por más de US$ 400.000. El auto queda, pero "Sin precio",
+     * así no aparece como el más barato ni mueve el precio típico. (En la corrida del 10/11: 21 de 86.427 en ML.)
+     */
+    private const PRECIO_MINIMO_ARS = 500000;
+    private const PRECIO_MAXIMO_USD = 400000;
 
     /** @var array<string, int>|null clave de cada marca del catálogo ("mercedes benz"), para buscarla rápido */
     private ?array $clavesConocidas;
@@ -263,6 +270,11 @@ final class Importador
             || $precio === false || $contado === false) {
             return null;
         }
+        $creible = static fn(?float $p): ?float => $p === null
+            || ($moneda === 'ARS' && $p < self::PRECIO_MINIMO_ARS)
+            || ($moneda === 'USD' && $p > self::PRECIO_MAXIMO_USD) ? null : $p;
+        $precio = $creible($precio);
+        $contado = $creible($contado);
         $transmision = $a['transmision'] ?? null;
         $url = $texto($a['url'] ?? null, 500);
 

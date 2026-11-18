@@ -227,8 +227,12 @@ final class MetaBusquedaTest extends TestCase
 
     public function testImportadorValidaCadaAuto(): void
     {
-        $ok = ['id_externo' => '1', 'marca' => 'Fiat', 'modelo' => 'Uno', 'anio' => 2015, 'km' => 1000, 'moneda' => 'ARS', 'precio' => 100, 'url' => 'https://a.test/1'];
-        self::assertSame(100.0, Importador::validarAuto($ok)['precio']);
+        $ok = ['id_externo' => '1', 'marca' => 'Fiat', 'modelo' => 'Uno', 'anio' => 2015, 'km' => 1000, 'moneda' => 'ARS', 'precio' => 10000000, 'url' => 'https://a.test/1'];
+        self::assertSame(10000000.0, Importador::validarAuto($ok)['precio']);
+        // Errores de carga del vendedor (pesos como dólares o al revés): el auto queda, sin precio
+        self::assertNull(Importador::validarAuto(['precio' => 100000] + $ok)['precio']);
+        self::assertNull(Importador::validarAuto(['moneda' => 'USD', 'precio' => 700000] + $ok)['precio']);
+        self::assertSame(15000.0, Importador::validarAuto(['moneda' => 'USD', 'precio' => 15000] + $ok)['precio']);
         self::assertNull(Importador::validarAuto(['precio' => null] + $ok)['precio']);
         self::assertNull(Importador::validarAuto(['url' => 'javascript:alert(1)'] + $ok)['url']);
         foreach ([['marca' => ''], ['anio' => 1900], ['km' => -1], ['moneda' => 'EUR'], ['precio' => 0], ['id_externo' => null]] as $malo) {
