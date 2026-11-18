@@ -53,6 +53,8 @@ final class Panel
                       WHERE pago = 'liberado' AND firmada_at >= r.desde AND firmada_at < r.hasta) AS facturado,
                     (SELECT COALESCE(SUM(monto_autocar - monto_fondo - credito_usado), 0) FROM inspeccion, r
                       WHERE pago = 'liberado' AND firmada_at >= r.desde AND firmada_at < r.hasta) AS ganancia,
+                    (SELECT COALESCE(SUM(monto_mecanico), 0) FROM inspeccion, r
+                      WHERE pago = 'liberado' AND firmada_at >= r.desde AND firmada_at < r.hasta) AS mecanicos,
                     (SELECT COALESCE(SUM(COALESCE(devolucion, 0) + COALESCE(compensacion, 0) - COALESCE(franquicia, 0)), 0)
                        FROM reclamo, r WHERE estado = 'procede' AND resuelto_at >= r.desde AND resuelto_at < r.hasta) AS reclamos,
                     (SELECT COUNT(*) FROM reclamo, r
@@ -71,6 +73,7 @@ final class Panel
             'firmadas'        => (int)$t['firmadas'],
             'facturado'       => (float)$t['facturado'],
             'ganancia'        => (float)$t['ganancia'],
+            'mecanicos'       => (float)$t['mecanicos'], // pagado a los mecánicos (mismo criterio que ganancias.mecanicos)
             'reclamos'        => (float)$t['reclamos'],
             'reclamos_procedieron' => (int)$t['reclamos_procedieron'],
             'ingresos'        => (float)$t['ingresos'],
