@@ -44,6 +44,7 @@ final class Reporte
         }
 
         $perfil = $uso !== null && isset(ParaVos::PESOS[$uso]) ? $uso : null;
+        $pesos = $perfil !== null ? ParaVos::pesosActuales() : null;
         $anioTipico = (float)(Estadistica::mediana(array_column($externos, 'anio')) ?? 0);
         $items = [];
         foreach ($externos as $a) {
@@ -51,7 +52,7 @@ final class Reporte
             $etiqueta = $c !== null ? Comparables::etiqueta($a['precio'], $c) : null;
             $item = self::item($a, $etiqueta);
             if ($perfil !== null) {
-                $item['para_vos'] = ParaVos::puntuar($a, $c, $etiqueta, $perfil, $anioTipico);
+                $item['para_vos'] = ParaVos::puntuar($a, $c, $etiqueta, $perfil, $anioTipico, $pesos);
             }
             $items[] = $item;
         }

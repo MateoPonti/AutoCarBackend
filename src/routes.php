@@ -15,6 +15,7 @@ use AutoCar\Auth\PerfilController;
 use AutoCar\Catalogo\CatalogoController;
 use AutoCar\Chat\ChatController;
 use AutoCar\Comparador\ComparadorController;
+use AutoCar\Estadisticas\Eventos;
 use AutoCar\Favoritos\FavoritoController;
 use AutoCar\Inspecciones\AdminReclamoController;
 use AutoCar\Inspecciones\FallaTipicaController;
@@ -84,6 +85,8 @@ $router->post('/api/admin/fallas-tipicas', [FallaTipicaController::class, 'carga
 // Comprador: pide, ve las suyas, cancela antes de que la acepten y reclama dentro de los días de reclamo (parámetro) después de la firma.
 // El detalle lo ven el comprador, el mecánico asignado y quien resuelve reclamos.
 $router->post('/api/inspecciones', [InspeccionController::class, 'crear'], 'usuario');
+// Estadísticas: recomendaciones que el comprador vio y tocó (para el embudo del admin)
+$router->post('/api/eventos', [Eventos::class, 'registrar'], 'usuario');
 $router->get('/api/mis-inspecciones', [InspeccionController::class, 'mias'], 'auth');
 $router->get('/api/inspecciones/{id}', [InspeccionController::class, 'detalle'], 'auth');
 $router->get('/api/inspecciones/{id}/patente-foto', [InspeccionController::class, 'fotoPatente'], 'auth');

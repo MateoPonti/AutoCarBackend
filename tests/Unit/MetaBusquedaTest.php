@@ -223,6 +223,14 @@ final class MetaBusquedaTest extends TestCase
         // Sin comparables o con un perfil que no existe no hay puntaje (y el revendedor no está)
         self::assertNull(ParaVos::puntuar($a, null, null, 'personal', 2017.0));
         self::assertNull(ParaVos::puntuar($a, $comparacion, null, 'revendedor', 2017.0));
+
+        // Con los pesos que pone el admin: si solo cuenta el año (y este auto es del año típico) el puntaje es 0;
+        // con todos en 0, ese perfil no tiene "para vos"
+        $etiqueta = Comparables::etiqueta($a['precio'], $comparacion);
+        $soloAnio = ['personal' => ['precio' => 0, 'km' => 0, 'dias' => 0, 'anio' => 4]];
+        self::assertSame(0.0, ParaVos::puntuar($a, $comparacion, $etiqueta, 'personal', (float)$a['anio'], $soloAnio)['puntaje']);
+        $nada = ['personal' => ['precio' => 0, 'km' => 0, 'dias' => 0, 'anio' => 0]];
+        self::assertNull(ParaVos::puntuar($a, $comparacion, $etiqueta, 'personal', 2017.0, $nada));
     }
 
     public function testImportadorValidaCadaAuto(): void
