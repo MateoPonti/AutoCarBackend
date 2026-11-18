@@ -120,20 +120,31 @@ final class PorPerfil
               GROUP BY 1, 2, 3"
         )->fetchAll(PDO::FETCH_ASSOC);
         $pagos = $pdo->query(
-            "SELECT COALESCE(p.uso, '" . self::SIN_PERFIL . "') AS uso, i.origen, COUNT(DISTINCT i.comprador_id) AS n
+            "SELECT COALESCE(p.uso, '" . self::SIN_PERFIL . "') AS uso, i.origen, COUNT(DISTINCT i.comprador_id) AS n,
+                    COUNT(DISTINCT i.comprador_id) FILTER (WHERE i.estado = 'firmada') AS firmadas
                FROM inspeccion i LEFT JOIN usuario_preferencia p ON p.usuario_id = i.comprador_id
               WHERE i.origen IS NOT NULL AND i.created_at >= $desde
               GROUP BY 1, 2"
         )->fetchAll(PDO::FETCH_ASSOC);
-        return self::filasEmbudo($eventos, $pagos);
+        // De los que vieron cada recomendación, cuántos ordenaron la lista por precio, km o fecha de publicación
+        $ordenaron = $pdo->query(
+            "SELECT COALESCE(p.uso, '" . self::SIN_PERFIL . "') AS uso, m.origen, o.ref AS orden, COUNT(DISTINCT m.usuario_id) AS n
+               FROM (SELECT DISTINCT usuario_id, origen FROM evento WHERE tipo = 'mostrado' AND created_at >= $desde) m
+               JOIN (SELECT DISTINCT usuario_id, ref FROM evento WHERE tipo = 'orden' AND created_at >= $desde) o
+                 ON o.usuario_id = m.usuario_id
+               LEFT JOIN usuario_preferencia p ON p.usuario_id = m.usuario_id
+              GROUP BY 1, 2, 3"
+        )->fetchAll(PDO::FETCH_ASSOC);
+        return self::filasEmbudo($eventos, $pagos, $ordenaron);
     }
 
     /**
      * Función pura: de las filas agrupadas de la base al embudo por tipo de usuario.
      * @param list<array{uso: string, origen: string, tipo: string, n: mixed}> $eventos
-     * @param list<array{uso: string, origen: string, n: mixed}> $pagos
+     * @param list<array{uso: string, origen: string, n: mixed, firmadas?: mixed}> $pagos
+     * @param list<array{uso: string, origen: string, orden: string, n: mixed}> $ordenaron
      */
-    public static function filasEmbudo(array $eventos, array $pagos): array
+    public static function filasEmbudo(array $eventos, array $pagos, array $ordenaron = []): array
     {
         $cuenta = [];
         foreach ($eventos as $e) {
@@ -141,6 +152,10 @@ final class PorPerfil
         }
         foreach ($pagos as $p) {
             $cuenta[$p['uso']][$p['origen']]['pagaron'] = (int)$p['n'];
+            $cuenta[$p['uso']][$p['origen']]['firmadas'] = (int)($p['firmadas'] ?? 0);
+        }
+        foreach ($ordenaron as $o) {
+            $cuenta[$o['uso']][$o['origen']]['ordenaron'][$o['orden']] = (int)$o['n'];
         }
         $salida = [];
         foreach (self::usos() as $uso => $nombre) {
@@ -154,6 +169,13 @@ final class PorPerfil
                     'vieron'     => $vieron,
                     'tocaron'    => $c['tocaron'] ?? 0,
                     'pagaron'    => $pagaron,
+                    'firmadas'   => $c['firmadas'] ?? 0, // de los que pagaron, cuántos ya tienen la inspección firmada
+                    // De los que la vieron, cuántos ordenaron por precio, km o fecha de publicación ("Más nuevos")
+                    'ordenaron'  => [
+                        'precio' => $c['ordenaron']['precio'] ?? 0,
+                        'km'     => $c['ordenaron']['km'] ?? 0,
+                        'nuevos' => $c['ordenaron']['nuevos'] ?? 0,
+                    ],
                     // Pagaron ÷ vieron, en %. Sin nadie que la viera no hay conversión
                     'conversion' => $vieron > 0 ? round(min($pagaron / $vieron, 1) * 100, 1) : null,
                 ];
