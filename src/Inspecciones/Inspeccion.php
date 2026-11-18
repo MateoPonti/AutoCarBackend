@@ -6,6 +6,7 @@ namespace AutoCar\Inspecciones;
 use AutoCar\Comparador\Clave;
 use AutoCar\Core\Database;
 use AutoCar\Parametros\Parametros;
+use AutoCar\Pagos\Cobros;
 use DateTimeImmutable;
 use DateTimeZone;
 use PDO;
@@ -185,6 +186,7 @@ final class Inspeccion
         }
         if ($pago === 'reembolsado') { // se cayó, se canceló o se rechazó: el crédito que usó vuelve
             Creditos::liberar($id);
+            Cobros::devolver($id); // y lo que pagó por Mercado Pago (si no pagó, el cobro se cancela)
         }
         return true;
     }

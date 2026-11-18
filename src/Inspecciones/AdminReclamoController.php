@@ -7,6 +7,7 @@ use AutoCar\Auth\Auth;
 use AutoCar\Core\Database;
 use AutoCar\Core\Request;
 use AutoCar\Core\Response;
+use AutoCar\Pagos\Cobros;
 
 /**
  * Cola de reclamos (B8): permiso reclamos.resolver (moderador y admin, ver routes.php).
@@ -48,6 +49,9 @@ final class AdminReclamoController
         }
         Reclamos::resolver($reclamo, $resolucion, (int)Auth::id());
         $pdo->commit();
+        if ($resolucion['estado'] === 'procede') { // se le devuelve lo que pagó por Mercado Pago (fuera de la transacción)
+            Cobros::devolver((int)$reclamo['inspeccion_id']);
+        }
         Response::json(['reclamo' => Reclamos::paraApi(Reclamos::porId($id))]);
     }
 

@@ -9,6 +9,7 @@ use AutoCar\Core\Config;
 use AutoCar\Core\Database;
 use AutoCar\Core\Request;
 use AutoCar\Core\Response;
+use AutoCar\Pagos\Cobros;
 use DateTimeImmutable;
 use PDOException;
 
@@ -58,6 +59,8 @@ final class InspeccionController
      * El link puede ser de cualquier sitio. Si es de AutoCar, los datos del auto salen siempre de la publicación
      * (lo que mande el comprador no cuenta: así el precio del informe es el publicado).
      * El precio es el del taller en ese momento y queda fijo en la inspección. El pago es simulado (retenido).
+     * Con Mercado Pago (MP_ACTIVO=true) se arma la order de lo que falta pagar y viene en "cobro" con el checkout_url:
+     * el front manda al comprador a pagar, y el mecánico no la puede aceptar hasta que pague.
      */
     public function crear(): void
     {
@@ -117,8 +120,10 @@ final class InspeccionController
             }
             Response::error(409, 'duplicada', self::DUPLICADA);
         }
+        $inspeccion = Inspeccion::porId($id);
+        $cobro = Cobros::iniciar($id, (float)$inspeccion['precio'] - (float)$inspeccion['credito_usado']);
         header('Location: /api/inspecciones/' . $id);
-        Response::json(['inspeccion' => Inspeccion::paraApi(Inspeccion::porId($id), [])], 201);
+        Response::json(['inspeccion' => Inspeccion::paraApi($inspeccion, []) + ['cobro' => Cobros::paraApi($cobro)]], 201);
     }
 
     /** GET /api/mis-inspecciones → {items}: las que pidió el usuario, las más nuevas primero */
@@ -135,7 +140,8 @@ final class InspeccionController
     public function detalle(int $id): void
     {
         $i = self::visible($id);
-        Response::json(['inspeccion' => Inspeccion::paraApi($i, Inspeccion::items($id))]);
+        // cobro: null si no se paga con Mercado Pago (MP apagado o la cubrió un crédito)
+        Response::json(['inspeccion' => Inspeccion::paraApi($i, Inspeccion::items($id)) + ['cobro' => Cobros::paraApi(Cobros::de($id))]]);
     }
 
     /** GET /api/inspecciones/{id}/patente-foto: la foto de la chapa. La ven los mismos que el detalle. */

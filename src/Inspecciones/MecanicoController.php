@@ -8,6 +8,7 @@ use AutoCar\Catalogo\MarcaModelo;
 use AutoCar\Core\Database;
 use AutoCar\Core\Request;
 use AutoCar\Core\Response;
+use AutoCar\Pagos\Cobros;
 use AutoCar\Parametros\Parametros;
 use AutoCar\Publicaciones\Foto;
 use DateTimeImmutable;
@@ -64,6 +65,9 @@ final class MecanicoController
         if ($accion === 'aceptar') {
             if (Taller::delMecanico(self::yo()) === null) {
                 self::fallar(409, 'sin_taller', 'Completá el perfil del taller antes de aceptar pedidos.');
+            }
+            if (Cobros::faltaPagar($id)) { // con Mercado Pago: primero paga el comprador
+                self::fallar(409, 'sin_pagar', 'El comprador todavía no pagó la inspección. Vas a poder aceptarla cuando pague.');
             }
             [$fecha, $error] = Estados::validarTurno($in['fecha_turno'] ?? null, new DateTimeImmutable());
             if ($error !== null) {

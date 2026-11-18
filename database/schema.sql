@@ -1718,3 +1718,19 @@ CREATE TABLE IF NOT EXISTS usuario_preferencia (
   created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
+
+-- 031: cobro de la inspección con Mercado Pago (Pagos\Cobros). Solo se usa con MP_ACTIVO=true.
+CREATE TABLE IF NOT EXISTS cobro (
+  inspeccion_id INTEGER       PRIMARY KEY REFERENCES inspeccion(id) ON DELETE CASCADE,
+  monto         NUMERIC(12,2) NOT NULL CHECK (monto > 0),       -- lo que paga el comprador: precio − crédito usado
+  orden_id      VARCHAR(64),                                     -- id de la order en Mercado Pago (ORD...)
+  checkout_url  TEXT,                                            -- adónde se manda al comprador a pagar
+  intento       INTEGER       NOT NULL DEFAULT 1,                -- sube si hay que armar otra order (la anterior venció)
+  estado        VARCHAR(10)   NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'pagado', 'cancelado', 'devuelto')),
+  estado_mp     VARCHAR(30),                                     -- el status de la order en Mercado Pago, tal cual
+  pagado_at     TIMESTAMPTZ,
+  devuelto_at   TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_cobro_orden ON cobro (orden_id);
