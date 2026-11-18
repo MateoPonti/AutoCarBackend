@@ -17,7 +17,7 @@ use AutoCar\Core\Response;
 final class Eventos
 {
     public const TIPOS    = ['mostrado', 'tocado'];
-    public const ORIGENES = ['para_vos', 'destacado', 'metabuscador', 'publicacion', 'ranking'];
+    public const ORIGENES = ['para_vos', 'destacado', 'metabuscador', 'publicacion'];
     private const MAXIMO_POR_PEDIDO = 50;
 
     public function registrar(): void
