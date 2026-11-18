@@ -65,6 +65,24 @@ final class Checklist
         return [$validos, null];
     }
 
+    /**
+     * Para firmar, cada ítem con "falla" necesita una foto de lo que vio el mecánico ("observado" puede no tenerla).
+     * $items: [codigo => [resultado, nota]]; $conFoto: los códigos que ya tienen foto. Devuelve el error o null.
+     */
+    public static function faltanFotos(array $items, array $conFoto): ?string
+    {
+        $faltan = [];
+        foreach ($items as $codigo => [$resultado, $nota]) {
+            if ($resultado === 'falla' && !in_array($codigo, $conFoto, true)) {
+                $faltan[] = $codigo;
+            }
+        }
+        if (!$faltan) {
+            return null;
+        }
+        return 'Subí una foto de cada falla. Faltan: ' . implode(', ', $faltan) . '.';
+    }
+
     /** Lo que exige la firma además de los ítems. Devuelve el error o null. */
     public static function validarConclusion(mixed $conclusion, mixed $resumen): ?string
     {

@@ -126,6 +126,18 @@ final class InspeccionController
         Response::archivo($f['datos'], $f['mime'], false);
     }
 
+    /** GET /api/inspecciones/{id}/item-foto?codigo=motor: la foto de un ítem del checklist. La ven los mismos que el detalle. */
+    public function fotoItem(int $id): void
+    {
+        self::visible($id);
+        $codigo = is_string($_GET['codigo'] ?? null) ? $_GET['codigo'] : '';
+        $f = isset(Checklist::ITEMS[$codigo]) ? Inspeccion::fotoItem($id, $codigo) : null;
+        if ($f === null) {
+            Response::error(404, 'no_encontrado', 'Ese ítem no tiene foto.');
+        }
+        Response::archivo($f['datos'], $f['mime'], false);
+    }
+
     /** La inspección si la puede ver quien pregunta (comprador, mecánico o quien resuelve reclamos); si no, 404. */
     private static function visible(int $id): array
     {

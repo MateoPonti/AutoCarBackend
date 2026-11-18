@@ -155,7 +155,7 @@ final class MecanicoController
 
     /**
      * POST /api/mecanico/inspecciones/{id}/firma: firma lo que está guardado.
-     * Exige los 10 ítems y la conclusión. Guarda el nombre del mecánico y del taller, el momento y la huella
+     * Exige los 10 ítems, la conclusión y una foto de cada falla. Guarda el nombre del mecánico y del taller, el momento y la huella
      * (SHA-256 del informe, ver Huella). Después, cualquier cambio da 409.
      */
     public function firmar(int $id): void
@@ -175,6 +175,7 @@ final class MecanicoController
             $guardados[] = ['codigo' => $codigo, 'resultado' => $resultado, 'nota' => $nota];
         }
         [$items, $error] = Checklist::validarItems($guardados, true);
+        $error ??= Checklist::faltanFotos($items, Inspeccion::itemsConFoto($id));
         $error ??= Checklist::validarConclusion($inspeccion['conclusion'], $inspeccion['resumen']);
         if ($error === null && $inspeccion['patente'] === null) {
             $error = 'Falta la patente: cargala como está en la chapa.';
@@ -216,6 +217,31 @@ final class MecanicoController
         $inspeccion = self::propia($id, true);
         self::exigirAceptada($inspeccion);
         Inspeccion::guardarFotoPatente($id, $fotos[0][0], $fotos[0][1]);
+        $pdo->commit();
+        self::responderDetalle($id);
+    }
+
+    /**
+     * POST /api/mecanico/inspecciones/{id}/item-foto (multipart: codigo, foto) → {inspeccion}. La foto de lo que vio
+     * en un ítem del checklist: obligatoria para firmar si el ítem tiene "falla". JPG, PNG o WebP de hasta 2 MB;
+     * reemplaza la anterior de ese ítem.
+     */
+    public function subirFotoItem(int $id): void
+    {
+        $campos = Request::formulario();
+        $codigo = is_string($campos['codigo'] ?? null) ? trim($campos['codigo']) : '';
+        if (!isset(Checklist::ITEMS[$codigo])) {
+            Response::error(422, 'validacion', 'Revisá el ítem.', ['codigo' => 'Ese ítem del checklist no existe.']);
+        }
+        [$fotos, $error] = Foto::validarSubidas($_FILES['foto'] ?? null);
+        if ($error !== null || count($fotos) !== 1) {
+            Response::error(422, 'validacion', 'Revisá la foto.', ['foto' => $error ?? 'Subí una sola foto.']);
+        }
+        $pdo = Database::pdo();
+        $pdo->beginTransaction();
+        $inspeccion = self::propia($id, true);
+        self::exigirAceptada($inspeccion);
+        Inspeccion::guardarFotoItem($id, $codigo, $fotos[0][0], $fotos[0][1]);
         $pdo->commit();
         self::responderDetalle($id);
     }
