@@ -37,8 +37,10 @@ final class Panel
     /** @return array<string, float|int> */
     private static function totales(int $dias, int $corrimiento): array
     {
-        $st = Database::pdo()->prepare(
-            "WITH r AS (SELECT now() - make_interval(days => :d + :c) AS desde, now() - make_interval(days => :c2) AS hasta)
+        // $dias y $corrimiento son enteros (dias() valida el período): van en la consulta como números
+        $desde = $dias + $corrimiento;
+        $st = Database::pdo()->query(
+            "WITH r AS (SELECT now() - make_interval(days => $desde) AS desde, now() - make_interval(days => $corrimiento) AS hasta)
              SELECT (SELECT COUNT(*) FROM usuario, r WHERE created_at >= r.desde AND created_at < r.hasta) AS nuevos_usuarios,
                     (SELECT COUNT(*) FROM inspeccion, r WHERE created_at >= r.desde AND created_at < r.hasta) AS pagaron,
                     (SELECT COUNT(DISTINCT comprador_id) FROM inspeccion, r WHERE created_at >= r.desde AND created_at < r.hasta) AS compradores,
@@ -50,7 +52,6 @@ final class Panel
                     (SELECT COALESCE(SUM(COALESCE(devolucion, 0) + COALESCE(compensacion, 0) - COALESCE(franquicia, 0)), 0)
                        FROM reclamo, r WHERE estado = 'procede' AND resuelto_at >= r.desde AND resuelto_at < r.hasta) AS reclamos"
         );
-        $st->execute(['d' => $dias, 'c' => $corrimiento, 'c2' => $corrimiento]);
         $t = $st->fetch();
         return [
             'nuevos_usuarios' => (int)$t['nuevos_usuarios'],
@@ -71,10 +72,11 @@ final class Panel
     public static function serie(int $dias): array
     {
         $unidad = $dias <= 31 ? 'day' : 'week';
-        $grupo = static fn(string $columna): string => "date_trunc('$unidad', $columna AT TIME ZONE '" . self::ZONA . "')";
-        $st = Database::pdo()->prepare(
+        $grupo = static fn(string $columna): string => "date_trunc('$unidad', ($columna) AT TIME ZONE '" . self::ZONA . "')";
+        $antes = $dias - 1; // entero: dias() valida el período
+        $st = Database::pdo()->query(
             "WITH f AS (
-               SELECT generate_series({$grupo('now() - make_interval(days => :d - 1)')}, {$grupo('now()')},
+               SELECT generate_series({$grupo("now() - make_interval(days => $antes)")}, {$grupo('now()')},
                                       interval '1 $unidad') AS fecha
              ),
              u AS (SELECT {$grupo('created_at')} AS fecha, COUNT(*) AS n FROM usuario GROUP BY 1),
@@ -92,7 +94,6 @@ final class Panel
                FROM f LEFT JOIN u USING (fecha) LEFT JOIN p USING (fecha) LEFT JOIN g USING (fecha) LEFT JOIN r USING (fecha)
               ORDER BY f.fecha"
         );
-        $st->execute(['d' => $dias]);
         $puntos = array_map(static fn(array $x): array => [
             'fecha'           => $x['fecha'],
             'nuevos_usuarios' => (int)$x['nuevos_usuarios'],
