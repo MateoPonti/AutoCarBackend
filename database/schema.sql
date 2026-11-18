@@ -1701,6 +1701,12 @@ INSERT INTO parametro (clave, valor, minimo, maximo, unidad, descripcion, orden)
   ('peso_aplicacion_dias', 1, 0, 5, 'puntos', 'Para vos (aplicación (Uber, Cabify)): cuánto pesan los días publicado', 32),
   ('peso_aplicacion_anio', 3, 0, 5, 'puntos', 'Para vos (aplicación (Uber, Cabify)): cuánto pesa el año', 33)
 ON CONFLICT (clave) DO NOTHING;
+-- 030: el ranking de los mecánicos en Parámetros (ver Inspecciones\Ranking)
+INSERT INTO parametro (clave, valor, minimo, maximo, unidad, descripcion, orden) VALUES
+  ('ranking_veces_reclamo',      2,   0, 10, 'veces',  'Ranking de mecánicos: cuánto baja el puntaje cada reclamo que procedió (el "2" de la fórmula)', 34),
+  ('ranking_minimo_firmadas',    3,   1, 50, 'veces',  'Ranking de mecánicos: inspecciones firmadas que hacen falta para tener puntaje (antes es "Nuevo en la red")', 35),
+  ('ranking_especialidad_buena', 2.5, 0, 5,  'puntos', 'Ranking de mecánicos: desde qué puntaje en un modelo o marca la especialidad es buena', 36)
+ON CONFLICT (clave) DO NOTHING;
 
 -- Preferencias del comprador: "¿Para qué buscás el auto?" (021-preferencias-y-parametros.sql, Auth\Preferencias)
 CREATE TABLE IF NOT EXISTS usuario_preferencia (

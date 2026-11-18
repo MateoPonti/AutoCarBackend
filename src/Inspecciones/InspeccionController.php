@@ -40,9 +40,10 @@ final class InspeccionController
         if ($marca !== null) {
             $revisados = Taller::revisados($marca, $modelo);
             $nada = ['modelo' => 0, 'reclamos_modelo' => 0, 'marca' => 0, 'reclamos_marca' => 0];
+            $valores = Ranking::valores();
             foreach ($items as &$m) {
                 $m['revisados'] = $revisados[$m['id']] ?? $nada;
-                $m['especialidad'] = Ranking::especialidad($m['revisados']);
+                $m['especialidad'] = Ranking::especialidad($m['revisados'], $valores);
             }
             unset($m);
             if ($orden === 'especialidad') {
