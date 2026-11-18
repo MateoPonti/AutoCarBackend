@@ -6,13 +6,12 @@
 --   destacado    → uno de los destacados del metabuscador (más barato, mejor relación, menos usado)
 --   metabuscador → otro auto de la lista del metabuscador
 --   publicacion  → la ficha de una publicación de AutoCar
---   ranking      → el ranking de mecánicos
 -- Las inspecciones anteriores quedan con origen NULL ("sin dato").
 -- Se ejecuta UNA vez en el SQL Editor de Neon (dev y main), ANTES de desplegar el back que la usa. Es idempotente.
 -- Una base nueva no la necesita: schema.sql ya trae todo.
 
 ALTER TABLE inspeccion ADD COLUMN IF NOT EXISTS origen VARCHAR(15)
-  CHECK (origen IN ('para_vos', 'destacado', 'metabuscador', 'publicacion', 'ranking'));
+  CHECK (origen IN ('para_vos', 'destacado', 'metabuscador', 'publicacion'));
 
 -- mostrado = el comprador tuvo la recomendación en pantalla; tocado = tocó "Mandale un mecánico" ahí.
 -- El front manda cada par (tipo, origen, ref) una sola vez por sesión del navegador.
@@ -20,7 +19,7 @@ CREATE TABLE IF NOT EXISTS evento (
   id          BIGINT       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   usuario_id  INTEGER      NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
   tipo        VARCHAR(8)   NOT NULL CHECK (tipo IN ('mostrado', 'tocado')),
-  origen      VARCHAR(15)  NOT NULL CHECK (origen IN ('para_vos', 'destacado', 'metabuscador', 'publicacion', 'ranking')),
+  origen      VARCHAR(15)  NOT NULL CHECK (origen IN ('para_vos', 'destacado', 'metabuscador', 'publicacion')),
   ref         VARCHAR(500),
   created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
 );

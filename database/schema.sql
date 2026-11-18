@@ -1588,12 +1588,12 @@ CREATE INDEX IF NOT EXISTS idx_credito_usuario ON credito (usuario_id, created_a
 -- Estadísticas del admin (028): de dónde vino cada inspección y qué recomendaciones vio cada comprador.
 -- "Compró" en las estadísticas = pagó la inspección.
 ALTER TABLE inspeccion ADD COLUMN IF NOT EXISTS origen VARCHAR(15)
-  CHECK (origen IN ('para_vos', 'destacado', 'metabuscador', 'publicacion', 'ranking'));
+  CHECK (origen IN ('para_vos', 'destacado', 'metabuscador', 'publicacion'));
 CREATE TABLE IF NOT EXISTS evento (
   id          BIGINT       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   usuario_id  INTEGER      NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
   tipo        VARCHAR(8)   NOT NULL CHECK (tipo IN ('mostrado', 'tocado')),
-  origen      VARCHAR(15)  NOT NULL CHECK (origen IN ('para_vos', 'destacado', 'metabuscador', 'publicacion', 'ranking')),
+  origen      VARCHAR(15)  NOT NULL CHECK (origen IN ('para_vos', 'destacado', 'metabuscador', 'publicacion')),
   ref         VARCHAR(500),
   created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
 );

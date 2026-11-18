@@ -14,12 +14,12 @@ final class EstadisticasTest extends TestCase
         self::assertSame([], Eventos::validos(null));
         self::assertSame([], Eventos::validos('texto'));
         self::assertSame(
-            [['tipo' => 'mostrado', 'origen' => 'para_vos', 'ref' => 'https://a.test/1'], ['tipo' => 'tocado', 'origen' => 'ranking', 'ref' => null]],
+            [['tipo' => 'mostrado', 'origen' => 'para_vos', 'ref' => 'https://a.test/1'], ['tipo' => 'tocado', 'origen' => 'publicacion', 'ref' => null]],
             Eventos::validos([
                 ['tipo' => 'mostrado', 'origen' => 'para_vos', 'ref' => ' https://a.test/1 '],
                 ['tipo' => 'visto', 'origen' => 'para_vos'],
                 ['tipo' => 'mostrado', 'origen' => 'otro'],
-                ['tipo' => 'tocado', 'origen' => 'ranking', 'ref' => ''],
+                ['tipo' => 'tocado', 'origen' => 'publicacion', 'ref' => ''],
                 5,
             ])
         );
