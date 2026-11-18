@@ -25,6 +25,7 @@ final class AdminMetricasController
             'resumen'       => Panel::resumen($dias),
             'serie'         => Panel::serie($dias),
             'embudo'        => Panel::embudo($dias),
+            'inspecciones'  => Panel::inspecciones($dias),
             'recurrentes'   => Panel::recurrentes(),
             'usuarios'      => self::usuarios(),
             'publicaciones' => self::publicaciones(),
