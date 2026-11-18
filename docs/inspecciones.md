@@ -161,6 +161,7 @@ Todas están en el back (el front repite algunas para avisar antes, pero la que 
 **El informe**
 - El mecánico acepta con un turno de **hasta 60 días** o rechaza con motivo.
 - Checklist de **10 ítems** (`ok`, `observado` o `falla`); lo que no está `ok` exige nota. Conclusión: `recomendable`, `con_reparos` o `no_recomendable`.
+- Cada ítem con `falla` necesita **una foto** de lo que vio el mecánico (en `observado` es opcional; migración `027`). Así una falla no es solo una palabra: el comprador la ve y, si hay reclamo, el moderador también.
 - Para firmar hacen falta los 10 ítems y la conclusión. La firma guarda el nombre del mecánico y del taller, el momento y la **huella SHA-256**. Firmada, **no cambia más** (409).
 
 **Auto vendido (solo autos de AutoCar, `AutoVendido`; migración `024`)**

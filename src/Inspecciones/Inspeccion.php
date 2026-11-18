@@ -233,6 +233,41 @@ final class Inspeccion
         return ['mime' => $f['mime'], 'datos' => is_resource($f['datos']) ? stream_get_contents($f['datos']) : $f['datos']];
     }
 
+    /** La foto de un ítem del checklist (reemplaza la que hubiera). $tmp: archivo ya validado con Foto::validarSubidas. */
+    public static function guardarFotoItem(int $id, string $codigo, string $tmp, string $mime): void
+    {
+        $st = self::pdo()->prepare(
+            'INSERT INTO inspeccion_item_foto (inspeccion_id, codigo, mime, datos) VALUES (:id, :codigo, :mime, :datos)
+             ON CONFLICT (inspeccion_id, codigo) DO UPDATE SET mime = EXCLUDED.mime, datos = EXCLUDED.datos, created_at = now()'
+        );
+        $st->bindValue(':id', $id, PDO::PARAM_INT);
+        $st->bindValue(':codigo', $codigo);
+        $st->bindValue(':mime', $mime);
+        $st->bindValue(':datos', (string)file_get_contents($tmp), PDO::PARAM_LOB);
+        $st->execute();
+    }
+
+    /** La foto de un ítem: mime y datos, o null si no hay. */
+    public static function fotoItem(int $id, string $codigo): ?array
+    {
+        $st = self::pdo()->prepare('SELECT mime, datos FROM inspeccion_item_foto WHERE inspeccion_id = :id AND codigo = :codigo');
+        $st->execute(['id' => $id, 'codigo' => $codigo]);
+        $f = $st->fetch();
+        if (!$f) {
+            return null;
+        }
+        // BYTEA llega como stream desde pdo_pgsql
+        return ['mime' => $f['mime'], 'datos' => is_resource($f['datos']) ? stream_get_contents($f['datos']) : $f['datos']];
+    }
+
+    /** @return string[] los códigos de los ítems que tienen foto */
+    public static function itemsConFoto(int $id): array
+    {
+        $st = self::pdo()->prepare('SELECT codigo FROM inspeccion_item_foto WHERE inspeccion_id = :id');
+        $st->execute(['id' => $id]);
+        return $st->fetchAll(PDO::FETCH_COLUMN);
+    }
+
     /**
      * El historial que trae el informe: las otras inspecciones firmadas del mismo auto (misma patente), la más nueva
      * primero. Si esta ya está firmada, solo las de antes (si firmaron en el mismo segundo, desempata el id). No se busca por patente desde afuera: lo ven los que ven
@@ -394,9 +429,15 @@ final class Inspeccion
                 $datos['costo_total'] = CostoTotal::calcular(CostoTotal::arreglos($items), $presupuestos,
                     $numero($i['precio_publicado']), new DateTimeImmutable());
             }
+            // Cada ítem con su foto, si el mecánico subió una (obligatoria en "falla", ver Checklist::faltanFotos)
+            $conFoto = self::itemsConFoto((int)$i['id']);
             $datos['items'] = [];
             foreach ($items as $codigo => [$resultado, $nota]) {
-                $datos['items'][] = ['codigo' => $codigo, 'resultado' => $resultado, 'nota' => $nota];
+                $foto = null;
+                if (in_array($codigo, $conFoto, true)) {
+                    $foto = "/api/inspecciones/{$i['id']}/item-foto?codigo=$codigo";
+                }
+                $datos['items'][] = ['codigo' => $codigo, 'resultado' => $resultado, 'nota' => $nota, 'foto' => $foto];
             }
         }
         return $datos;
