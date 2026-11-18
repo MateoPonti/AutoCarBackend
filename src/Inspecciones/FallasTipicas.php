@@ -22,14 +22,17 @@ final class FallasTipicas
         $minimo = (int)Parametros::valor('fallas_minimo_inspecciones');
         $necesarios = (int)Parametros::valor('fallas_votos_confirmar');
 
-        $st = $pdo->prepare("SELECT COUNT(*) FROM inspeccion WHERE estado = 'firmada' AND marca = :m AND modelo = :mo");
+        // En una sola consulta (cada viaje a la base suma tiempo al votar): cuántas firmadas hay del modelo y, de esas,
+        // cuántas tuvieron cada ítem observado o con falla ({codigo: n}, null si ninguna)
+        $st = $pdo->prepare("WITH f AS (SELECT id FROM inspeccion WHERE estado = 'firmada' AND marca = :m AND modelo = :mo)
+            SELECT (SELECT COUNT(*) FROM f) AS inspecciones,
+                   (SELECT json_object_agg(codigo, n) FROM (
+                       SELECT it.codigo, COUNT(*) AS n FROM inspeccion_item it JOIN f ON f.id = it.inspeccion_id
+                        WHERE it.resultado <> 'ok' GROUP BY it.codigo) x) AS con_item");
         $st->execute(['m' => $marca, 'mo' => $modelo]);
-        $inspecciones = (int)$st->fetchColumn();
-
-        $st = $pdo->prepare("SELECT it.codigo, COUNT(*) AS n FROM inspeccion i JOIN inspeccion_item it ON it.inspeccion_id = i.id
-            WHERE i.estado = 'firmada' AND i.marca = :m AND i.modelo = :mo AND it.resultado <> 'ok' GROUP BY it.codigo");
-        $st->execute(['m' => $marca, 'mo' => $modelo]);
-        $conItem = array_map('intval', $st->fetchAll(\PDO::FETCH_KEY_PAIR));
+        $cuentas = $st->fetch();
+        $inspecciones = (int)$cuentas['inspecciones'];
+        $conItem = array_map('intval', json_decode((string)($cuentas['con_item'] ?? 'null'), true) ?? []);
         $porcentajes = FallaTipica::porcentajes($conItem, $inspecciones, $minimo);
 
         $st = $pdo->prepare(
