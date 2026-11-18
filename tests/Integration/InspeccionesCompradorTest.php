@@ -194,7 +194,7 @@ final class InspeccionesCompradorTest extends ApiTestCase
             'titulo' => 'Otro auto', 'anio' => 2010, 'kilometraje' => 1, 'precio_publicado' => 1000, 'localidad' => 'Otra']);
         self::assertSame(201, $r['status'], json_encode($r['json']));
         $i = $r['json']['inspeccion'];
-        self::assertSame(['autocar', $vehiculo, 'Fiat Cronos Drive', 2022, 60000, 21000000.0, 'Luján'],
+        self::assertSame(['autocar', $vehiculo, 'Fiat Cronos Drive', 2022, 60000, 21000000, 'Luján'],
             [$i['fuente'], $i['vehiculo_id'], $i['titulo'], $i['anio'], $i['kilometraje'], $i['precio_publicado'], $i['localidad']]);
 
         // Una publicación que no está disponible no se puede inspeccionar
