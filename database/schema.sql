@@ -1585,6 +1585,20 @@ CREATE TABLE IF NOT EXISTS credito (
 );
 CREATE INDEX IF NOT EXISTS idx_credito_usuario ON credito (usuario_id, created_at) WHERE usado_en IS NULL;
 
+-- Estadísticas del admin (028): de dónde vino cada inspección y qué recomendaciones vio cada comprador.
+-- "Compró" en las estadísticas = pagó la inspección.
+ALTER TABLE inspeccion ADD COLUMN IF NOT EXISTS origen VARCHAR(15)
+  CHECK (origen IN ('para_vos', 'destacado', 'metabuscador', 'publicacion', 'ranking'));
+CREATE TABLE IF NOT EXISTS evento (
+  id          BIGINT       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  usuario_id  INTEGER      NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+  tipo        VARCHAR(8)   NOT NULL CHECK (tipo IN ('mostrado', 'tocado')),
+  origen      VARCHAR(15)  NOT NULL CHECK (origen IN ('para_vos', 'destacado', 'metabuscador', 'publicacion', 'ranking')),
+  ref         VARCHAR(500),
+  created_at  TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_evento_origen ON evento (origen, tipo, created_at);
+
 -- Los autos de otras plataformas (MercadoLibre, Kavak, Autocosmos), su historial, las búsquedas guardadas y sus avisos
 -- NO están en esta base: van en Firestore (NoSQL). Ver docs/arquitectura-scraper.md y src/MetaBusqueda/Documentos.php.
 

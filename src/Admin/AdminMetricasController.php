@@ -5,19 +5,27 @@ namespace AutoCar\Admin;
 
 use AutoCar\Auth\Preferencias;
 use AutoCar\Core\Database;
+use AutoCar\Estadisticas\Panel;
 use AutoCar\Inspecciones\Fondo;
 use AutoCar\Core\Response;
 use PDO;
 
 /**
- * GET /api/admin/metricas (permiso metricas.ver): números de la app sacados de la base.
- * Ninguna consulta recibe datos del usuario, así que no hace falta preparar parámetros.
+ * GET /api/admin/metricas?dias=7|30|90 (permiso metricas.ver): números de la app sacados de la base.
+ * Lo que depende del período (resumen contra el período anterior, serie en el tiempo y embudo de las
+ * recomendaciones) sale de Estadisticas\Panel; el resto es la foto de hoy.
  */
 final class AdminMetricasController
 {
     public function index(): void
     {
+        $dias = Panel::dias($_GET['dias'] ?? null);
         Response::json([
+            'periodo'       => ['dias' => $dias, 'opciones' => Panel::PERIODOS],
+            'resumen'       => Panel::resumen($dias),
+            'serie'         => Panel::serie($dias),
+            'embudo'        => Panel::embudo($dias),
+            'recurrentes'   => Panel::recurrentes(),
             'usuarios'      => self::usuarios(),
             'publicaciones' => self::publicaciones(),
             'moderacion'    => self::moderacion(),

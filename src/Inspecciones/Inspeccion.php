@@ -123,8 +123,8 @@ final class Inspeccion
     {
         $st = self::pdo()->prepare(
             'INSERT INTO inspeccion (comprador_id, mecanico_id, vehiculo_id, url, url_clave, fuente, titulo, anio, kilometraje,
-               precio_publicado, localidad, precio, monto_mecanico, monto_autocar, monto_fondo, tope_veces, dias_reclamo, marca, modelo)
-             VALUES (:c, :m, :v, :url, :clave, :fuente, :titulo, :anio, :km, :pp, :loc, :precio, :mm, :ma, :mf, :tope, :dias, :marca, :modelo)
+               precio_publicado, localidad, precio, monto_mecanico, monto_autocar, monto_fondo, tope_veces, dias_reclamo, marca, modelo, origen)
+             VALUES (:c, :m, :v, :url, :clave, :fuente, :titulo, :anio, :km, :pp, :loc, :precio, :mm, :ma, :mf, :tope, :dias, :marca, :modelo, :origen)
              RETURNING id'
         );
         $st->execute([
@@ -135,7 +135,7 @@ final class Inspeccion
             'precio' => $montos['precio'], 'mm' => $montos['monto_mecanico'], 'ma' => $montos['monto_autocar'],
             'mf' => $montos['monto_fondo'], 'tope' => Parametros::valor('tope_veces'),
             'dias' => (int)Parametros::valor('dias_reclamo'),
-            'marca' => $datos['marca'] ?? null, 'modelo' => $datos['modelo'] ?? null,
+            'marca' => $datos['marca'] ?? null, 'modelo' => $datos['modelo'] ?? null, 'origen' => $datos['origen'] ?? null,
         ]);
         return (int)$st->fetchColumn();
     }
