@@ -5,6 +5,7 @@ namespace AutoCar\Estadisticas;
 
 use AutoCar\Auth\Preferencias;
 use AutoCar\Core\Database;
+use AutoCar\MetaBusqueda\Estadistica;
 use PDO;
 
 /**
@@ -29,12 +30,108 @@ final class PorPerfil
     /** Todo junto, para GET /api/admin/metricas. $dias ya viene validado (Panel::dias). */
     public static function todo(int $dias): array
     {
+        $plata = self::plata($dias);
         return [
             'usos'         => self::usos(),
-            'plata'        => self::plata($dias),
+            'plata'        => $plata,
             'embudo'       => self::embudo($dias),
             'metabuscador' => self::metabuscador($dias),
             'ordenes'      => self::ordenes($dias),
+            'valor'        => self::valor($dias, $plata),
+        ];
+    }
+
+    /** Lo que cuenta como interacción: acciones del usuario (buscar, cambiar el orden, tocar "Mandale un mecánico") */
+    public const INTERACCIONES = ['busco', 'orden', 'tocado'];
+    /** Hasta cuántos días antes de pagar se cuentan las interacciones de un comprador */
+    public const DIAS_ANTES_DE_COMPRAR = 90;
+
+    /**
+     * Cuánto deja cada interacción por tipo de usuario, y cuánto tuvo que interactuar para comprar.
+     * "mostrado" no cuenta: es que el sistema le mostró algo, no que el usuario hizo algo.
+     * Los ingresos son los mismos del informe de plata ($plata = self::plata), atribuidos al perfil del comprador.
+     * @param list<array<string, mixed>> $plata
+     */
+    public static function valor(int $dias, array $plata): array
+    {
+        $pdo = Database::pdo();
+        $desde = "now() - make_interval(days => $dias)"; // entero validado
+        $tipos = "'" . implode("', '", self::INTERACCIONES) . "'";
+        $actividad = $pdo->query(
+            "SELECT COALESCE(p.uso, '" . self::SIN_PERFIL . "') AS uso,
+                    COUNT(DISTINCT e.usuario_id) AS activos, COUNT(*) AS interacciones
+               FROM evento e LEFT JOIN usuario_preferencia p ON p.usuario_id = e.usuario_id
+              WHERE e.tipo IN ($tipos) AND e.created_at >= $desde
+              GROUP BY 1"
+        )->fetchAll(PDO::FETCH_ASSOC);
+        // Cada comprador del período, en su primer pago: cuántas interacciones tuvo en los 90 días anteriores y
+        // cuántos días pasaron desde la primera de esas
+        $antes = self::DIAS_ANTES_DE_COMPRAR;
+        $compradores = $pdo->query(
+            "WITH primera AS (SELECT comprador_id AS usuario_id, MIN(created_at) AS pago
+                                FROM inspeccion WHERE created_at >= $desde GROUP BY 1)
+             SELECT COALESCE(p.uso, '" . self::SIN_PERFIL . "') AS uso,
+                    COUNT(e.created_at) AS interacciones,
+                    EXTRACT(EPOCH FROM pr.pago - MIN(e.created_at)) / 86400 AS dias
+               FROM primera pr
+               LEFT JOIN evento e ON e.usuario_id = pr.usuario_id AND e.tipo IN ($tipos)
+                    AND e.created_at <= pr.pago AND e.created_at > pr.pago - make_interval(days => $antes)
+               LEFT JOIN usuario_preferencia p ON p.usuario_id = pr.usuario_id
+              GROUP BY pr.usuario_id, pr.pago, p.uso"
+        )->fetchAll(PDO::FETCH_ASSOC);
+        return self::filasValor($plata, $actividad, $compradores);
+    }
+
+    /**
+     * Función pura. Por tipo de usuario y en total:
+     *   por_interaccion = ingresos ÷ interacciones; por_usuario = ingresos ÷ usuarios con alguna interacción;
+     *   interacciones_hasta_comprar y dias_hasta_comprar = medianas de los compradores que interactuaron antes de pagar
+     *   (los que pagaron sin pasar por el metabuscador no tienen interacciones registradas: se cuentan aparte).
+     * @param list<array<string, mixed>> $plata filas de filasPlata (uso, ingresos)
+     * @param list<array<string, mixed>> $actividad {uso, activos, interacciones}
+     * @param list<array<string, mixed>> $compradores uno por comprador: {uso, interacciones, dias}
+     */
+    public static function filasValor(array $plata, array $actividad, array $compradores): array
+    {
+        $ingresos = array_column($plata, 'ingresos', 'uso');
+        $act = array_column($actividad, null, 'uso');
+        $porUso = [];
+        foreach ($compradores as $c) {
+            $porUso[$c['uso']][] = $c;
+        }
+        $fila = static function (float $ingresos, int $activos, int $interacciones, array $compradores): array {
+            $con = array_values(array_filter($compradores, static fn(array $c): bool => (int)$c['interacciones'] > 0));
+            $medInter = Estadistica::mediana(array_map(static fn(array $c): int => (int)$c['interacciones'], $con));
+            $medDias = Estadistica::mediana(array_map(static fn(array $c): float => (float)$c['dias'], $con));
+            return [
+                'ingresos'                    => $ingresos,
+                'activos'                     => $activos,
+                'interacciones'               => $interacciones,
+                'por_interaccion'             => $interacciones > 0 ? round($ingresos / $interacciones) : null,
+                'por_usuario'                 => $activos > 0 ? round($ingresos / $activos) : null,
+                'compradores'                 => count($compradores),
+                'compradores_sin_interacciones' => count($compradores) - count($con),
+                'interacciones_hasta_comprar' => $medInter !== null ? round($medInter, 1) : null,
+                'dias_hasta_comprar'          => $medDias !== null ? round($medDias, 1) : null,
+            ];
+        };
+
+        $salida = [];
+        $total = ['ingresos' => 0.0, 'activos' => 0, 'interacciones' => 0, 'compradores' => []];
+        foreach (self::usos() as $uso => $nombre) {
+            $i = (float)($ingresos[$uso] ?? 0);
+            $a = (int)($act[$uso]['activos'] ?? 0);
+            $n = (int)($act[$uso]['interacciones'] ?? 0);
+            $c = $porUso[$uso] ?? [];
+            $salida[] = ['uso' => $uso, 'nombre' => $nombre] + $fila($i, $a, $n, $c);
+            $total['ingresos'] += $i;
+            $total['activos'] += $a;
+            $total['interacciones'] += $n;
+            $total['compradores'] = array_merge($total['compradores'], $c);
+        }
+        return [
+            'total'   => $fila($total['ingresos'], $total['activos'], $total['interacciones'], $total['compradores']),
+            'por_uso' => $salida,
         ];
     }
 

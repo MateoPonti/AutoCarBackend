@@ -107,6 +107,36 @@ final class EstadisticasTest extends TestCase
         self::assertNull($o[0]['preferido']);
     }
 
+    public function testCuantoDejaCadaInteraccionYCuantoTuvoQueInteractuarParaComprar(): void
+    {
+        $plata = [['uso' => 'trabajo', 'ingresos' => 30000.0], ['uso' => 'familia', 'ingresos' => 15000.0]];
+        $actividad = [['uso' => 'trabajo', 'activos' => 3, 'interacciones' => 20], ['uso' => 'familia', 'activos' => 5, 'interacciones' => 60]];
+        $compradores = [
+            ['uso' => 'trabajo', 'interacciones' => 4, 'dias' => 1.5],
+            ['uso' => 'trabajo', 'interacciones' => 8, 'dias' => 3.5],
+            ['uso' => 'familia', 'interacciones' => 18, 'dias' => 12.0],
+            ['uso' => 'familia', 'interacciones' => 0, 'dias' => null], // pagó sin pasar por el metabuscador
+        ];
+        $v = PorPerfil::filasValor($plata, $actividad, $compradores);
+        $porUso = array_column($v['por_uso'], null, 'uso');
+
+        self::assertSame(array_keys(PorPerfil::usos()), array_column($v['por_uso'], 'uso'));
+        self::assertSame(1500.0, $porUso['trabajo']['por_interaccion']);  // 30.000 ÷ 20
+        self::assertSame(10000.0, $porUso['trabajo']['por_usuario']);     // 30.000 ÷ 3
+        self::assertSame(6.0, $porUso['trabajo']['interacciones_hasta_comprar']);
+        self::assertSame(2.5, $porUso['trabajo']['dias_hasta_comprar']);
+        self::assertSame(250.0, $porUso['familia']['por_interaccion']);   // 15.000 ÷ 60
+        self::assertSame(18.0, $porUso['familia']['interacciones_hasta_comprar']);
+        self::assertSame(1, $porUso['familia']['compradores_sin_interacciones']);
+        // Sin datos: sin división por cero
+        self::assertNull($porUso['personal']['por_interaccion']);
+        self::assertNull($porUso['personal']['interacciones_hasta_comprar']);
+        // Total: 45.000 ÷ 80 interacciones; mediana de 4, 8 y 18
+        self::assertSame(563.0, $v['total']['por_interaccion']);
+        self::assertSame(8.0, $v['total']['interacciones_hasta_comprar']);
+        self::assertSame(4, $v['total']['compradores']);
+    }
+
     public function testElPeriodoEsUnoDeLosPermitidos(): void
     {
         self::assertSame(7, Panel::dias('7'));

@@ -79,6 +79,38 @@ final class Avisos
         return array_slice($salida, 0, $limite);
     }
 
+    /** Los tipos que muestra el gráfico de novedades por día (el reservado no: el auto sigue en la lista) */
+    public const POR_DIA = [Novedades::NUEVO, Novedades::BAJO, Novedades::RETIRADO];
+
+    /**
+     * Cuántos avisos de cada tipo hubo cada día de los últimos $dias (hasta $hoy incluido, con ceros), en hora de
+     * Argentina. Para el gráfico de barras de la página de novedades de una búsqueda. Función pura.
+     *
+     * @param list<array<string, mixed>> $avisos los de Avisos::delUsuario (con "fecha" de la corrida y "tipo")
+     * @return list<array{fecha: string, nuevo: int, bajo: int, retirado: int}> del más viejo al de hoy
+     */
+    public static function porDia(array $avisos, \DateTimeImmutable $hoy, int $dias): array
+    {
+        $zona = new \DateTimeZone('America/Argentina/Buenos_Aires');
+        $hoy = $hoy->setTimezone($zona);
+        $salida = [];
+        for ($i = $dias - 1; $i >= 0; $i--) {
+            $fecha = $hoy->modify("-$i days")->format('Y-m-d');
+            $salida[$fecha] = ['fecha' => $fecha] + array_fill_keys(self::POR_DIA, 0);
+        }
+        foreach ($avisos as $a) {
+            try {
+                $fecha = (new \DateTimeImmutable((string)$a['fecha']))->setTimezone($zona)->format('Y-m-d');
+            } catch (\Exception) {
+                continue;
+            }
+            if (isset($salida[$fecha]) && in_array($a['tipo'], self::POR_DIA, true)) {
+                $salida[$fecha][$a['tipo']]++;
+            }
+        }
+        return array_values($salida);
+    }
+
     private static function firma(array $a): string
     {
         return "{$a['busqueda_id']}|{$a['auto_id']}|{$a['fecha']}|{$a['tipo']}";

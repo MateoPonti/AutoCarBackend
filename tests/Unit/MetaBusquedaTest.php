@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace AutoCar\Tests\Unit;
 
+use AutoCar\MetaBusqueda\Avisos;
 use AutoCar\MetaBusqueda\Busqueda;
 use AutoCar\MetaBusqueda\Comparables;
 use AutoCar\MetaBusqueda\Estadistica;
@@ -231,6 +232,50 @@ final class MetaBusquedaTest extends TestCase
         self::assertSame(0.0, ParaVos::puntuar($a, $comparacion, $etiqueta, 'personal', (float)$a['anio'], $soloAnio)['puntaje']);
         $nada = ['personal' => ['precio' => 0, 'km' => 0, 'dias' => 0, 'anio' => 0]];
         self::assertNull(ParaVos::puntuar($a, $comparacion, $etiqueta, 'personal', 2017.0, $nada));
+    }
+
+    public function testParaVosArmaElMensajeConElPerfilYLoQueMasSumo(): void
+    {
+        $comparacion = ['autos' => array_fill(0, 5, []), 'suficientes' => true, 'criterio' => 'anio_2_km', 'mediana_precio' => 15000000.0, 'mediana_km' => 100000.0];
+        $mensaje = static fn(array $a, string $uso): ?string =>
+            ParaVos::puntuar($a, $comparacion, Comparables::etiqueta($a['precio'], $comparacion), $uso, 2017.0)['mensaje'];
+
+        // Para la familia lo que más pesa son los km: si es lo que más suma, lo dice; la segunda razón va corta
+        $pocosKm = self::auto(1, ['precio' => 14000000.0, 'km' => 60000]);
+        self::assertSame('Como lo buscás para la familia, priorizamos pocos kilómetros: tiene 40 % menos km que autos parecidos,'
+            . ' y además está 6,7 % más barato.', $mensaje($pocosKm, 'familia'));
+
+        // Para trabajar pesa el precio
+        $barato = self::auto(2, ['precio' => 12000000.0]);
+        self::assertSame('Como lo buscás para trabajar, priorizamos el precio: está 20 % más barato que autos parecidos.',
+            $mensaje($barato, 'trabajo'));
+
+        // Si lo que más sumó no es lo que más pesa en el perfil, no dice "priorizamos"
+        self::assertStringStartsWith('Como lo buscás para vos, este te conviene: tiene 40 % menos km',
+            $mensaje(self::auto(3, ['km' => 60000]), 'personal'));
+
+        // Nada a favor: sin mensaje
+        self::assertNull($mensaje(self::auto(4, ['precio' => 18000000.0, 'km' => 130000]), 'trabajo'));
+    }
+
+    public function testNovedadesPorDiaCuentaCadaTipoEnHoraDeArgentina(): void
+    {
+        $avisos = [
+            ['tipo' => 'nuevo', 'fecha' => '2026-11-18T10:00:00-03:00'],
+            ['tipo' => 'nuevo', 'fecha' => '2026-11-18T22:00:00-03:00'],
+            ['tipo' => 'bajo', 'fecha' => '2026-11-19T01:30:00+00:00'],      // 18/11 22:30 en Argentina
+            ['tipo' => 'retirado', 'fecha' => '2026-11-20T09:00:00-03:00'],
+            ['tipo' => 'reservado', 'fecha' => '2026-11-20T09:00:00-03:00'], // no va en el gráfico
+            ['tipo' => 'nuevo', 'fecha' => '2026-10-01T09:00:00-03:00'],     // fuera del período
+            ['tipo' => 'nuevo', 'fecha' => 'no es una fecha'],
+        ];
+        $dias = Avisos::porDia($avisos, new \DateTimeImmutable('2026-11-20T12:00:00-03:00'), 3);
+
+        self::assertSame([
+            ['fecha' => '2026-11-18', 'nuevo' => 2, 'bajo' => 1, 'retirado' => 0],
+            ['fecha' => '2026-11-19', 'nuevo' => 0, 'bajo' => 0, 'retirado' => 0],
+            ['fecha' => '2026-11-20', 'nuevo' => 0, 'bajo' => 0, 'retirado' => 1],
+        ], $dias);
     }
 
     public function testImportadorValidaCadaAuto(): void

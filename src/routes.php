@@ -73,6 +73,7 @@ $router->post('/api/meta-busquedas', [MetaBusquedaController::class, 'crear'], '
 $router->get('/api/meta-busquedas/conteo', [MetaBusquedaController::class, 'conteo'], 'auth');
 $router->get('/api/meta-busquedas/avisos', [MetaBusquedaController::class, 'avisos'], 'auth');
 $router->get('/api/meta-busquedas/{id}', [MetaBusquedaController::class, 'reporte'], 'auth');
+$router->get('/api/meta-busquedas/{id}/novedades', [MetaBusquedaController::class, 'novedades'], 'auth');
 $router->put('/api/meta-busquedas/{id}', [MetaBusquedaController::class, 'actualizar'], 'auth');
 $router->delete('/api/meta-busquedas/{id}', [MetaBusquedaController::class, 'eliminar'], 'auth');
 $router->post('/api/meta-busquedas/{id}/avisos/vistos', [MetaBusquedaController::class, 'marcarVistos'], 'auth');

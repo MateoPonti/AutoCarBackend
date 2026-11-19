@@ -182,6 +182,18 @@ final class MetaBusquedaTest extends ApiTestCase
         self::assertSame(['bajo', 'nuevo', 'reservado', 'retirado'], $tipos);
         self::assertSame(4, $this->pedir('GET', '/api/meta-busquedas')['json']['busquedas'][0]['avisos_sin_ver']);
 
+        // La página de novedades: lo de la última corrida, las sin ver y 30 días para el gráfico (no la marca vista)
+        $nov = $this->pedir('GET', "/api/meta-busquedas/$id/novedades");
+        self::assertSame(200, $nov['status'], json_encode($nov['json']));
+        self::assertSame(1, $nov['json']['corrida']['nuevos']);
+        self::assertSame(1, $nov['json']['corrida']['bajaron']);
+        self::assertSame(1, $nov['json']['corrida']['retirados']);
+        self::assertCount(5, $nov['json']['corrida']['items'], 'nuevo, bajó, subió, reservado y retirado');
+        self::assertSame(4, $nov['json']['sin_ver']);
+        self::assertCount(30, $nov['json']['por_dia']);
+        self::assertSame(['fecha', 'nuevo', 'bajo', 'retirado'], array_keys($nov['json']['por_dia'][0]));
+        self::assertSame(404, $this->pedir('GET', '/api/meta-busquedas/999999/novedades')['status']);
+
         self::assertSame(204, $this->pedir('POST', "/api/meta-busquedas/$id/avisos/vistos")['status']);
         self::assertSame([], $this->pedir('GET', '/api/meta-busquedas/avisos?sin_ver=1')['json']['avisos']);
         self::assertCount(4, $this->pedir('GET', '/api/meta-busquedas/avisos')['json']['avisos']);

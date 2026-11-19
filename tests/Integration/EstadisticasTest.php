@@ -133,6 +133,16 @@ final class EstadisticasTest extends ApiTestCase
         $p = self::delUso($despues['plata'], 'trabajo');
         self::assertSame(self::delUso($antes['plata'], 'trabajo')['pagaron'] + 1, $p['pagaron']);
         self::assertEqualsWithDelta($p['ingresos'] - $p['perdida'], $p['neta'], 0.01);
+
+        // Valor por interacción: buscó y eligió un orden (2 interacciones; "mostrado" no cuenta) y después pagó
+        $v = self::delUso($despues['valor']['por_uso'], 'trabajo');
+        $vAntes = self::delUso($antes['valor']['por_uso'], 'trabajo');
+        self::assertSame($vAntes['interacciones'] + 2, $v['interacciones']);
+        self::assertSame($vAntes['activos'] + 1, $v['activos']);
+        self::assertSame($vAntes['compradores'] + 1, $v['compradores']);
+        self::assertSame($vAntes['compradores_sin_interacciones'], $v['compradores_sin_interacciones']);
+        self::assertNotNull($v['interacciones_hasta_comprar']);
+        self::assertSame($antes['valor']['total']['interacciones'] + 2, $despues['valor']['total']['interacciones']);
     }
 
     public function testLasInspeccionesDelPeriodoTraenEstadosReclamosYMecanicos(): void
