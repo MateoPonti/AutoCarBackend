@@ -129,6 +129,11 @@ final class EstadisticasTest extends ApiTestCase
         $eAntes = self::origen(self::delUso($antes['embudo'], 'trabajo'), 'metabuscador');
         self::assertSame($eAntes['vieron'] + 1, $e['vieron']);
         self::assertSame($eAntes['pagaron'] + 1, $e['pagaron']);
+        // La inspección no está firmada todavía: no suma ganancia, pero el origen trae cuánto deja cada paso
+        self::assertSame($eAntes['ganancia'], $e['ganancia']);
+        self::assertArrayHasKey('por_vio', $e);
+        self::assertArrayHasKey('por_pago', $despues['valor']['total'] + self::origen(self::delUso($despues['embudo'], 'trabajo'), 'para_vos'));
+        self::assertArrayHasKey('ganancia', $this->metricas()['embudo']['total']);
 
         $p = self::delUso($despues['plata'], 'trabajo');
         self::assertSame(self::delUso($antes['plata'], 'trabajo')['pagaron'] + 1, $p['pagaron']);
