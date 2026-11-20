@@ -4,6 +4,8 @@ declare(strict_types=1);
 namespace AutoCar\Afiliacion;
 
 use AutoCar\Core\Database;
+use AutoCar\Empresas\Empresa;
+use AutoCar\Parametros\Parametros;
 use DateTimeImmutable;
 use DateTimeZone;
 use PDO;
@@ -82,8 +84,9 @@ final class Afiliacion
     }
 
     /**
-     * Todo lo del panel del admin: el mes en curso (la grilla) y la evolución de los últimos 12 meses.
-     * @return array{convenios: list<array<string, mixed>>, este_mes: array<string, mixed>, evolucion: list<array<string, mixed>>}
+     * Todo lo del panel del admin: el mes en curso (la grilla) y la evolución de los últimos 12 meses, con las
+     * plataformas (clics) y las empresas (abono mensual, el mismo para todas: parámetro abono_empresa_mensual).
+     * @return array{convenios: list<array<string, mixed>>, abono_empresa: float, este_mes: array<string, mixed>, evolucion: list<array<string, mixed>>}
      */
     public static function panel(DateTimeImmutable $ahora): array
     {
@@ -98,81 +101,87 @@ final class Afiliacion
         $st->execute([$desde]);
         $clics = $st->fetchAll(PDO::FETCH_ASSOC);
         $cobros = $pdo->query(
-            "SELECT to_char(mes, 'YYYY-MM-01') AS mes, socio, cantidad, monto, cobrado_at FROM cobro_afiliacion WHERE tipo = 'plataforma'"
+            "SELECT tipo, to_char(mes, 'YYYY-MM-01') AS mes, socio, cantidad, monto, cobrado_at FROM cobro_afiliacion"
         )->fetchAll(PDO::FETCH_ASSOC);
         $convenios = self::convenios();
+        $empresas = Empresa::conAbono();
+        $abono = Parametros::valor('abono_empresa_mensual');
         return [
-            'convenios' => $convenios,
-            'este_mes'  => self::esteMes($convenios, $clics, $ahora),
-            'evolucion' => self::evolucion($convenios, $clics, $cobros, $ahora),
+            'convenios'     => $convenios,
+            'abono_empresa' => $abono,
+            'este_mes'      => self::esteMes($convenios, $clics, $ahora, $empresas, $abono),
+            'evolucion'     => self::evolucion($convenios, $clics, $cobros, $ahora, $empresas, $abono),
         ];
     }
 
     /**
-     * La grilla del mes en curso: una fila por plataforma con sus clics, la tarifa y lo que va a cobrar. Función pura.
+     * La grilla del mes en curso: una fila por plataforma (clics, tarifa y lo que va a cobrar) y una por empresa (su
+     * abono). Función pura.
      * @param list<array<string, mixed>> $convenios
      * @param list<array{mes: string, fuente: string, clics: mixed, validos: mixed}> $clics
+     * @param list<array{id: int, nombre: string, desde: string}> $empresas las que pagan abono y desde qué mes
      */
-    public static function esteMes(array $convenios, array $clics, DateTimeImmutable $ahora): array
+    public static function esteMes(array $convenios, array $clics, DateTimeImmutable $ahora, array $empresas = [], float $abono = 0.0): array
     {
         $mes = self::mes($ahora);
-        $filas = self::filasDelMes($convenios, $clics, $mes);
+        $filas = self::filasDelMes($convenios, $clics, $mes, $empresas, $abono);
         $local = $ahora->setTimezone(new DateTimeZone(self::ZONA));
-        return [
-            'mes'             => $mes,
-            'dias_al_cierre'  => (int)$local->format('t') - (int)$local->format('j'),
-            'filas'           => $filas,
-            'clics'           => array_sum(array_column($filas, 'clics')),
-            'validos'         => array_sum(array_column($filas, 'validos')),
-            'de_clics'        => array_sum(array_column($filas, 'monto')),
-            'de_abonos'       => 0.0, // las empresas (abono mensual) llegan en la etapa siguiente
-            'total'           => array_sum(array_column($filas, 'monto')),
-        ];
+        return ['mes' => $mes, 'dias_al_cierre' => (int)$local->format('t') - (int)$local->format('j')] + self::totales($filas);
     }
 
     /**
-     * Mes a mes, del más viejo al actual: cuánto se cobra (o se cobró) a las plataformas y si cada mes cerrado ya se
-     * marcó cobrado. Un mes cobrado muestra lo que se guardó al cobrarlo; uno sin cobrar, sus clics × la tarifa de hoy.
-     * Función pura.
-     * @param list<array{mes: string, socio: string, cantidad: mixed, monto: mixed, cobrado_at: string}> $cobros
+     * Mes a mes, del más viejo al actual: cuánto se cobra (o se cobró) a cada socio y si cada mes cerrado ya se marcó
+     * cobrado. Un mes cobrado muestra lo que se guardó al cobrarlo; uno sin cobrar, sus clics × la tarifa de hoy (o el
+     * abono de hoy). Función pura.
+     * @param list<array{tipo?: string, mes: string, socio: string, cantidad: mixed, monto: mixed, cobrado_at: string}> $cobros
      */
-    public static function evolucion(array $convenios, array $clics, array $cobros, DateTimeImmutable $ahora): array
+    public static function evolucion(array $convenios, array $clics, array $cobros, DateTimeImmutable $ahora, array $empresas = [], float $abono = 0.0): array
     {
         $actual = self::mes($ahora);
         $cobrado = [];
         foreach ($cobros as $c) {
-            $cobrado[$c['mes']][$c['socio']] = $c;
+            $cobrado[$c['mes']][($c['tipo'] ?? 'plataforma') . '|' . $c['socio']] = $c;
         }
         $salida = [];
         for ($i = self::MESES - 1; $i >= 0; $i--) {
             $mes = (new DateTimeImmutable($actual))->modify("-$i months")->format('Y-m-01');
             $filas = array_map(static function (array $f) use ($cobrado, $mes): array {
-                $c = $cobrado[$mes][$f['fuente']] ?? null;
+                $c = $cobrado[$mes][$f['tipo'] . '|' . $f['socio']] ?? null;
                 return $c === null ? $f + ['cobrado_at' => null] : array_merge($f, [
-                    'validos'    => (int)$c['cantidad'],
+                    'validos'    => $f['tipo'] === 'plataforma' ? (int)$c['cantidad'] : 0,
                     'monto'      => (float)$c['monto'],
                     'cobrado_at' => $c['cobrado_at'],
                 ]);
-            }, self::filasDelMes($convenios, $clics, $mes));
+            }, self::filasDelMes($convenios, $clics, $mes, $empresas, $abono));
             $porCobrar = array_filter($filas, static fn(array $f): bool => $f['cobrado_at'] === null && $f['monto'] > 0);
-            $total = array_sum(array_column($filas, 'monto'));
-            $salida[] = [
-                'mes'       => $mes,
-                'en_curso'  => $mes === $actual,
-                'validos'   => array_sum(array_column($filas, 'validos')),
-                'de_clics'  => $total,
-                'de_abonos' => 0.0,
-                'total'     => $total,
-                // en_curso: todavía no se cobra; pendiente: falta cobrar alguna plataforma; cobrado: todo cobrado (o nada que cobrar)
-                'estado'    => $mes === $actual ? 'en_curso' : ($porCobrar === [] ? 'cobrado' : 'pendiente'),
-                'filas'     => $filas,
+            $salida[] = ['mes' => $mes, 'en_curso' => $mes === $actual] + self::totales($filas) + [
+                // en_curso: todavía no se cobra; pendiente: falta cobrar algún socio; cobrado: todo cobrado (o nada que cobrar)
+                'estado' => $mes === $actual ? 'en_curso' : ($porCobrar === [] ? 'cobrado' : 'pendiente'),
             ];
         }
         return $salida;
     }
 
-    /** Una fila por plataforma con convenio, aunque no tenga clics ese mes. Sin convenio activo no se cobra. */
-    private static function filasDelMes(array $convenios, array $clics, string $mes): array
+    /** Las filas de un mes y sus totales, separados en clics (plataformas) y abonos (empresas). */
+    private static function totales(array $filas): array
+    {
+        $deTipo = static fn(string $tipo): float => (float)array_sum(array_column(
+            array_filter($filas, static fn(array $f): bool => $f['tipo'] === $tipo), 'monto'));
+        return [
+            'filas'     => $filas,
+            'clics'     => array_sum(array_column($filas, 'clics')),
+            'validos'   => array_sum(array_column($filas, 'validos')),
+            'de_clics'  => $deTipo('plataforma'),
+            'de_abonos' => $deTipo('empresa'),
+            'total'     => (float)array_sum(array_column($filas, 'monto')),
+        ];
+    }
+
+    /**
+     * Una fila por plataforma con convenio, aunque no tenga clics ese mes (sin convenio activo no se cobra), y una por
+     * empresa desde el mes en que se aprobó.
+     */
+    private static function filasDelMes(array $convenios, array $clics, string $mes, array $empresas = [], float $abono = 0.0): array
     {
         $delMes = [];
         foreach ($clics as $c) {
@@ -180,10 +189,12 @@ final class Afiliacion
                 $delMes[$c['fuente']] = $c;
             }
         }
-        return array_map(static function (array $conv) use ($delMes): array {
+        $plataformas = array_map(static function (array $conv) use ($delMes): array {
             $c = $delMes[$conv['fuente']] ?? [];
             $validos = (int)($c['validos'] ?? 0);
             return [
+                'tipo'        => 'plataforma',
+                'socio'       => $conv['fuente'],
                 'fuente'      => $conv['fuente'],
                 'nombre'      => $conv['nombre'],
                 'tarifa_clic' => $conv['tarifa_clic'],
@@ -193,32 +204,41 @@ final class Afiliacion
                 'monto'       => $conv['activo'] ? $validos * $conv['tarifa_clic'] : 0.0,
             ];
         }, $convenios);
+        $deEmpresas = [];
+        foreach ($empresas as $e) {
+            if ($e['desde'] <= $mes) {
+                $deEmpresas[] = [
+                    'tipo' => 'empresa', 'socio' => (string)$e['id'], 'fuente' => null, 'nombre' => $e['nombre'],
+                    'tarifa_clic' => null, 'activo' => true, 'clics' => 0, 'validos' => 0, 'monto' => $abono,
+                ];
+            }
+        }
+        return array_merge($plataformas, $deEmpresas);
     }
 
     /**
-     * Marca cobrado lo de una plataforma en un mes cerrado, con el monto de ese momento.
+     * Marca cobrado lo de un socio (una plataforma o una empresa) en un mes cerrado, con el monto de ese momento.
      * @return array{ok: bool, error?: string} error: mes_en_curso, no_existe, ya_cobrado
      */
-    public static function cobrar(string $fuente, string $mes, int $adminId, DateTimeImmutable $ahora): array
+    public static function cobrar(string $tipo, string $socio, string $mes, int $adminId, DateTimeImmutable $ahora): array
     {
         if ($mes >= self::mes($ahora)) {
             return ['ok' => false, 'error' => 'mes_en_curso'];
         }
-        $panel = self::panel($ahora);
-        foreach ($panel['evolucion'] as $m) {
+        foreach (self::panel($ahora)['evolucion'] as $m) {
             if ($m['mes'] !== $mes) {
                 continue;
             }
             foreach ($m['filas'] as $f) {
-                if ($f['fuente'] !== $fuente) {
+                if ($f['tipo'] !== $tipo || $f['socio'] !== $socio) {
                     continue;
                 }
                 if ($f['cobrado_at'] !== null) {
                     return ['ok' => false, 'error' => 'ya_cobrado'];
                 }
                 Database::pdo()->prepare(
-                    "INSERT INTO cobro_afiliacion (tipo, socio, mes, cantidad, monto, cobrado_por) VALUES ('plataforma', ?, ?, ?, ?, ?)"
-                )->execute([$fuente, $mes, $f['validos'], $f['monto'], $adminId]);
+                    'INSERT INTO cobro_afiliacion (tipo, socio, mes, cantidad, monto, cobrado_por) VALUES (?, ?, ?, ?, ?, ?)'
+                )->execute([$tipo, $socio, $mes, $f['validos'], $f['monto'], $adminId]);
                 return ['ok' => true];
             }
         }

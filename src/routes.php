@@ -29,6 +29,8 @@ use AutoCar\Parametros\ParametroController;
 use AutoCar\Publicaciones\PublicacionController;
 use AutoCar\Soporte\SoporteController;
 use AutoCar\Afiliacion\AfiliacionController;
+use AutoCar\Empresas\EmpresaController;
+use AutoCar\Catalogo\PrecioMercadoController;
 use AutoCar\Core\Router;
 
 /** @var Router $router */
@@ -48,13 +50,13 @@ $router->get('/api/fotos/{id}', [PublicacionController::class, 'foto']); // cont
 $router->get('/api/mis-vehiculos', [PublicacionController::class, 'index'], 'auth');
 // Turnos de inspección de mis publicaciones: el vendedor los confirma (si el auto se vende antes, se caen solos)
 $router->get('/api/mis-vehiculos/turnos', [InspeccionController::class, 'turnos'], 'auth');
-$router->post('/api/mis-vehiculos', [PublicacionController::class, 'crear'], 'usuario');
+$router->post('/api/mis-vehiculos', [PublicacionController::class, 'crear'], 'vendedor');
 $router->get('/api/mis-vehiculos/{id}', [PublicacionController::class, 'detalle'], 'auth');
-$router->put('/api/mis-vehiculos/{id}', [PublicacionController::class, 'actualizar'], 'usuario');
-$router->patch('/api/mis-vehiculos/{id}/estado', [PublicacionController::class, 'cambiarEstado'], 'usuario');
+$router->put('/api/mis-vehiculos/{id}', [PublicacionController::class, 'actualizar'], 'vendedor');
+$router->patch('/api/mis-vehiculos/{id}/estado', [PublicacionController::class, 'cambiarEstado'], 'vendedor');
 $router->delete('/api/mis-vehiculos/{id}', [PublicacionController::class, 'eliminar'], 'auth');
 // Publicar por partes: las fotos se pueden agregar o sacar después de crear la publicación
-$router->post('/api/mis-vehiculos/{id}/fotos', [PublicacionController::class, 'agregarFotos'], 'usuario');
+$router->post('/api/mis-vehiculos/{id}/fotos', [PublicacionController::class, 'agregarFotos'], 'vendedor');
 $router->delete('/api/mis-vehiculos/{id}/fotos/{foto}', [PublicacionController::class, 'eliminarFoto'], 'auth');
 
 // Chat entre interesado y vendedor (sólo los participantes ven cada conversación)
@@ -80,6 +82,10 @@ $router->delete('/api/meta-busquedas/{id}', [MetaBusquedaController::class, 'eli
 $router->post('/api/meta-busquedas/{id}/avisos/vistos', [MetaBusquedaController::class, 'marcarVistos'], 'auth');
 // "Ver en Kavak / MercadoLibre…": anota el clic (afiliación) y redirige al aviso. Sin sesión obligatoria
 $router->get('/api/salida', [AfiliacionController::class, 'salida']);
+// Precio contra el mercado de los autos de Explorar: el scraper lee los autos de acá (pública) y deja el cálculo en
+// Firestore; el admin lo puede recalcular a mano
+$router->get('/api/vehiculos/mercado', [PrecioMercadoController::class, 'paraElScraper']);
+$router->post('/api/admin/precios-mercado', [PrecioMercadoController::class, 'admin'], 'permiso:parametros.editar');
 $router->get('/api/autos-externos', [MetaBusquedaController::class, 'autoExterno'], 'auth'); // ?id=fuente~modelo~id
 
 // Inspecciones: el mecánico que firma. El ranking de mecánicos es público.
@@ -140,6 +146,12 @@ $router->patch('/api/mecanico/presupuestos/{id}', [PresupuestoController::class,
 // "Adherí tu taller": el usuario pide sumarse y un admin lo aprueba (pasa a rol mecanico) o lo rechaza.
 // Aprobar le cambia el rol al usuario, por eso pide el mismo permiso que editar usuarios.
 $router->post('/api/solicitudes-taller', [SolicitudTallerController::class, 'enviar']);
+// "Sumá tu concesionaria" (033): la empresa pide sumarse (crea su cuenta), el admin la aprueba; su vitrina y su panel
+$router->post('/api/solicitudes-empresa', [EmpresaController::class, 'enviar']);
+$router->get('/api/empresas/{id}', [EmpresaController::class, 'vitrina']);
+$router->get('/api/empresa/panel', [EmpresaController::class, 'panel'], 'empresa');
+$router->get('/api/admin/solicitudes-empresa', [EmpresaController::class, 'index'], 'permiso:usuarios.editar');
+$router->patch('/api/admin/solicitudes-empresa/{id}', [EmpresaController::class, 'resolver'], 'permiso:usuarios.editar');
 $router->get('/api/admin/solicitudes-taller', [SolicitudTallerController::class, 'index'], 'permiso:usuarios.editar');
 $router->patch('/api/admin/solicitudes-taller/{id}', [SolicitudTallerController::class, 'resolver'], 'permiso:usuarios.editar');
 

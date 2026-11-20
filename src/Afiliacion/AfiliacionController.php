@@ -66,21 +66,27 @@ final class AfiliacionController
         Response::json(['convenios' => Afiliacion::convenios()]);
     }
 
-    /** POST /api/admin/afiliacion/cobros {fuente, mes: "AAAA-MM"} → marca cobrado ese mes cerrado */
+    /**
+     * POST /api/admin/afiliacion/cobros {fuente, mes: "AAAA-MM"} (una plataforma) o {tipo: "empresa", socio: id, mes}
+     * → marca cobrado ese mes cerrado y devuelve el panel
+     */
     public function cobrar(): void
     {
         $d = Request::json();
-        $fuente = is_string($d['fuente'] ?? null) ? $d['fuente'] : '';
+        $tipo = ($d['tipo'] ?? 'plataforma') === 'empresa' ? 'empresa' : 'plataforma';
+        $socio = $tipo === 'empresa'
+            ? (is_int($d['socio'] ?? null) || (is_string($d['socio'] ?? null) && ctype_digit($d['socio'])) ? (string)$d['socio'] : '')
+            : (is_string($d['fuente'] ?? null) ? $d['fuente'] : (is_string($d['socio'] ?? null) ? $d['socio'] : ''));
         $mes = is_string($d['mes'] ?? null) && preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $d['mes']) ? $d['mes'] . '-01' : null;
-        if ($fuente === '' || $mes === null) {
-            Response::error(422, 'validacion', 'Indicá la plataforma y el mes (AAAA-MM).');
+        if ($socio === '' || $mes === null) {
+            Response::error(422, 'validacion', 'Indicá el socio y el mes (AAAA-MM).');
         }
-        $r = Afiliacion::cobrar($fuente, $mes, (int)Auth::id(), new DateTimeImmutable());
+        $r = Afiliacion::cobrar($tipo, $socio, $mes, (int)Auth::id(), new DateTimeImmutable());
         if (!$r['ok']) {
             match ($r['error']) {
                 'mes_en_curso' => Response::error(409, 'mes_en_curso', 'El mes todavía no cerró: se cobra cuando termina.'),
                 'ya_cobrado'   => Response::error(409, 'ya_cobrado', 'Ese mes ya está cobrado.'),
-                default        => Response::error(404, 'no_encontrado', 'No hay nada para cobrar de esa plataforma en ese mes.'),
+                default        => Response::error(404, 'no_encontrado', 'No hay nada para cobrar de ese socio en ese mes.'),
             };
         }
         Response::json(Afiliacion::panel(new DateTimeImmutable()));

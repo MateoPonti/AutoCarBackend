@@ -24,7 +24,9 @@ final class Parametros
         'peso_trabajo_precio', 'peso_trabajo_km', 'peso_trabajo_dias', 'peso_trabajo_anio',
         'peso_aplicacion_precio', 'peso_aplicacion_km', 'peso_aplicacion_dias', 'peso_aplicacion_anio',
         // El ranking de los mecánicos (ver Inspecciones\Ranking)
-        'ranking_veces_reclamo', 'ranking_minimo_firmadas', 'ranking_especialidad_buena'];
+        'ranking_veces_reclamo', 'ranking_minimo_firmadas', 'ranking_especialidad_buena',
+        // Empresas (033): cuántos autos activos puede tener un particular y el abono mensual de cada empresa
+        'limite_autos_particular', 'abono_empresa_mensual'];
 
     /** @var array<string, float>|null se leen una sola vez por pedido */
     private static ?array $valores = null;
@@ -121,7 +123,7 @@ final class Parametros
                 $errores[$clave] = 'Tiene que estar entre ' . self::numero($p['minimo']) . ' y ' . self::numero($p['maximo']) . '.';
                 continue;
             }
-            if (in_array($p['unidad'], ['dias', 'pesos', 'horas'], true) && floor($valor) !== $valor) {
+            if (in_array($p['unidad'], ['dias', 'pesos', 'horas', 'autos'], true) && floor($valor) !== $valor) {
                 $errores[$clave] = 'Ingresá un número sin decimales.';
                 continue;
             }

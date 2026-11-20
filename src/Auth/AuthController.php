@@ -5,6 +5,7 @@ namespace AutoCar\Auth;
 
 use AutoCar\Core\Request;
 use AutoCar\Core\Response;
+use AutoCar\Empresas\Empresa;
 use AutoCar\Inspecciones\SolicitudTaller;
 use PDOException;
 
@@ -83,6 +84,19 @@ final class AuthController
             if ($taller !== null && $taller['estado'] === 'rechazado') {
                 Response::error(403, 'taller_rechazado', 'La solicitud de tu taller fue rechazada. Motivo: '
                     . $taller['motivo_rechazo'] . ' Corregí los datos y volvé a mandarla desde "Adherí tu taller" con el mismo email y contraseña.');
+            }
+        }
+
+        // Una empresa (concesionaria) también: ingresa recién cuando un admin aprueba su solicitud (033)
+        if ($usuario['rol'] === 'empresa') {
+            $empresa = Empresa::delUsuario((int)$usuario['id']);
+            if ($empresa !== null && $empresa['estado'] === 'pendiente') {
+                Response::error(403, 'empresa_pendiente',
+                    'Tu empresa todavía está en revisión. Vas a poder ingresar cuando un administrador apruebe la solicitud.');
+            }
+            if ($empresa !== null && $empresa['estado'] === 'rechazado') {
+                Response::error(403, 'empresa_rechazada', 'La solicitud de tu empresa fue rechazada. Motivo: '
+                    . $empresa['motivo_rechazo'] . ' Corregí los datos y volvé a mandarla desde "Sumá tu concesionaria" con el mismo email y contraseña.');
             }
         }
 

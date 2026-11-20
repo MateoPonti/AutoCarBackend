@@ -6,6 +6,7 @@ namespace AutoCar\Admin;
 use AutoCar\Auth\Auth;
 use AutoCar\Auth\Usuario;
 use AutoCar\Catalogo\CatalogoController;
+use AutoCar\Catalogo\PrecioMercado;
 use AutoCar\Catalogo\Vehiculo;
 use AutoCar\Core\Request;
 use AutoCar\Core\Response;
@@ -79,6 +80,15 @@ final class AdminVehiculoController
         // Si otro moderador la cambió mientras tanto, gana el primero y este pedido da 409
         if (!Vehiculo::cambiarEstado($id, $nuevo, $motivo, $actual['estado'])) {
             Response::error(409, 'estado_cambiado', 'Otro moderador acaba de revisar esta publicación. Recargá para ver cómo quedó.');
+        }
+        // Aprobada: su precio contra el mercado, para el ranking de Explorar y el panel de la empresa (si los otros
+        // sitios no responden, se calcula en la corrida del día)
+        if ($nuevo === 'disponible') {
+            try {
+                PrecioMercado::recalcular([Vehiculo::find($id)]);
+            } catch (\Throwable $e) {
+                \AutoCar\Core\Logger::error('Precio contra el mercado al aprobar: ' . $e->getMessage());
+            }
         }
         Response::json(['vehiculo' => Vehiculo::paraApi(Vehiculo::find($id))]);
     }

@@ -3,9 +3,14 @@ declare(strict_types=1);
 
 namespace AutoCar\Catalogo;
 
+use AutoCar\Auth\Auth;
+use AutoCar\Auth\Preferencias;
 use AutoCar\Auth\Usuario;
 use AutoCar\Core\Response;
+use AutoCar\Empresas\Empresa;
+use AutoCar\MetaBusqueda\ParaVos;
 use AutoCar\Publicaciones\Foto;
+use DateTimeImmutable;
 
 /** API pública: listado con búsqueda y filtros, y detalle. */
 final class CatalogoController
@@ -13,9 +18,54 @@ final class CatalogoController
     // 12 se divide por 2, 3 y 4: las filas de la grilla quedan completas en celular, tablet y escritorio
     public const POR_PAGINA = 12;
 
+    /** GET /api/vehiculos: Explorar. Por defecto "Más relevantes" (RankingExplorar); orden=recientes, los más nuevos primero. */
     public function index(): void
     {
-        Response::json(self::listado(self::filtros($_GET), true, self::POR_PAGINA));
+        $filtros = self::filtros($_GET);
+        Response::json($filtros['orden'] === 'relevantes' ? self::relevantes($filtros) : self::listado($filtros, true, self::POR_PAGINA));
+    }
+
+    /** Explorar ordenado como el metabuscador, con el perfil del que mira (si tiene). */
+    private static function relevantes(array $filtros): array
+    {
+        $pagina = min(10000, max(1, (int)($_GET['page'] ?? 1)));
+        $todos = Vehiculo::buscar($filtros, 1, RankingExplorar::MAXIMO, true)['items'];
+        $usuario = Auth::usuario();
+        $uso = ($usuario['rol'] ?? null) === 'usuario' ? (Preferencias::delUsuario((int)$usuario['id'])['uso'] ?? null) : null;
+        // El precio contra el mercado ya está calculado (PrecioMercado): si el scraper dejó uno nuevo, se copia a Neon
+        self::sincronizarPrecios();
+        $ordenados = RankingExplorar::ordenar($todos, PrecioMercado::guardados($todos), $uso,
+            $uso !== null ? ParaVos::pesosActuales() : null, new DateTimeImmutable());
+        $total = count($ordenados);
+        return [
+            'items'      => self::conInsignia(array_slice($ordenados, ($pagina - 1) * self::POR_PAGINA, self::POR_PAGINA)),
+            'total'      => $total,
+            'pagina'     => $pagina,
+            'por_pagina' => self::POR_PAGINA,
+            'paginas'    => max(1, (int)ceil($total / self::POR_PAGINA)),
+            'orden'      => 'relevantes',
+        ];
+    }
+
+    /** Copia el cálculo del día que dejó el scraper (como mucho una lectura de Firestore por hora). Si falla, sigue. */
+    public static function sincronizarPrecios(): void
+    {
+        try {
+            PrecioMercado::sincronizar(\AutoCar\MetaBusqueda\Almacenamiento::documentos());
+        } catch (\Throwable $e) {
+            \AutoCar\Core\Logger::error('Precio contra el mercado (copia del día): ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Las filas como las devuelve la API, con "empresa" ({id, nombre} si el vendedor es una concesionaria aprobada,
+     * para la insignia "Concesionaria X · Empresa verificada"; null si es un particular).
+     * @param list<array<string, mixed>> $filas
+     */
+    public static function conInsignia(array $filas): array
+    {
+        $insignias = Empresa::insignias(array_column($filas, 'usuario_id'));
+        return array_map(static fn(array $v): array => Vehiculo::paraApi($v) + ['empresa' => $insignias[(int)$v['usuario_id']] ?? null], $filas);
     }
 
     public function detalle(int $id): void
@@ -26,7 +76,9 @@ final class CatalogoController
             Response::error(404, 'no_encontrado', 'El vehículo no existe.');
         }
         $vendedor = Usuario::porId((int)$v['usuario_id']);
+        Visitas::registrar($id, (int)$v['usuario_id']); // para el panel de la empresa (cuentan todas, también sin sesión)
         Response::json(['vehiculo' => Vehiculo::paraApi($v) + [
+            'empresa'  => Empresa::insignias([(int)$v['usuario_id']])[(int)$v['usuario_id']] ?? null,
             'fotos'    => Foto::rutasDe($id),
             // Página pública: del vendedor solo el nombre y desde cuándo está (nunca el email)
             'vendedor' => $vendedor === null ? null : [
@@ -54,7 +106,7 @@ final class CatalogoController
         $pagina = min(10000, max(1, (int)($_GET['page'] ?? 1))); // tope: una página enorme desbordaría el OFFSET
         $r = Vehiculo::buscar($filtros, $pagina, $porPagina, $soloDisponibles);
         return [
-            'items'      => array_map([Vehiculo::class, 'paraApi'], $r['items']),
+            'items'      => $soloDisponibles ? self::conInsignia($r['items']) : array_map([Vehiculo::class, 'paraApi'], $r['items']),
             'total'      => $r['total'],
             'pagina'     => $pagina,
             'por_pagina' => $porPagina,
@@ -69,6 +121,8 @@ final class CatalogoController
         $precio = str_replace(',', '.', $texto('precio_max', 12));
         $comb   = $texto('combustible', 20);
         $estado = $texto('estado', 12);
+        $vendedor = $texto('vendedor', 12);
+        $orden = $texto('orden', 12);
         return [
             'estado'      => in_array($estado, Vehiculo::ESTADOS, true) ? $estado : '', // sólo lo usa el admin
             'completa'    => in_array($texto('completa', 1), ['0', '1'], true) ? $texto('completa', 1) : '', // sólo el admin
@@ -76,6 +130,9 @@ final class CatalogoController
             'marca'       => $texto('marca', 50),
             'combustible' => in_array($comb, Vehiculo::COMBUSTIBLES, true) ? $comb : '',
             'precio_max'  => preg_match('/^\d{1,9}(\.\d{1,2})?$/', $precio) ? $precio : null,
+            'vendedor'    => in_array($vendedor, ['particular', 'empresa'], true) ? $vendedor : '',
+            // Explorar: "Más relevantes" (el ranking) salvo que se pida "recientes" (los más nuevos primero)
+            'orden'       => $orden === 'recientes' ? 'recientes' : 'relevantes',
         ];
     }
 }

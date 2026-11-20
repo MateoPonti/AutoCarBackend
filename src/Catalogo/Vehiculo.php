@@ -18,6 +18,8 @@ final class Vehiculo
     // eliminado = baja lógica hecha por el dueño (la fila queda para el historial y los chats).
     public const ESTADOS       = ['pendiente', 'disponible', 'rechazado', 'vendido', 'eliminado'];
     public const VISIBLES      = ['disponible', 'vendido'];
+    // Los que cuentan para el límite de un particular (033): publicados o en revisión
+    public const ACTIVOS       = ['pendiente', 'disponible'];
 
     /** @return array{items: array, total: int} */
     public static function buscar(array $f, int $pagina, int $porPagina, bool $soloDisponibles): array
@@ -52,6 +54,12 @@ final class Vehiculo
         if (($f['combustible'] ?? '') !== '') {
             $where[] = 'combustible = :combustible';
             $params['combustible'] = $f['combustible'];
+        }
+        // Explorar: solo de particulares o solo de empresas (concesionarias aprobadas, 033)
+        if (($f['vendedor'] ?? '') === 'empresa') {
+            $where[] = 'usuario_id IN (' . \AutoCar\Empresas\Empresa::APROBADAS_SQL . ')';
+        } elseif (($f['vendedor'] ?? '') === 'particular') {
+            $where[] = 'usuario_id NOT IN (' . \AutoCar\Empresas\Empresa::APROBADAS_SQL . ')';
         }
         if (($f['precio_max'] ?? null) !== null) {
             $where[] = 'precio <= :precio_max';
@@ -123,6 +131,16 @@ final class Vehiculo
             $faltan[] = 'fotos';
         }
         return $faltan;
+    }
+
+    /** Cuántas publicaciones activas (publicadas o en revisión) tiene un vendedor, sin contar $excepto. */
+    public static function activosDe(int $usuarioId, ?int $excepto = null): int
+    {
+        $st = Database::pdo()->prepare(
+            "SELECT COUNT(*) FROM vehiculo WHERE usuario_id = :u AND estado IN ('pendiente', 'disponible') AND id <> :excepto"
+        );
+        $st->execute(['u' => $usuarioId, 'excepto' => $excepto ?? 0]);
+        return (int)$st->fetchColumn();
     }
 
     public static function find(int $id): ?array
