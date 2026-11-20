@@ -28,6 +28,7 @@ use AutoCar\MetaBusqueda\MetaBusquedaController;
 use AutoCar\Parametros\ParametroController;
 use AutoCar\Publicaciones\PublicacionController;
 use AutoCar\Soporte\SoporteController;
+use AutoCar\Afiliacion\AfiliacionController;
 use AutoCar\Core\Router;
 
 /** @var Router $router */
@@ -77,6 +78,8 @@ $router->get('/api/meta-busquedas/{id}/novedades', [MetaBusquedaController::clas
 $router->put('/api/meta-busquedas/{id}', [MetaBusquedaController::class, 'actualizar'], 'auth');
 $router->delete('/api/meta-busquedas/{id}', [MetaBusquedaController::class, 'eliminar'], 'auth');
 $router->post('/api/meta-busquedas/{id}/avisos/vistos', [MetaBusquedaController::class, 'marcarVistos'], 'auth');
+// "Ver en Kavak / MercadoLibre…": anota el clic (afiliación) y redirige al aviso. Sin sesión obligatoria
+$router->get('/api/salida', [AfiliacionController::class, 'salida']);
 $router->get('/api/autos-externos', [MetaBusquedaController::class, 'autoExterno'], 'auth'); // ?id=fuente~modelo~id
 
 // Inspecciones: el mecánico que firma. El ranking de mecánicos es público.
@@ -165,6 +168,10 @@ $router->delete('/api/admin/vehiculos/{id}', [AdminVehiculoController::class, 'e
 // Usuarios (admin): ver datos, editar nombre y rol, baja lógica
 // Métricas de la app (admin)
 $router->get('/api/admin/metricas', [AdminMetricasController::class, 'index'], 'permiso:metricas.ver');
+// Afiliación con las plataformas del metabuscador (convenio simulado): el mes en curso, la evolución y los cobros
+$router->get('/api/admin/afiliacion', [AfiliacionController::class, 'panel'], 'permiso:metricas.ver');
+$router->put('/api/admin/afiliacion/convenios', [AfiliacionController::class, 'convenio'], 'permiso:parametros.editar');
+$router->post('/api/admin/afiliacion/cobros', [AfiliacionController::class, 'cobrar'], 'permiso:parametros.editar');
 
 // Parámetros del negocio (comisión, fondo, tope, días de reclamo, precio de la inspección): los cambia el admin.
 // Los valores son públicos: el front muestra el desglose del precio y el rango que acepta el taller.
