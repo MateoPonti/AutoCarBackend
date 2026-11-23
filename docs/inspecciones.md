@@ -90,7 +90,7 @@ Por experiencia: primero los que tienen al menos `ranking_minimo_firmadas` inspe
 
 ## 6. Datos de demo
 
-`database/007-demo-inspecciones-solo-dev.sql`, **solo para la base de dev**: 5 mecánicos de Mercedes y Luján con su taller, marcados como demo. La contraseña de todos es `mecanico-demo`. Las inspecciones firmadas de ejemplo (para que el ranking tenga experiencia) se cargan con `php bin/demo-historial.php`, que firma con el mismo código que la API: así la huella de cada informe es la real.
+`database/007-demo-inspecciones-solo-dev.sql`, **solo para la base de dev**: 5 mecánicos de Mercedes y Luján con su taller, marcados como demo. La contraseña de todos es `mecanico-demo`. Las inspecciones firmadas de ejemplo (para que el ranking tenga experiencia) se cargan con `php bin/demo-experiencia.php`, que firma con el mismo código que la API: así la huella de cada informe es la real.
 
 ## 7. Endpoints: hechos y pendientes
 

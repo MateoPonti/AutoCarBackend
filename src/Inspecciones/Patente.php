@@ -4,8 +4,8 @@ declare(strict_types=1);
 namespace AutoCar\Inspecciones;
 
 /**
- * La patente del auto inspeccionado. Es lo que une las inspecciones de un mismo auto aunque el aviso cambie o se
- * borre: con ella se arma el historial. La carga el mecánico al ver el auto, con una foto de la chapa como control,
+ * La patente del auto inspeccionado: prueba que el informe es de ese auto (no se arma un historial con ella desde el
+ * 23/11). La carga el mecánico al ver el auto, con una foto de la chapa como control,
  * y sin ella no se puede firmar. Se guarda solo la patente y el informe: nada del dueño.
  * Formatos argentinos: la vieja (ABC123, desde 1995) y la del Mercosur (AB123CD, desde 2016).
  */

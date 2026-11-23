@@ -64,7 +64,7 @@ La `007` (mecánicos `mecanicoN@demo.autocar.com.ar`) está solo en dev, como co
 
 ## Historial de la demo (solo dev)
 
-Después de la 007, `php bin/demo-historial.php` carga inspecciones firmadas de meses anteriores de los 5 mecánicos (31 en total), firmadas con el mismo código que la API. Sin eso, todos figuran como "Nuevo en la red" (el ranking es por experiencia). No es una migración: es un script de PHP porque la huella se calcula en PHP. Toma la base de `.env` o de las variables de entorno, como `bin/importar-autos.php`; para Neon dev, con los datos de conexión de esa branch. Se puede correr más de una vez: si un mecánico ya tiene esas inspecciones, no le agrega nada.
+Después de la 007, `php bin/demo-experiencia.php` carga inspecciones firmadas de meses anteriores de los 5 mecánicos (31 en total), firmadas con el mismo código que la API. Sin eso, todos figuran como "Nuevo en la red" (el ranking es por experiencia). No es una migración: es un script de PHP porque la huella se calcula en PHP. Toma la base de `.env` o de las variables de entorno, como `bin/importar-autos.php`; para Neon dev, con los datos de conexión de esa branch. Se puede correr más de una vez: si un mecánico ya tiene esas inspecciones, no le agrega nada.
 
 **Ojo:** el script busca los mecánicos por los emails de la `007` (`mecanicoN@demo.autocar.com.ar`). En main esos usuarios no existen (los talleres de demo de main son otros, ver arriba), así que ahí falla sin cargar nada. Al 11/11 tampoco se corrió en dev: ninguna inspección tiene el link `historial.demo.invalid`.
 

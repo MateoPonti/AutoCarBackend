@@ -4,7 +4,7 @@
 --   DELETE FROM taller WHERE demo; DELETE FROM usuario WHERE email LIKE '%@demo.autocar.com.ar';
 -- Contraseña de todos: mecanico-demo
 -- Las inspecciones firmadas de ejemplo (para que el ranking tenga números) se cargan después con
--- `php bin/demo-historial.php`, que firma con el mismo código que la API: así la huella de cada informe es real.
+-- `php bin/demo-experiencia.php`, que firma con el mismo código que la API: así la huella de cada informe es real.
 
 INSERT INTO usuario (nombre, email, password_hash, rol_id)
 SELECT u.nombre, u.email, '$2y$12$nhrbZHzYp9khIexSilRgoelAYw4KDpepfYVCYHsrkU2nJK2gu2Nmi', r.id

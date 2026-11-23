@@ -7,9 +7,9 @@
  * (por experiencia, ver Inspecciones\Ranking) queda: Gómez 12, Ferreyra 8, Acosta 5, Medina 4 y Benítez 2 (nuevo).
  *
  * Las firmas usan el mismo código que el endpoint (Inspecciones\Huella), así la huella de cada informe es real.
- * Es idempotente: si un mecánico ya tiene historial de demo, no le agrega nada.
+ * Es idempotente: si un mecánico ya tiene estas inspecciones de demo, no le agrega nada.
  *
- * Uso: php bin/demo-historial.php   (toma la base de .env o de las variables de entorno, como el resto de bin/)
+ * Uso: php bin/demo-experiencia.php   (toma la base de .env o de las variables de entorno, como el resto de bin/)
  */
 declare(strict_types=1);
 
@@ -84,7 +84,7 @@ try {
         }
         $yaTiene->execute(['m' => $m['id'], 'u' => URL_HISTORIAL . '%']);
         if ((int)$yaTiene->fetchColumn() > 0) {
-            echo "{$m['nombre']}: ya tiene historial, no se toca.\n";
+            echo "{$m['nombre']}: ya tiene inspecciones de demo, no se toca.\n";
             continue;
         }
 
