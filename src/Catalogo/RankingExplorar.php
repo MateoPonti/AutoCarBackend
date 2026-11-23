@@ -12,7 +12,8 @@ use DateTimeImmutable;
  * el puntaje de "para vos" (precio y km contra autos parecidos, días publicado y año, con los pesos de ese perfil que el
  * admin cambia en Parámetros); sin perfil, la diferencia con el precio típico. Los autos parecidos son los de otros
  * sitios (PrecioMercado, ya calculado: Explorar no lee Firestore). Particulares y empresas compiten igual. Sin al menos 5 parecidos el auto no tiene puntaje y va
- * después de los que sí, del más nuevo al más viejo. Explorar es un feed: no muestra el motivo ni el mensaje.
+ * después de los que sí, del más nuevo al más viejo. Cada fila trae "mensaje" (por qué se recomienda, o null): Explorar
+ * se lo muestra solo a los primeros (CatalogoController::RECOMENDADOS).
  */
 final class RankingExplorar
 {
@@ -34,6 +35,7 @@ final class RankingExplorar
         foreach ($vehiculos as &$v) {
             $m = $mercado[(int)$v['id']] ?? null;
             $v['puntaje'] = null;
+            $v['mensaje'] = null;
             if ($m === null || !$m['suficientes']) {
                 continue;
             }
@@ -46,9 +48,14 @@ final class RankingExplorar
                     $uso, $anioTipico, $pesos,
                 );
                 $v['puntaje'] = $r['puntaje'] ?? null;
+                $v['mensaje'] = $r['mensaje'] ?? null;
             } else {
                 // Sin perfil, como el metabuscador: cuanto más barato frente a los parecidos, más arriba (20 % = 1)
                 $v['puntaje'] = round(max(-1.0, min(1.0, -(float)$m['diferencia_pct'] / 20)), 2);
+                if ((float)$m['diferencia_pct'] < 0) {
+                    $v['mensaje'] = 'Está ' . str_replace('.', ',', (string)abs((float)$m['diferencia_pct']))
+                        . ' % por debajo del precio típico de autos parecidos en otros sitios.';
+                }
             }
         }
         unset($v);
