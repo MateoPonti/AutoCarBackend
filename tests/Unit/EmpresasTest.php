@@ -61,6 +61,14 @@ final class EmpresasTest extends TestCase
         // "Para trabajar" pesa más el precio
         self::assertSame([1, 2, 4, 3], $ids(RankingExplorar::ordenar($autos, $mercado, 'trabajo', null, $ahora)));
         self::assertNull(RankingExplorar::ordenar($autos, $mercado, null, null, $ahora)[3]['puntaje']);
+
+        // El por qué: sin perfil, solo el que está por debajo del precio típico; con perfil, el mensaje de "para vos"
+        $sinPerfil = array_column(RankingExplorar::ordenar($autos, $mercado, null, null, $ahora), 'mensaje', 'id');
+        self::assertSame('Está 10 % por debajo del precio típico de autos parecidos en otros sitios.', $sinPerfil[1]);
+        self::assertNull($sinPerfil[2]);
+        self::assertNull($sinPerfil[3]);
+        $familia = array_column(RankingExplorar::ordenar($autos, $mercado, 'familia', null, $ahora), 'mensaje', 'id');
+        self::assertStringStartsWith('Como lo buscás para la familia', (string)$familia[2]);
     }
 
     public function testElPanelDeLaEmpresaSumaYOrdenaPorVisitas(): void

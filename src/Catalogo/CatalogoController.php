@@ -17,6 +17,8 @@ final class CatalogoController
 {
     // 12 se divide por 2, 3 y 4: las filas de la grilla quedan completas en celular, tablet y escritorio
     public const POR_PAGINA = 12;
+    /** Cuántos de la primera página de "Más relevantes" se marcan como recomendados, con su mensaje */
+    public const RECOMENDADOS = 4;
 
     /** GET /api/vehiculos: Explorar. Por defecto "Más relevantes" (RankingExplorar); orden=recientes, los más nuevos primero. */
     public function index(): void
@@ -37,8 +39,18 @@ final class CatalogoController
         $ordenados = RankingExplorar::ordenar($todos, PrecioMercado::guardados($todos), $uso,
             $uso !== null ? ParaVos::pesosActuales() : null, new DateTimeImmutable());
         $total = count($ordenados);
+        $filas = array_slice($ordenados, ($pagina - 1) * self::POR_PAGINA, self::POR_PAGINA);
+        $items = self::conInsignia($filas);
+        // En la primera página, los primeros con mensaje llevan "recomendado": el puesto y por qué (el front los marca)
+        $puesto = 0;
+        foreach ($filas as $i => $v) {
+            if ($pagina === 1 && $puesto < self::RECOMENDADOS && $v['mensaje'] !== null) {
+                $items[$i]['recomendado'] = ['puesto' => ++$puesto, 'mensaje' => $v['mensaje']];
+            }
+        }
         return [
-            'items'      => self::conInsignia(array_slice($ordenados, ($pagina - 1) * self::POR_PAGINA, self::POR_PAGINA)),
+            'perfil'     => $uso,
+            'items'      => $items,
             'total'      => $total,
             'pagina'     => $pagina,
             'por_pagina' => self::POR_PAGINA,
