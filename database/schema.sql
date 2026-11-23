@@ -36,14 +36,12 @@ INSERT INTO permiso (nombre, descripcion) VALUES
   ('verificaciones.ver',      'Ver las verificaciones de vehículos asignadas al taller'),
   ('verificaciones.realizar', 'Cargar el resultado de una verificación'),
   ('metricas.ver',            'Ver las métricas de la aplicación'),
-  ('reclamos.resolver',       'Ver los reclamos de inspecciones y decidir si proceden'),
-  ('parametros.editar',       'Cambiar los parámetros del negocio (comisión, fondo, tope, días de reclamo, precios)')
+  ('parametros.editar',       'Cambiar los parámetros del negocio (comisión, precios, crédito, ranking)')
 ON CONFLICT (nombre) DO NOTHING;
 
 INSERT INTO rol_permiso (rol_id, permiso_id)
 SELECT r.id, p.id FROM (VALUES
   ('moderador', 'vehiculos.moderar'),
-  ('moderador', 'reclamos.resolver'),
   ('mecanico',  'verificaciones.ver'),
   ('mecanico',  'verificaciones.realizar')
 ) AS rp(rol, permiso)
@@ -1448,9 +1446,6 @@ CREATE TABLE IF NOT EXISTS inspeccion (
   precio           NUMERIC(11,2) NOT NULL CHECK (precio > 0),
   monto_mecanico   NUMERIC(11,2) NOT NULL,
   monto_autocar    NUMERIC(11,2) NOT NULL,
-  monto_fondo      NUMERIC(11,2) NOT NULL,   -- parte de monto_autocar que va al fondo de garantía
-  tope_veces       NUMERIC(6,2)  NOT NULL DEFAULT 3,   -- con los que se pidió (parámetros, 021-preferencias-y-parametros.sql)
-  dias_reclamo     SMALLINT      NOT NULL DEFAULT 15,
   credito_usado    NUMERIC(11,2) NOT NULL DEFAULT 0,   -- crédito del comprador descontado del precio (024)
   marca            VARCHAR(60),   -- del catálogo, para las fallas típicas por modelo (026); obligatorios para firmar
   modelo           VARCHAR(60),
@@ -1473,7 +1468,6 @@ CREATE TABLE IF NOT EXISTS inspeccion (
   CONSTRAINT inspeccion_modelo_fk FOREIGN KEY (marca, modelo) REFERENCES modelo (marca, nombre) ON UPDATE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_inspeccion_modelo ON inspeccion (marca, modelo) WHERE estado = 'firmada';
-CREATE INDEX IF NOT EXISTS idx_inspeccion_patente ON inspeccion (patente) WHERE patente IS NOT NULL;
 
 -- Foto de la chapa que sube el mecánico antes de firmar (022-patente.sql)
 CREATE TABLE IF NOT EXISTS inspeccion_patente_foto (
@@ -1508,24 +1502,6 @@ CREATE TABLE IF NOT EXISTS inspeccion_item_foto (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (inspeccion_id, codigo)
 );
-
--- Un solo reclamo por inspección. Si procede, el pago se reembolsa y el mecánico baja en el ranking.
-CREATE TABLE IF NOT EXISTS reclamo (
-  id            INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  inspeccion_id INTEGER       NOT NULL UNIQUE REFERENCES inspeccion(id),
-  item_codigo   VARCHAR(20),
-  descripcion   VARCHAR(1000) NOT NULL CHECK (length(descripcion) > 0),
-  estado        VARCHAR(10)   NOT NULL DEFAULT 'abierto' CHECK (estado IN ('abierto', 'procede', 'no_procede')),
-  compensacion  NUMERIC(11,2) CHECK (compensacion >= 0),
-  devolucion    NUMERIC(11,2) CHECK (devolucion >= 0),   -- lo que pagó el comprador, que le devuelve el fondo (024)
-  franquicia    NUMERIC(11,2) CHECK (franquicia >= 0),   -- lo que el mecánico le paga al fondo (024)
-  respuesta     VARCHAR(1000),
-  resuelto_por  INTEGER       REFERENCES usuario(id),
-  created_at    TIMESTAMPTZ   NOT NULL DEFAULT now(),
-  resuelto_at   TIMESTAMPTZ
-);
-
-CREATE INDEX IF NOT EXISTS idx_reclamo_estado ON reclamo (estado, created_at);
 
 -- Idea A, costo total (025-presupuestos.sql, Inspecciones\Presupuestos): cada arreglo del informe firmado se le pide a
 -- otros talleres de la red, nunca al que inspeccionó. Cada uno responde con un monto, vigente unos días.
@@ -1664,14 +1640,10 @@ CREATE INDEX IF NOT EXISTS idx_parametro_cambio_fecha ON parametro_cambio (creat
 -- Valores decididos el 14/11 (ideas-14-11-2026/decisiones-14-11-2026.md del front)
 INSERT INTO parametro (clave, valor, minimo, maximo, unidad, descripcion, orden) VALUES
   ('comision_autocar', 23,      0,    50,       'porcentaje', 'Parte del precio de la inspección que se queda AutoCar (el resto es del mecánico)', 1),
-  ('parte_fondo',      33.3333, 0,    100,      'porcentaje', 'Parte de lo de AutoCar que va al fondo de garantía', 2),
-  ('tope_veces',       3,       0,    10,       'veces',      'Tope de la compensación de un reclamo, en veces el precio de la inspección', 3),
-  ('dias_reclamo',     15,      1,    60,       'dias',       'Días que tiene el comprador para reclamar después de la firma', 4),
   ('precio_minimo',    70000,   1000, 10000000, 'pesos',      'Precio mínimo que puede cobrar un taller por la inspección', 5),
   ('precio_sugerido',  100000,  1000, 10000000, 'pesos',      'Precio que se le sugiere al taller', 6),
   ('precio_maximo',    150000,  1000, 10000000, 'pesos',      'Precio máximo que puede cobrar un taller por la inspección', 7),
   ('cotizacion_dolar', 1450,    1,    100000,   'pesos',      'Cotización del dólar: con ella se muestran en pesos los autos publicados en dólares en el metabuscador', 8), -- 023
-  ('franquicia',       40,      0,    100,      'porcentaje', 'Parte de lo que cobró el mecánico que paga al fondo si un reclamo procede', 9),  -- 024
   ('credito_vendido',  30,      0,    100,      'porcentaje', 'Crédito para el comprador, en % del precio, si el auto se vendió (firmada con el auto vendido o cupón)', 10),
   ('horas_cupon',      48,      1,    720,      'horas',      'Horas después de la firma en las que, si el auto se vende con el turno confirmado, el comprador recibe el cupón', 11),
   ('presupuestos_por_arreglo', 3, 1, 10,       'veces',      'A cuántos talleres de la red se les pide presupuesto por cada arreglo del informe', 12),  -- 025
@@ -1703,9 +1675,7 @@ INSERT INTO parametro (clave, valor, minimo, maximo, unidad, descripcion, orden)
 ON CONFLICT (clave) DO NOTHING;
 -- 030: el ranking de los mecánicos en Parámetros (ver Inspecciones\Ranking)
 INSERT INTO parametro (clave, valor, minimo, maximo, unidad, descripcion, orden) VALUES
-  ('ranking_veces_reclamo',      2,   0, 10, 'veces',  'Ranking de mecánicos: cuánto baja el puntaje cada reclamo que procedió (el "2" de la fórmula)', 34),
-  ('ranking_minimo_firmadas',    3,   1, 50, 'veces',  'Ranking de mecánicos: inspecciones firmadas que hacen falta para tener puntaje (antes es "Nuevo en la red")', 35),
-  ('ranking_especialidad_buena', 2.5, 0, 5,  'puntos', 'Ranking de mecánicos: desde qué puntaje en un modelo o marca la especialidad es buena', 36)
+  ('ranking_minimo_firmadas',    3,   1, 50, 'veces',  'Ranking de mecánicos: inspecciones firmadas que hacen falta para dejar de ser "Nuevo en la red"', 35)
 ON CONFLICT (clave) DO NOTHING;
 
 -- Preferencias del comprador: "¿Para qué buscás el auto?" (021-preferencias-y-parametros.sql, Auth\Preferencias)

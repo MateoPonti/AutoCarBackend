@@ -134,8 +134,8 @@ final class PorPerfil
 
     /**
      * La plata del período por tipo de usuario, con las mismas cuentas que el informe de plata (Panel::totales):
-     * ingresos = comisión de AutoCar de las firmadas ya cobradas o reembolsadas por un reclamo, menos los créditos;
-     * pérdida = lo que costaron los reclamos que procedieron; neta = ingresos − pérdida.
+     * ingresos = comisión de AutoCar de las firmadas ya cobradas (o reembolsadas por un reclamo antes del 23/11), menos
+     * los créditos. Sin reclamos no hay pérdida.
      * @return list<array<string, mixed>>
      */
     public static function plata(int $dias): array
@@ -154,45 +154,27 @@ final class PorPerfil
               WHERE i.created_at >= $desde OR i.firmada_at >= $desde
               GROUP BY 1"
         )->fetchAll(PDO::FETCH_ASSOC);
-        $reclamos = $pdo->query(
-            "SELECT COALESCE(p.uso, '" . self::SIN_PERFIL . "') AS uso,
-                    COALESCE(SUM(COALESCE(r.devolucion, 0) + COALESCE(r.compensacion, 0) - COALESCE(r.franquicia, 0)), 0) AS perdida,
-                    COUNT(*) AS reclamos
-               FROM reclamo r
-               JOIN inspeccion i ON i.id = r.inspeccion_id
-               LEFT JOIN usuario_preferencia p ON p.usuario_id = i.comprador_id
-              WHERE r.estado = 'procede' AND r.resuelto_at >= $desde
-              GROUP BY 1"
-        )->fetchAll(PDO::FETCH_ASSOC);
-        return self::filasPlata($inspecciones, $reclamos);
+        return self::filasPlata($inspecciones);
     }
 
     /**
      * Arma una fila por tipo de usuario (también los que no tienen datos). Función pura.
      * @param list<array<string, mixed>> $inspecciones filas {uso, pagaron, compradores, ingresos, por_cobrar}
-     * @param list<array<string, mixed>> $reclamos filas {uso, perdida, reclamos}: los que procedieron
      * @return list<array<string, mixed>>
      */
-    public static function filasPlata(array $inspecciones, array $reclamos): array
+    public static function filasPlata(array $inspecciones): array
     {
         $porUso = array_column($inspecciones, null, 'uso');
-        $reclamosPorUso = array_column($reclamos, null, 'uso');
         $salida = [];
         foreach (self::usos() as $uso => $nombre) {
             $f = $porUso[$uso] ?? [];
-            $r = $reclamosPorUso[$uso] ?? [];
-            $ingresos = (float)($f['ingresos'] ?? 0);
-            $perdida = (float)($r['perdida'] ?? 0);
             $salida[] = [
                 'uso'                  => $uso,
                 'nombre'               => $nombre,
                 'pagaron'              => (int)($f['pagaron'] ?? 0),
                 'compradores'          => (int)($f['compradores'] ?? 0),
-                'ingresos'             => $ingresos,
-                'perdida'              => $perdida,
-                'neta'                 => $ingresos - $perdida,
+                'ingresos'             => (float)($f['ingresos'] ?? 0),
                 'por_cobrar'           => (float)($f['por_cobrar'] ?? 0),
-                'reclamos_procedieron' => (int)($r['reclamos'] ?? 0),
             ];
         }
         return $salida;
@@ -285,8 +267,8 @@ final class PorPerfil
 
     /**
      * Agrega a una fila del embudo cuánta ganancia dejó cada paso. "ganancia" es la comisión de AutoCar (menos créditos)
-     * de las inspecciones pedidas en el período desde esa recomendación que ya se firmaron y se cobraron (o se
-     * reembolsaron por un reclamo), igual que el informe de plata. Función pura:
+     * de las inspecciones pedidas en el período desde esa recomendación que ya se firmaron y se cobraron, igual que el
+     * informe de plata. Función pura:
      *   por_vio = ganancia ÷ vieron; por_toco = ganancia ÷ tocaron "Mandale un mecánico"; por_pago = ganancia ÷ pagaron.
      * @param array<string, mixed> $fila con vieron, tocaron, pagaron y ganancia
      */

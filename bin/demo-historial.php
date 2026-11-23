@@ -1,15 +1,10 @@
 <?php
 /**
- * Historial de DEMO para el ranking: inspecciones firmadas de meses anteriores de los 5 mecánicos de
- * database/demo-inspecciones.sql, algunas con un reclamo que procedió. SOLO para dev o local, nunca en main.
+ * Experiencia de DEMO para el ranking: inspecciones firmadas de meses anteriores de los 5 mecánicos de
+ * database/demo-inspecciones.sql. SOLO para dev o local, nunca en main.
  *
- * Sin historial, todos los mecánicos tienen menos de 3 firmadas y figuran como "Nuevo en la red", y en la demo
- * no se ve al mecánico bajar en el ranking cuando procede el reclamo. Con este historial:
- *   Ferreyra  8 firmadas, 0 procedentes → 5,0 (primero). Después de la demo: 9 y 1 → 3,9 (baja al tercer lugar)
- *   Gómez    12 firmadas, 1 procedente  → 4,2
- *   Acosta    5 firmadas, 0 procedentes → 5,0
- *   Benítez   2 firmadas                → Nuevo en la red
- *   Medina    4 firmadas, 1 procedente  → 2,5
+ * Sin esto, todos los mecánicos tienen menos de 3 firmadas y figuran como "Nuevo en la red". Con esto el ranking
+ * (por experiencia, ver Inspecciones\Ranking) queda: Gómez 12, Ferreyra 8, Acosta 5, Medina 4 y Benítez 2 (nuevo).
  *
  * Las firmas usan el mismo código que el endpoint (Inspecciones\Huella), así la huella de cada informe es real.
  * Es idempotente: si un mecánico ya tiene historial de demo, no le agrega nada.
@@ -33,13 +28,13 @@ $raiz = dirname(__DIR__);
 require $raiz . '/vendor/autoload.php';
 Config::load($raiz . '/.env');
 
-// email del mecánico => [firmadas, reclamos que procedieron]
+// email del mecánico => inspecciones firmadas
 const PLAN = [
-    'mecanico1@demo.autocar.com.ar' => [8, 0],
-    'mecanico2@demo.autocar.com.ar' => [12, 1],
-    'mecanico3@demo.autocar.com.ar' => [5, 0],
-    'mecanico4@demo.autocar.com.ar' => [2, 0],
-    'mecanico5@demo.autocar.com.ar' => [4, 1],
+    'mecanico1@demo.autocar.com.ar' => 8,
+    'mecanico2@demo.autocar.com.ar' => 12,
+    'mecanico3@demo.autocar.com.ar' => 5,
+    'mecanico4@demo.autocar.com.ar' => 2,
+    'mecanico5@demo.autocar.com.ar' => 4,
 ];
 // .invalid es un dominio reservado: estos links nunca apuntan a un sitio real
 const URL_HISTORIAL = 'https://historial.demo.invalid/';
@@ -73,8 +68,6 @@ try {
          ON CONFLICT (email) DO NOTHING"
     )->execute(['n' => COMPRADOR[0], 'e' => COMPRADOR[1], 'h' => HASH_DEMO]);
     $comprador = (int)$pdo->query("SELECT id FROM usuario WHERE email = '" . COMPRADOR[1] . "'")->fetchColumn();
-    $admin = $pdo->query("SELECT u.id FROM usuario u JOIN rol r ON r.id = u.rol_id WHERE r.nombre = 'admin' ORDER BY u.id LIMIT 1")
-        ->fetchColumn() ?: null;
 
     $mecanicos = $pdo->prepare(
         'SELECT u.id, u.nombre, t.nombre AS taller, t.localidad, t.precio_inspeccion
@@ -83,7 +76,7 @@ try {
     $yaTiene = $pdo->prepare('SELECT COUNT(*) FROM inspeccion WHERE mecanico_id = :m AND url LIKE :u');
     $n = 0;
 
-    foreach (PLAN as $email => [$firmadas, $procedentes]) {
+    foreach (PLAN as $email => $firmadas) {
         $mecanicos->execute(['e' => $email]);
         $m = $mecanicos->fetch();
         if (!$m) {
@@ -97,7 +90,7 @@ try {
 
         for ($k = 0; $k < $firmadas; $k++) {
             [$titulo, $anio, $km, $precioAuto] = AUTOS[($k + $n) % count(AUTOS)];
-            // Firmadas hace entre 20 y ~130 días: ya cerró el plazo de 15 días para reclamar
+            // Firmadas hace entre 20 y ~130 días
             $momento = (new DateTimeImmutable('@' . (time() - (20 + $k * 9) * 86400)))->setTime(14, 30 + $k);
             $precio = (float)$m['precio_inspeccion'];
             $id = Inspeccion::crear($comprador, [
@@ -108,7 +101,7 @@ try {
             ], Precio::desgloseActual($precio));
             Inspeccion::cambiarEstado($id, 'pedida', 'aceptada', ['fecha_turno' => $momento->modify('-3 hours')->format('c')]);
 
-            // Uno de cada tres con algo observado; los que tienen reclamo, con un ítem que se pasó por alto
+            // Uno de cada tres con algo observado
             $items = array_map(static fn(): array => ['ok', null], Checklist::ITEMS);
             if ($k % 3 === 1) {
                 $codigo = array_keys(OBSERVACIONES)[$k % count(OBSERVACIONES)];
@@ -118,7 +111,7 @@ try {
             $resumen = $conclusion === 'recomendable'
                 ? 'Auto en buen estado para su año y kilometraje.'
                 : 'En buen estado general; hay que presupuestar lo observado antes de cerrar el precio.';
-            // El mismo auto de la lista tiene siempre la misma patente: así se ve su historial con varios mecánicos
+            // El mismo auto de la lista tiene siempre la misma patente
             $patente = 'AC' . str_pad((string)(($k + $n) % count(AUTOS)), 3, '0', STR_PAD_LEFT) . 'HD';
             Inspeccion::guardarInforme($id, $items, $conclusion, $resumen, $patente);
             $huella = Huella::calcular($id, $items, $conclusion, $resumen, $m['nombre'], $m['taller'],
@@ -126,22 +119,8 @@ try {
             Inspeccion::firmar($id, $m['nombre'], $m['taller'], $momento, $huella);
             $pdo->prepare('UPDATE inspeccion SET created_at = :c, updated_at = :c WHERE id = :id')
                 ->execute(['id' => $id, 'c' => $momento->modify('-2 days')->format('c')]);
-
-            if ($k < $procedentes) {
-                $pdo->prepare(
-                    "INSERT INTO reclamo (inspeccion_id, item_codigo, descripcion, estado, compensacion, respuesta,
-                       resuelto_por, created_at, resuelto_at)
-                     VALUES (:i, 'estructura', :d, 'procede', :c, :r, :a, :creado, :resuelto)"
-                )->execute([
-                    'i' => $id, 'd' => 'El auto tenía el larguero delantero reparado y el informe no lo marca.',
-                    'c' => Precio::topeCompensacion($precio) / 2,
-                    'r' => 'Se veía con el capot abierto: procede. Devolución y compensación.', 'a' => $admin,
-                    'creado' => $momento->modify('+5 days')->format('c'), 'resuelto' => $momento->modify('+8 days')->format('c'),
-                ]);
-                $pdo->prepare("UPDATE inspeccion SET pago = 'reembolsado' WHERE id = :id")->execute(['id' => $id]);
-            }
         }
-        echo "{$m['nombre']}: $firmadas firmadas, $procedentes con reclamo que procedió.\n";
+        echo "{$m['nombre']}: $firmadas firmadas.\n";
         $n++;
     }
     $pdo->commit();

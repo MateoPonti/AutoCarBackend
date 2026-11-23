@@ -15,7 +15,7 @@ use PDOException;
 
 /**
  * Lado del comprador (y lo público): ranking de mecánicos (B3), pedir (B4), mis inspecciones, detalle y
- * cancelar (B5), y reclamar (B8). Cada comprador ve solo sus inspecciones: las de otro responden 404.
+ * y cancelar (B5). Cada comprador ve solo sus inspecciones: las de otro responden 404.
  */
 final class InspeccionController
 {
@@ -23,9 +23,9 @@ final class InspeccionController
 
     /**
      * GET /api/mecanicos?localidad=&marca=&modelo=&orden=especialidad|ranking (público)
-     * → {items: [mecánico con puntaje], localidades, orden}
+     * → {items: [mecánico con firmadas y nuevo], localidades, orden}
      * Con marca (la del auto que se quiere revisar), cada mecánico trae "revisados" (cuántas firmó de ese modelo y
-     * de otros de la marca, y en cuántas procedió un reclamo) y "especialidad" (Ranking::especialidad, o null).
+     * de otros de la marca) y "especialidad" (Ranking::especialidad, o null).
      * Así, el orden por defecto es por especialidad (Ranking::porEspecialidad); con orden=ranking, el ranking general.
      */
     public function mecanicos(): void
@@ -40,11 +40,10 @@ final class InspeccionController
         $items = array_map([Taller::class, 'paraRanking'], Taller::red($localidad));
         if ($marca !== null) {
             $revisados = Taller::revisados($marca, $modelo);
-            $nada = ['modelo' => 0, 'reclamos_modelo' => 0, 'marca' => 0, 'reclamos_marca' => 0];
-            $valores = Ranking::valores();
+            $nada = ['modelo' => 0, 'marca' => 0];
             foreach ($items as &$m) {
                 $m['revisados'] = $revisados[$m['id']] ?? $nada;
-                $m['especialidad'] = Ranking::especialidad($m['revisados'], $valores);
+                $m['especialidad'] = Ranking::especialidad($m['revisados']);
             }
             unset($m);
             if ($orden === 'especialidad') {
@@ -135,7 +134,7 @@ final class InspeccionController
 
     /**
      * GET /api/inspecciones/{id} → {inspeccion} con el checklist.
-     * La ven el comprador, el mecánico asignado y quien resuelve reclamos (moderador y admin). Para el resto, 404.
+     * La ven el comprador y el mecánico asignado. Para el resto, 404.
      */
     public function detalle(int $id): void
     {
@@ -167,7 +166,7 @@ final class InspeccionController
         Response::archivo($f['datos'], $f['mime'], false);
     }
 
-    /** La inspección si la puede ver quien pregunta (comprador, mecánico o quien resuelve reclamos); si no, 404. */
+    /** La inspección si la puede ver quien pregunta (el comprador o el mecánico); si no, 404. */
     private static function visible(int $id): array
     {
         $i = Inspeccion::porId($id);
@@ -175,7 +174,6 @@ final class InspeccionController
         $puedeVer = $i !== null && (
             (int)$i['comprador_id'] === $yo
             || (int)$i['mecanico_id'] === $yo
-            || Auth::tiene('reclamos.resolver')
         );
         if (!$puedeVer) {
             Response::error(404, 'no_encontrado', 'La inspección no existe.');
@@ -195,31 +193,6 @@ final class InspeccionController
         Response::json(['inspeccion' => Inspeccion::paraApi(Inspeccion::porId($id), Inspeccion::items($id))]);
     }
 
-    /**
-     * POST /api/inspecciones/{id}/reclamo {descripcion, item_codigo?} → 201
-     * Solo el comprador, con la inspección firmada, dentro de los días de reclamo de su inspección (parámetro dias_reclamo) y una sola vez.
-     */
-    public function reclamar(int $id): void
-    {
-        $i = self::propia($id);
-        [$datos, $errores] = Reclamo::validarPedido(Request::json());
-        if ($errores) {
-            Response::error(422, 'validacion', 'Revisá el reclamo.', $errores);
-        }
-        if ($i['estado'] !== 'firmada') {
-            Response::error(409, 'estado_invalido', 'Solo se puede reclamar una inspección firmada.');
-        }
-        if ($i['reclamo_id'] !== null) {
-            Response::error(409, 'reclamo_existente', 'Ya hiciste un reclamo por esta inspección.');
-        }
-        if (!Estados::enPlazoDeReclamo(new DateTimeImmutable($i['firmada_at']), new DateTimeImmutable(), (int)$i['dias_reclamo'])) {
-            Response::error(409, 'fuera_de_plazo', 'Pasaron más de ' . (int)$i['dias_reclamo'] . ' días desde la firma.');
-        }
-        if (Reclamos::crear($id, $datos) === null) { // otro pedido lo creó recién
-            Response::error(409, 'reclamo_existente', 'Ya hiciste un reclamo por esta inspección.');
-        }
-        Response::json(['inspeccion' => Inspeccion::paraApi(Inspeccion::porId($id), Inspeccion::items($id))], 201);
-    }
 
     /** GET /api/mis-creditos → {items, total}: los créditos que el comprador todavía no usó (se descuentan solos al pedir). */
     public function creditos(): void

@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace AutoCar\Tests\Integration;
 
 /**
- * Lado del comprador y del admin: ranking (B3), pedir (B4), mis inspecciones y cancelar (B5), reclamo (B8).
+ * Lado del comprador y del admin: ranking (B3), pedir (B4), mis inspecciones y cancelar (B5).
  * La primera prueba es el recorrido de la demo del 30/11 (PLAN.md, sección 3) de punta a punta por la API.
  */
 final class InspeccionesCompradorTest extends ApiTestCase
@@ -34,44 +34,30 @@ final class InspeccionesCompradorTest extends ApiTestCase
         $this->aceptarYFirmar($pedido['id']);
 
         $despues = $ganancias();
-        $fila = Entorno::pdo()->query("SELECT precio, monto_autocar, monto_fondo, monto_mecanico FROM inspeccion WHERE id = {$pedido['id']}")->fetch();
+        $fila = Entorno::pdo()->query("SELECT precio, monto_autocar, monto_mecanico FROM inspeccion WHERE id = {$pedido['id']}")->fetch();
         self::assertEqualsWithDelta((float)$fila['precio'], $despues['facturado'] - $antes['facturado'], 0.01);
-        self::assertEqualsWithDelta($fila['monto_autocar'] - $fila['monto_fondo'], $despues['autocar'] - $antes['autocar'], 0.01);
+        self::assertEqualsWithDelta((float)$fila['monto_autocar'], $despues['autocar'] - $antes['autocar'], 0.01);
         self::assertEqualsWithDelta((float)$fila['monto_mecanico'], $despues['mecanicos'] - $antes['mecanicos'], 0.01);
-        self::assertEqualsWithDelta((float)$fila['monto_fondo'], $despues['fondo']['acumulado'] - $antes['fondo']['acumulado'], 0.01);
+        self::assertArrayNotHasKey('fondo', $despues); // sin fondo de garantía desde el 23/11
     }
 
-    public function testElInformeTraeLasInspeccionesAnterioresDeLaPatente(): void
+    public function testElInformeNoTraeOtrasInspeccionesDeLaPatente(): void
     {
         $patente = 'AA' . str_pad((string)random_int(0, 999), 3, '0', STR_PAD_LEFT) . 'ZZ'; // propia de esta prueba
         [$mecanicoId, $mecanico] = $this->ingresarComoMecanico();
-        $primera = null;
         foreach (['https://auto.mercadolibre.com.ar/MLA-111-gol-_JM', 'https://auto.mercadolibre.com.ar/MLA-222-gol-_JM'] as $url) {
             $comprador = $this->ingresarComoUsuario();
             $id = $this->pedirInspeccion($mecanicoId, ['url' => $url])['json']['inspeccion']['id'];
-            $primera ??= $id;
             $this->ingresar($mecanico);
             $this->aceptarYFirmar($id, $patente);
         }
 
-        // El historial viene en el informe: la segunda trae la primera (misma patente), con qué falló
+        // Sin historial por patente (23/11): la patente queda en el informe, pero no las inspecciones anteriores
         $this->ingresar($comprador);
         $r = $this->pedir('GET', "/api/inspecciones/{$id}");
         self::assertSame(200, $r['status'], json_encode($r['json']));
-        $anteriores = $r['json']['inspeccion']['anteriores'];
-        self::assertCount(1, $anteriores);
-        self::assertSame('Taller de Prueba', $anteriores[0]['taller']);
-        self::assertSame(1, count($anteriores[0]['fallas'])); // el rayón del checklist de prueba
-        self::assertArrayHasKey('codigo', $anteriores[0]['fallas'][0]);
-        self::assertArrayNotHasKey('nota', $anteriores[0]['fallas'][0]); // las notas no
-        self::assertArrayNotHasKey('comprador', $anteriores[0]); // nada de quién la pidió
-
-        // La primera no trae a la segunda (solo las de antes); el mecánico ve lo mismo
-        $this->ingresar($mecanico);
-        self::assertSame([], $this->pedir('GET', "/api/inspecciones/{$primera}")['json']['inspeccion']['anteriores']);
-        self::assertCount(1, $this->pedir('GET', "/api/inspecciones/{$id}")['json']['inspeccion']['anteriores']);
-
-        // Ya no hay buscador por patente
+        self::assertSame($patente, $r['json']['inspeccion']['patente']);
+        self::assertArrayNotHasKey('anteriores', $r['json']['inspeccion']);
         self::assertSame(404, $this->pedir('GET', '/api/historial-patente?patente=' . $patente)['status']);
     }
 
@@ -98,8 +84,8 @@ final class InspeccionesCompradorTest extends ApiTestCase
         $id = $i['id'];
         self::assertSame('/api/inspecciones/' . $id, $pedido['headers']['location']);
         self::assertSame(['pedida', 'mercadolibre', 'retenido'], [$i['estado'], $i['fuente'], $i['pago']]);
-        self::assertSame([130000.0, 100000.0, 30000.0, 10000.0],
-            [(float)$i['precio'], (float)$i['monto_mecanico'], (float)$i['monto_autocar'], (float)$i['monto_fondo']]);
+        self::assertSame([130000.0, 100000.0, 30000.0],
+            [(float)$i['precio'], (float)$i['monto_mecanico'], (float)$i['monto_autocar']]);
         self::assertSame('Taller de Prueba', $i['mecanico']['taller']);
         self::assertSame(409, $this->pedirInspeccion($mecanicoId)['status'], 'el mismo auto dos veces');
         self::assertSame([$id], array_column($this->pedir('GET', '/api/mis-inspecciones')['json']['items'], 'id'));
@@ -108,40 +94,16 @@ final class InspeccionesCompradorTest extends ApiTestCase
         $this->ingresar($mecanico);
         $this->aceptarYFirmar($id);
 
-        // 5. El comprador ve el informe firmado y reclama
+        // 5. El comprador ve el informe firmado (sin reclamo después) y el mecánico suma una firmada en el ranking
         $this->ingresar($comprador);
         $firmada = $this->pedir('GET', "/api/inspecciones/$id")['json']['inspeccion'];
-        self::assertSame('firmada', $firmada['estado']);
-        self::assertTrue($firmada['puede_reclamar']);
-        self::assertNotNull($firmada['reclamo_hasta']);
-        $reclamo = $this->pedir('POST', "/api/inspecciones/$id/reclamo",
-            ['descripcion' => 'Tenía un golpe en el zócalo y no lo marcó', 'item_codigo' => 'carroceria']);
-        self::assertSame(201, $reclamo['status'], json_encode($reclamo['json']));
-        self::assertSame('abierto', $reclamo['json']['inspeccion']['reclamo']['estado']);
-        self::assertFalse($reclamo['json']['inspeccion']['puede_reclamar']);
-        self::assertSame(409, $this->pedir('POST', "/api/inspecciones/$id/reclamo", ['descripcion' => 'Otro reclamo más largo'])['status']);
-
-        // 6. El admin resuelve: procede, con compensación hasta el tope
-        $this->ingresarComoAdmin();
-        $cola = $this->pedir('GET', '/api/admin/reclamos?estado=abierto');
-        self::assertSame(200, $cola['status']);
-        $item = array_values(array_filter($cola['json']['items'], fn($r) => $r['inspeccion']['id'] === $id))[0];
-        self::assertSame(390000.0, (float)$item['tope']);
-        $rid = $item['id'];
-        $pasado = $this->pedir('PATCH', "/api/admin/reclamos/$rid", ['procede' => true, 'compensacion' => 400000, 'respuesta' => 'Procede']);
-        self::assertSame(422, $pasado['status']);
-        $ok = $this->pedir('PATCH', "/api/admin/reclamos/$rid", ['procede' => true, 'compensacion' => 390000, 'respuesta' => 'Se veía en las fotos.']);
-        self::assertSame(200, $ok['status'], json_encode($ok['json']));
-        self::assertSame('procede', $ok['json']['reclamo']['estado']);
-        self::assertSame(409, $this->pedir('PATCH', "/api/admin/reclamos/$rid", ['procede' => false, 'respuesta' => 'Cambio de idea'])['status']);
-
-        // El comprador ve la devolución y el mecánico suma el reclamo en el ranking
-        $this->ingresar($comprador);
-        $final = $this->pedir('GET', "/api/inspecciones/$id")['json']['inspeccion'];
-        self::assertSame('reembolsado', $final['pago']);
-        self::assertSame(390000.0, (float)$final['reclamo']['compensacion']);
+        self::assertSame(['firmada', 'liberado'], [$firmada['estado'], $firmada['pago']]);
+        self::assertArrayNotHasKey('puede_reclamar', $firmada);
+        self::assertArrayNotHasKey('reclamo', $firmada);
+        self::assertSame(404, $this->pedir('POST', "/api/inspecciones/$id/reclamo", ['descripcion' => 'Tenía un golpe y no lo marcó'])['status']);
         $despues = $this->pedir('GET', '/api/mecanicos?localidad=' . rawurlencode($localidad))['json']['items'][0];
-        self::assertSame([1, 1], [$despues['firmadas'], $despues['reclamos_procedentes']]);
+        self::assertSame(1, $despues['firmadas']);
+        self::assertArrayNotHasKey('puntaje', $despues);
     }
 
     public function testSoloSeEligenMecanicosDeLaRed(): void
@@ -228,39 +190,5 @@ final class InspeccionesCompradorTest extends ApiTestCase
         $this->pedir('PATCH', "/api/mecanico/inspecciones/$otra", ['accion' => 'aceptar', 'fecha_turno' => self::turno()]);
         $this->ingresar($comprador);
         self::assertSame(409, $this->pedir('POST', "/api/inspecciones/$otra/cancelar", [])['status']);
-    }
-
-    public function testReglasDelReclamo(): void
-    {
-        [$mecanicoId, $mecanico] = $this->ingresarComoMecanico();
-        $comprador = $this->ingresarComoUsuario();
-        $id = $this->pedirInspeccion($mecanicoId)['json']['inspeccion']['id'];
-        $reclamo = ['descripcion' => 'El motor perdía aceite y no lo marcó'];
-
-        self::assertSame(409, $this->pedir('POST', "/api/inspecciones/$id/reclamo", $reclamo)['status'], 'sin firmar');
-        self::assertSame(422, $this->pedir('POST', "/api/inspecciones/$id/reclamo", ['descripcion' => 'corto'])['status']);
-
-        $this->ingresar($mecanico);
-        $this->aceptarYFirmar($id);
-        self::assertSame(404, $this->pedir('POST', "/api/inspecciones/$id/reclamo", $reclamo)['status'], 'el mecánico no reclama');
-
-        // Pasados los 15 días ya no se puede
-        Entorno::pdo()->prepare("UPDATE inspeccion SET firmada_at = now() - interval '16 days' WHERE id = :id")->execute(['id' => $id]);
-        $this->ingresar($comprador);
-        self::assertFalse($this->pedir('GET', "/api/inspecciones/$id")['json']['inspeccion']['puede_reclamar']);
-        $tarde = $this->pedir('POST', "/api/inspecciones/$id/reclamo", $reclamo);
-        self::assertSame(409, $tarde['status']);
-        self::assertSame('fuera_de_plazo', $tarde['json']['error']);
-    }
-
-    public function testLaColaDeReclamosEsDelModeradorYElAdmin(): void
-    {
-        $this->ingresarComoUsuario();
-        self::assertSame(403, $this->pedir('GET', '/api/admin/reclamos')['status']);
-        $this->ingresarComoMecanico();
-        self::assertSame(403, $this->pedir('PATCH', '/api/admin/reclamos/1', ['procede' => false, 'respuesta' => 'no'])['status']);
-        $this->ingresarComoAdmin();
-        self::assertSame(422, $this->pedir('GET', '/api/admin/reclamos?estado=cualquiera')['status']);
-        self::assertSame(404, $this->pedir('PATCH', '/api/admin/reclamos/999999', ['procede' => false, 'respuesta' => 'No procede'])['status']);
     }
 }

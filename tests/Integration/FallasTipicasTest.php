@@ -77,8 +77,8 @@ final class FallasTipicasTest extends ApiTestCase
         [$mecanico] = $this->ingresarComoMecanico();
         for ($n = 0; $n < $cuantas; $n++) {
             $st = $pdo->prepare("INSERT INTO inspeccion (comprador_id, mecanico_id, url, fuente, estado, precio, monto_mecanico,
-                monto_autocar, monto_fondo, pago, conclusion, firmado_por, taller_firma, firmada_at, huella, patente, marca, modelo)
-                VALUES (:c, :m, :u, 'mercadolibre', 'firmada', 100000, 77000, 23000, 8000, 'liberado', 'recomendable', 'Prueba',
+                monto_autocar, pago, conclusion, firmado_por, taller_firma, firmada_at, huella, patente, marca, modelo)
+                VALUES (:c, :m, :u, 'mercadolibre', 'firmada', 100000, 77000, 23000, 'liberado', 'recomendable', 'Prueba',
                 'Taller de Prueba', now(), :h, :p, :marca, :modelo) RETURNING id");
             $st->execute(['c' => $comprador, 'm' => $mecanico, 'u' => "https://auto.mercadolibre.com.ar/MLA-9$n-x-_JM",
                 'h' => str_repeat('a', 64), 'p' => sprintf('AB%03dCD', $n), 'marca' => $marca, 'modelo' => $modelo]);

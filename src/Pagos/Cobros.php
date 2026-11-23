@@ -11,11 +11,11 @@ use Throwable;
 
 /**
  * El cobro de cada inspección con Mercado Pago (tabla cobro, migración 031). Toda la plata entra a la cuenta de
- * AutoCar; a los mecánicos se les sigue pagando aparte (a los 10 y 15 días, simulado), como en Inspecciones\Fondo.
+ * AutoCar; a los mecánicos se les paga aparte (simulado).
  *   Al pedir la inspección se arma la order y el comprador va a pagar. Hasta que paga, el mecánico no la puede aceptar.
  *   Se entera de que pagó por el aviso de Mercado Pago (webhook) o cuando el comprador vuelve al sitio, pero
  *   nunca le cree al aviso: siempre le pregunta la order a Mercado Pago con el token de AutoCar.
- *   Si la inspección se rechaza, se cancela, no se hace, se cae o procede un reclamo, se devuelve por Mercado Pago.
+ *   Si la inspección se rechaza, se cancela, no se hace o se cae, se devuelve por Mercado Pago.
  * Con MP_ACTIVO=false no hace nada (ni lee la tabla): el pago sigue simulado como antes.
  */
 final class Cobros
@@ -128,7 +128,7 @@ final class Cobros
     }
 
     /**
-     * La inspección no siguió (o procedió un reclamo): si pagó, se le devuelve todo por Mercado Pago; si no pagó,
+     * La inspección no siguió: si pagó, se le devuelve todo por Mercado Pago; si no pagó,
      * el cobro se cancela. Se llama fuera de las transacciones (es un pedido a otro servidor). Si Mercado Pago falla,
      * queda en el log y el cobro sigue pagado, para devolverlo a mano.
      */

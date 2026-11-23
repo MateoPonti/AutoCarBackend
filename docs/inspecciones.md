@@ -1,10 +1,12 @@
 # Inspecciones: el mecánico que firma
 
-Estado al 09/11/2026, en `dev` y `main`: la base, las reglas de negocio y todos los endpoints están hechos y con pruebas. Las reglas juntas están en el § 8. El porqué del modelo y el plan completo están en `modelo-de-negocio/README.md` y `PLAN.md` del repo del front.
+Estado al 23/11/2026: la base, las reglas de negocio y todos los endpoints están hechos y con pruebas. **El 23/11 se sacaron los reclamos, el fondo de garantía y el historial por patente** (migraciones `034` y `035`, ver el § 1). Las reglas juntas están en el § 8. El porqué del modelo y el plan completo están en `modelo-de-negocio/README.md` y `PLAN.md` del repo del front.
 
 ## 1. La idea
 
-El comprador encuentra un auto en cualquier sitio (MercadoLibre, Kavak, Autocosmos o AutoCar), pega el link y **elige** un mecánico de la red por su ranking. El vendedor no puede elegirlo. El mecánico revisa el auto con un checklist y **firma el informe con su nombre**. Si se le pasó algo que se veía, el comprador reclama: si procede, se le devuelve la plata, se lo compensa y el mecánico baja en el ranking.
+El comprador encuentra un auto en cualquier sitio (MercadoLibre, Kavak, Autocosmos o AutoCar), pega el link y **elige** un mecánico de la red por su ranking. El vendedor no puede elegirlo. El mecánico revisa el auto con un checklist y **firma el informe con su nombre**, con fotos de lo que encontró y la patente con la foto de la chapa. Con eso el comprador decide **antes** de pagar el auto.
+
+**El informe reduce el riesgo, no lo elimina.** Si al mecánico se le pasa algo, ese es el punto ciego del servicio, y es un riesgo que asume el comprador: no hay reclamo ni devolución después de la firma. Se sacaron el 23/11 (después de la devolución del profe) porque no se pueden verificar (nadie puede saber si la falla estaba el día de la inspección o apareció después) y porque llegan cuando el comprador ya compró, o sea cuando la decisión ya está tomada. Tampoco hay historial por patente: un auto puede dejar de estar publicado a las dos semanas y las inspecciones viejas quedan sin sentido.
 
 AutoCar se queda una parte de cada inspección. El pago, por ahora, es **simulado**: se guarda el desglose, pero no se cobra.
 
@@ -15,11 +17,11 @@ Las reglas son **funciones puras** en `src/Inspecciones/`: no tocan la base ni l
 | Componente | Qué resuelve | Lo usa |
 |---|---|---|
 | **`Fuente`** | De qué sitio es el link: `mercadolibre`, `kavak`, `autocosmos`, `autocar` u `otro`. Mira solo la URL, no entra a la página. Si es de AutoCar (`vehiculo.html?id=N` en un host de `FRONT_URL`), devuelve también el id del vehículo. El pedido rechaza los `otro` (422): el mecánico nunca abre un link de un sitio cualquiera | Pedir una inspección |
-| **`Precio`** | El desglose: 23 % para AutoCar (redondeado a miles), un tercio de eso al fondo de garantía y el resto para el mecánico. También el tope de la compensación (3 veces el precio) | Pedir una inspección, resolver un reclamo |
+| **`Precio`** | El desglose: 23 % para AutoCar (redondeado a miles) y el resto para el mecánico. También el crédito si el auto se vendió | Pedir una inspección |
 | **`Checklist`** | Los 10 ítems que se revisan y sus resultados (`ok`, `observado`, `falla`). Valida lo que manda el mecánico: a medias para guardar, completo para firmar. Si un ítem no está "ok", pide la nota | Guardar el informe, firmar |
 | **`Huella`** | El SHA-256 del informe (ítems, conclusión, resumen, mecánico, taller y fecha) en un orden fijo. Prueba que el informe no cambió después de firmarlo. **No es una firma digital con validez legal** | Firmar, mostrar el informe |
-| **`Estados`** | Qué cambios de estado se permiten, cómo queda el pago con cada uno y el plazo de 15 días para reclamar | Aceptar, rechazar, cancelar, firmar, reclamar |
-| **`Ranking`** | El puntaje público de cada mecánico y el orden de la lista. Sale solo de las inspecciones y los reclamos: nadie paga para subir | Lista de mecánicos |
+| **`Estados`** | Qué cambios de estado se permiten y cómo queda el pago con cada uno | Aceptar, rechazar, cancelar, firmar |
+| **`Ranking`** | El orden de la lista de mecánicos, por experiencia: cuántas inspecciones firmó cada uno (y de ese modelo o marca). Nadie paga para subir | Lista de mecánicos |
 
 ### Cómo se relacionan
 
@@ -33,15 +35,13 @@ flowchart TB
     C -->|"ítems completos + conclusión"| H[Huella]
   end
   subgraph Despues["Después de la firma"]
-    E2[Estados] -->|"dentro de 15 días"| R[Reclamo]
-    R -->|"procede: tope de Precio"| P2[Precio]
-    R -->|"cuenta para"| K[Ranking]
+    H -->|"una firmada más"| K[Ranking]
   end
   Pedido --> Mecanico --> Despues
   K -.->|"orden de la lista de mecánicos"| Pedido
 ```
 
-El ranking cierra el círculo: el mecánico que revisa mal recibe reclamos que proceden, baja en la lista y le piden menos inspecciones.
+El ranking cierra el círculo: cada informe firmado le suma experiencia al mecánico, y el que más autos de ese modelo revisó aparece primero.
 
 ## 3. Las tablas
 
@@ -54,7 +54,6 @@ erDiagram
   usuario ||--o{ inspeccion : "mecánico revisa"
   vehiculo |o--o{ inspeccion : "solo si es de AutoCar"
   inspeccion ||--o{ inspeccion_item : "checklist"
-  inspeccion ||--o| reclamo : "uno como máximo"
 ```
 
 | Tabla | Qué guarda |
@@ -62,7 +61,6 @@ erDiagram
 | `taller` | El perfil del mecánico: nombre, dirección, localidad, teléfono y precio de la inspección. La clave es el `usuario_id` del mecánico. `demo = true` en los talleres de ejemplo |
 | `inspeccion` | El pedido entero: quién pide, a qué mecánico, el link y la fuente, los datos del auto, el estado, los montos que se fijaron al pedir, el pago simulado y, al firmar, la conclusión, el nombre del mecánico y del taller, la fecha y la huella |
 | `inspeccion_item` | Un renglón por ítem del checklist: código, resultado y nota |
-| `reclamo` | El reclamo del comprador (uno por inspección): qué ítem, qué pasó, si procede, la compensación y quién lo resolvió |
 
 **La base también controla** lo más importante, por si un endpoint se equivoca: los montos del mecánico y de AutoCar suman el precio, nadie se inspecciona a sí mismo y una inspección firmada tiene que tener conclusión, firmante, fecha y huella.
 
@@ -84,30 +82,19 @@ stateDiagram-v2
 - **La inspección es voluntaria para el vendedor.** Ninguna ley obliga a dejar revisar un usado. Si el vendedor no deja revisar el auto (o no está, o no es el auto del aviso), el mecánico la marca `no_realizada` con el motivo (`PATCH /api/mecanico/inspecciones/{id}` con `{"accion":"no_realizada","motivo":"..."}`, migración `018`): al comprador se le devuelve todo y ve el motivo en `motivo_rechazo`. Para el comprador, que el vendedor se niegue ya es información.
 
 - Una inspección **firmada no cambia más**: cualquier intento tiene que dar 409.
-- Después de la firma, el comprador tiene **15 días** para reclamar, una sola vez. Si el reclamo procede, el pago pasa a `reembolsado` y la compensación tiene un tope de 3 veces el precio.
+- No hay reclamo después de la firma (§ 1).
 
 ## 5. El ranking
 
-```
-puntaje = 5 × (1 − 2 × reclamos que procedieron ÷ inspecciones firmadas), con mínimo 0
-```
-
-| Firmadas | Procedieron | Puntaje |
-|---|---|---|
-| 10 | 0 | 5,0 |
-| 10 | 1 | 4,0 |
-| 10 | 5 | 0,0 |
-| 2 | 0 | "Nuevo en la red" (con menos de 3 no hay puntaje) |
-
-Orden: primero el puntaje, después la cantidad de firmadas, y los nuevos al final.
+Por experiencia: primero los que tienen al menos `ranking_minimo_firmadas` inspecciones firmadas (de fábrica 3), de más a menos; después los "Nuevo en la red". Al pedir la inspección de un auto, primero van los que revisaron ese modelo, después los que revisaron esa marca y después el resto (cada grupo de más a menos revisados). Antes del 23/11 el puntaje salía de los reclamos que procedieron; sin reclamos, lo que se puede medir es la experiencia.
 
 ## 6. Datos de demo
 
-`database/007-demo-inspecciones-solo-dev.sql`, **solo para la base de dev**: 5 mecánicos de Mercedes y Luján con su taller, marcados como demo. La contraseña de todos es `mecanico-demo`. Las inspecciones firmadas de ejemplo (para que el ranking tenga números) se cargan con `php bin/demo-historial.php`, que firma con el mismo código que la API: así la huella de cada informe es la real.
+`database/007-demo-inspecciones-solo-dev.sql`, **solo para la base de dev**: 5 mecánicos de Mercedes y Luján con su taller, marcados como demo. La contraseña de todos es `mecanico-demo`. Las inspecciones firmadas de ejemplo (para que el ranking tenga experiencia) se cargan con `php bin/demo-historial.php`, que firma con el mismo código que la API: así la huella de cada informe es la real.
 
 ## 7. Endpoints: hechos y pendientes
 
-Los números son los del `PLAN.md`. Los controladores son `InspeccionController` (comprador y ranking público), `MecanicoController` y `AdminReclamoController`. El acceso a la base está en `Inspeccion`, `Taller` y `Reclamos`, y las reglas nuevas, también puras, en `Pedido` y `Reclamo`. Pruebas: `tests/Unit/Inspecciones*Test.php` y `tests/Integration/Inspecciones*Test.php`; `InspeccionesCompradorTest::testRecorridoDeLaDemo` recorre la demo del 30/11 entera por la API.
+Los números son los del `PLAN.md`. Los controladores son `InspeccionController` (comprador y ranking público), y `MecanicoController`. El acceso a la base está en `Inspeccion` y `Taller`, y las reglas del pedido, también puras, en `Pedido`. Pruebas: `tests/Unit/Inspecciones*Test.php` y `tests/Integration/Inspecciones*Test.php`; `InspeccionesCompradorTest::testRecorridoDeLaDemo` recorre la demo del 30/11 entera por la API.
 
 | Tarea | Endpoint | Componentes que usa | Estado |
 |---|---|---|---|
@@ -117,10 +104,10 @@ Los números son los del `PLAN.md`. Los controladores son `InspeccionController`
 | B5 | `GET /api/mis-inspecciones`, `GET /api/inspecciones/{id}`, `POST .../cancelar` | `Estados` | ✅ |
 | B6 | `GET/PATCH /api/mecanico/inspecciones...` | `Estados` (+ `validarTurno`, `validarMotivo`) | ✅ |
 | B7 | `PUT .../informe`, `POST .../firma` | `Checklist`, `Huella`, `Estados` | ✅ |
-| B8 | `POST /api/inspecciones/{id}/reclamo`, `GET/PATCH /api/admin/reclamos...` | `Reclamo`, `Estados`, `Precio` | ✅ |
+| B8 | ~~Reclamos~~ | Se sacaron el 23/11 (migración `034`) | — |
 | Adhesión | `POST /api/solicitudes-taller`, `GET/PATCH /api/admin/solicitudes-taller...` | `SolicitudTaller`, `Taller::validar` | ✅ |
 
-**Quién no puede intervenir (409):** el mecánico no se pide una inspección a sí mismo (`mecanico_propio`), el vendedor no pide la de su propio auto de AutoCar (`vehiculo_propio`), no se elige al mecánico que publicó el auto (`mecanico_vendedor`) y nadie resuelve un reclamo sobre una inspección propia (`interes_propio`). Tampoco se pide dos veces el mismo link mientras hay una en curso (`duplicada`).
+**Quién no puede intervenir (409):** el mecánico no se pide una inspección a sí mismo (`mecanico_propio`), el vendedor no pide la de su propio auto de AutoCar (`vehiculo_propio`), no se elige al mecánico que publicó el auto (`mecanico_vendedor`)Tampoco se pide dos veces el mismo link mientras hay una en curso (`duplicada`).
 
 **Solo se eligen mecánicos de la red:** taller **aprobado** y activo, cuenta activa y un rol con `verificaciones.realizar`.
 
@@ -132,11 +119,11 @@ Los números son los del `PLAN.md`. Los controladores son `InspeccionController`
 
 Todavía no está decidido y no afecta a esta base:
 - Qué datos del auto externo se completan solos con lo que juntó el scraper y cuáles carga el comprador.
-- Los pagos al mecánico (a los 10 y a los 15 días) y Mercado Pago: se deciden al final.
+- Los pagos al mecánico: se le paga lo suyo cuando firma (sin reclamos no hay por qué retenerlo).
 
 ## 8. Reglas de negocio (resumen)
 
-Todas están en el back (el front repite algunas para avisar antes, pero la que vale es la del back). Los números (porcentajes, montos y días) están en la tabla `parametro` y los cambia el admin desde su panel (migración `021`); cada inspección guarda el tope y los días con los que se pidió.
+Todas están en el back (el front repite algunas para avisar antes, pero la que vale es la del back). Los números (porcentajes, montos y días) están en la tabla `parametro` y los cambia el admin desde su panel (migración `021`).
 
 **Cuenta del taller ("Adherí tu taller")**
 - La cuenta del taller es **aparte** de la cuenta personal. Se crea con la solicitud, sin sesión (`POST /api/solicitudes-taller`).
@@ -154,20 +141,20 @@ Todas están en el back (el front repite algunas para avisar antes, pero la que 
 - 409 si hay interés propio: el mecánico no se pide una a sí mismo (`mecanico_propio`), el vendedor no la pide para su auto (`vehiculo_propio`), no se elige al mecánico que publicó el auto (`mecanico_vendedor`), y no se pide dos veces el mismo link mientras hay una en curso (`duplicada`).
 
 **Plata (`Precio`, el pago todavía es simulado)**
-- Precio sugerido **$ 100.000**; cada taller pone el suyo entre **$ 70.000 y $ 150.000** (parámetros `precio_minimo`, `precio_sugerido` y `precio_maximo`). **77 %** para el mecánico y **23 %** para AutoCar (`comision_autocar`); de lo de AutoCar, **un tercio** va al fondo de garantía que paga los reclamos (`parte_fondo`). Se redondea a $ 1.000.
+- Precio sugerido **$ 100.000**; cada taller pone el suyo entre **$ 70.000 y $ 150.000** (parámetros `precio_minimo`, `precio_sugerido` y `precio_maximo`). **77 %** para el mecánico y **23 %** para AutoCar (`comision_autocar`). Se redondea a $ 1.000. No hay fondo de garantía.
 - Los montos se guardan al pedirla: si el taller cambia el precio después, no afecta a las pedidas.
-- Pago: `retenido` al pedir → `liberado` al firmar, o `reembolsado` si el mecánico la rechaza, el comprador la cancela o el reclamo procede.
+- Pago: `retenido` al pedir → `liberado` al firmar, o `reembolsado` si el mecánico la rechaza, el comprador la cancela, no se hace o se cae.
 
 **El informe**
 - El mecánico acepta con un turno de **hasta 60 días** o rechaza con motivo.
 - Checklist de **10 ítems** (`ok`, `observado` o `falla`); lo que no está `ok` exige nota. Conclusión: `recomendable`, `con_reparos` o `no_recomendable`.
-- Cada ítem con `falla` necesita **una foto** de lo que vio el mecánico (en `observado` es opcional; migración `027`). Así una falla no es solo una palabra: el comprador la ve y, si hay reclamo, el moderador también.
+- Cada ítem con `falla` necesita **una foto** de lo que vio el mecánico (en `observado` es opcional; migración `027`). Así una falla no es solo una palabra: el comprador la ve.
 - Para firmar hacen falta los 10 ítems y la conclusión. La firma guarda el nombre del mecánico y del taller, el momento y la **huella SHA-256**. Firmada, **no cambia más** (409).
 
 **Auto vendido (solo autos de AutoCar, `AutoVendido`; migración `024`)**
 - El vendedor confirma el turno que dio el mecánico (`POST /api/inspecciones/{id}/confirmar-turno`). No sabe qué mecánico es.
 - Si la publicación pasa a vendida, eliminada o rechazada **antes del turno**, la inspección queda `caida` y se le devuelve todo al comprador. Una edición (vuelve a `pendiente`) no la hace caer.
-- Si el turno ya pasó (el mecánico fue), **se firma igual**: el informe queda en la patente. Si al firmar el auto ya está vendido, el comprador recibe un **crédito** del `credito_vendido` % del precio (30 %), no la devolución completa.
+- Si el turno ya pasó (el mecánico fue), **se firma igual**. Si al firmar el auto ya está vendido, el comprador recibe un **crédito** del `credito_vendido` % del precio (30 %), no la devolución completa.
 - **Cupón:** turno confirmado y auto vendido dentro de `horas_cupon` (48 h) después de la firma → el mismo crédito. Las dos condiciones se comprueban en la base.
 - Un aviso de otro sitio que desaparece no siempre es un auto vendido: ahí no se hace nada solo.
 - El crédito lo pone AutoCar de su parte, se descuenta solo en la próxima inspección del comprador y vuelve si esa se cae, se cancela o se rechaza.
@@ -183,8 +170,6 @@ Todas están en el back (el front repite algunas para avisar antes, pero la que 
 - El voto de los mecánicos cambia el estado: con `fallas_votos_confirmar` (3) de un lado, y más que del otro, queda confirmada o descartada. Las descartadas no se le muestran al comprador.
 - **No se muestra el porcentaje con menos de `fallas_minimo_inspecciones` (20)** inspecciones firmadas del modelo.
 
-**Reclamos, fondo y ranking**
-- El comprador tiene **15 días** desde la firma para reclamar, **una sola vez** (parámetro `dias_reclamo`).
-- Lo resuelve un moderador o admin (`reclamos.resolver`), nunca alguien con interés en esa inspección (`interes_propio`).
-- Si procede: se devuelve el pago y la compensación llega hasta **3 veces** el precio (parámetro `tope_veces`). Las dos salen del **fondo de garantía**, que solo paga reclamos; el mecánico le paga al fondo una **franquicia** del 40 % de lo que cobró (parámetro `franquicia`). El saldo y los movimientos están en `GET /api/admin/fondo` (`Fondo`).
-- Ranking: `5 × (1 − 2 × procedentes ÷ firmadas)`, mínimo 0; con **menos de 3** firmadas, "Nuevo en la red" (§ 5). Nadie paga para subir.
+**Ranking**
+- Por experiencia (§ 5): más inspecciones firmadas primero; con **menos de 3**, "Nuevo en la red". Nadie paga para subir.
+- Sin reclamos ni fondo de garantía (§ 1): el informe reduce el riesgo, no lo elimina, y la decisión es del comprador.

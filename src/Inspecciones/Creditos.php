@@ -7,8 +7,8 @@ use AutoCar\Core\Database;
 use DateTimeImmutable;
 
 /**
- * Créditos del comprador cuando el auto se vendió (tabla credito, ver AutoVendido). Los paga AutoCar de su parte:
- * el fondo de garantía es solo para reclamos. Se usan solos en la próxima inspección que pide el comprador (uno por
+ * Créditos del comprador cuando el auto se vendió (tabla credito, ver AutoVendido). Los paga AutoCar de su parte.
+ * Se usan solos en la próxima inspección que pide el comprador (uno por
  * inspección, el más viejo primero) y vuelven a estar disponibles si esa inspección se cae, se cancela o se rechaza.
  */
 final class Creditos
