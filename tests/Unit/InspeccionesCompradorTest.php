@@ -4,10 +4,9 @@ declare(strict_types=1);
 namespace AutoCar\Tests\Unit;
 
 use AutoCar\Inspecciones\Pedido;
-use AutoCar\Inspecciones\Reclamo;
 use PHPUnit\Framework\TestCase;
 
-/** Reglas del pedido (B4) y del reclamo (B8) que no necesitan base. */
+/** Reglas del pedido (B4) que no necesitan base. */
 final class InspeccionesCompradorTest extends TestCase
 {
     private const FRONT = ['autocar-zeta.vercel.app'];
@@ -83,47 +82,5 @@ final class InspeccionesCompradorTest extends TestCase
         self::assertSame('mecanico_propio', Pedido::conflicto(1, 1, null)[0]);
         self::assertSame('vehiculo_propio', Pedido::conflicto(1, 2, 1)[0]);
         self::assertSame('mecanico_vendedor', Pedido::conflicto(1, 2, 2)[0]);
-    }
-
-    // --- Reclamo
-
-    public function testPedidoDeReclamo(): void
-    {
-        [$datos, $errores] = Reclamo::validarPedido(['descripcion' => ' Tenía un golpe en el zócalo y no lo marcó ', 'item_codigo' => 'carroceria']);
-        self::assertSame([], $errores);
-        self::assertSame('carroceria', $datos['item_codigo']);
-        self::assertSame('Tenía un golpe en el zócalo y no lo marcó', $datos['descripcion']);
-
-        self::assertArrayHasKey('descripcion', Reclamo::validarPedido(['descripcion' => 'mal'])[1]);
-        self::assertArrayHasKey('item_codigo', Reclamo::validarPedido(['descripcion' => str_repeat('x', 20), 'item_codigo' => 'tapizado'])[1]);
-        self::assertNull(Reclamo::validarPedido(['descripcion' => str_repeat('x', 20), 'item_codigo' => ''])[0]['item_codigo']);
-    }
-
-    public function testProcedeConCompensacionHastaElTope(): void
-    {
-        [$r, $errores] = Reclamo::validarResolucion(['procede' => true, 'compensacion' => 390000, 'respuesta' => 'Se veía en las fotos.'], 130000, 3);
-        self::assertSame([], $errores);
-        self::assertSame('procede', $r['estado']);
-        self::assertSame(390000.0, $r['compensacion']);
-
-        $pasado = Reclamo::validarResolucion(['procede' => true, 'compensacion' => 390001, 'respuesta' => 'ok, procede'], 130000, 3);
-        self::assertArrayHasKey('compensacion', $pasado[1]);
-        self::assertArrayHasKey('compensacion', Reclamo::validarResolucion(['procede' => true, 'respuesta' => 'ok, procede'], 130000, 3)[1]);
-        self::assertSame([], Reclamo::validarResolucion(['procede' => true, 'compensacion' => 0, 'respuesta' => 'Solo devolución'], 130000, 3)[1]);
-    }
-
-    public function testNoProcedeNoLlevaCompensacion(): void
-    {
-        [$r, $errores] = Reclamo::validarResolucion(['procede' => false, 'compensacion' => 999999, 'respuesta' => 'Era un defecto oculto.'], 130000, 3);
-        self::assertSame([], $errores);
-        self::assertSame('no_procede', $r['estado']);
-        self::assertNull($r['compensacion']);
-    }
-
-    public function testLaResolucionPideDecisionYRespuesta(): void
-    {
-        [, $errores] = Reclamo::validarResolucion(['procede' => 'si'], 130000, 3);
-        self::assertArrayHasKey('procede', $errores);
-        self::assertArrayHasKey('respuesta', $errores);
     }
 }

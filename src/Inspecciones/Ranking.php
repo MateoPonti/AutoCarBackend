@@ -6,117 +6,83 @@ namespace AutoCar\Inspecciones;
 use AutoCar\Parametros\Parametros;
 
 /**
- * Puntaje público de cada mecánico: sale solo de cómo trabajó, nunca de un pago.
- * puntaje = 5 × (1 − 2 × reclamos que procedieron ÷ inspecciones firmadas), con mínimo 0.
- * Con menos de 3 firmadas no hay puntaje: se muestra "Nuevo en la red".
- * El 2, el 3 y el 2,5 de la especialidad son parámetros (030, el admin los cambia); el 5 queda fijo porque el sitio
- * dibuja cinco estrellas. Sin indicar valores se usan los de fábrica (así se prueban sin base).
+ * Orden público de los mecánicos: por experiencia, nunca por un pago. Sin reclamos (se sacaron el 23/11: no hay
+ * forma de verificar si un informe falló), lo que se puede medir es cuántas inspecciones firmó cada uno.
+ * Con menos de ranking_minimo_firmadas (parámetro, de fábrica 3) aparece como "Nuevo en la red" y va después.
+ * Sin indicar valores se usan los de fábrica (así se prueba sin base).
  */
 final class Ranking
 {
-    public const MAXIMO          = 5.0;
     public const MINIMO_FIRMADAS = 3;
-    /** Cuánto pesa cada reclamo que procedió (el "2" de la fórmula) */
-    public const VECES_RECLAMO   = 2.0;
 
     /**
-     * Los valores de Parámetros (030). Si todavía no están en la base, los de fábrica.
-     * @return array{veces_reclamo: float, minimo_firmadas: int, especialidad_buena: float}
+     * El valor de Parámetros (030). Si todavía no está en la base, el de fábrica.
+     * @return array{minimo_firmadas: int}
      */
     public static function valores(): array
     {
         try {
-            return [
-                'veces_reclamo'      => Parametros::valor('ranking_veces_reclamo'),
-                'minimo_firmadas'    => (int)Parametros::valor('ranking_minimo_firmadas'),
-                'especialidad_buena' => Parametros::valor('ranking_especialidad_buena'),
-            ];
+            return ['minimo_firmadas' => (int)Parametros::valor('ranking_minimo_firmadas')];
         } catch (\RuntimeException) {
             return self::deFabrica();
         }
     }
 
-    /** @return array{veces_reclamo: float, minimo_firmadas: int, especialidad_buena: float} */
+    /** @return array{minimo_firmadas: int} */
     public static function deFabrica(): array
     {
-        return ['veces_reclamo' => self::VECES_RECLAMO, 'minimo_firmadas' => self::MINIMO_FIRMADAS,
-            'especialidad_buena' => self::ESPECIALIDAD_BUENA];
+        return ['minimo_firmadas' => self::MINIMO_FIRMADAS];
     }
 
-    /** @param array{veces_reclamo: float, minimo_firmadas: int, especialidad_buena: float}|null $v los de valores() */
-    public static function puntaje(int $firmadas, int $procedentes, ?array $v = null): ?float
+    /** Si todavía es "Nuevo en la red" (menos firmadas que el mínimo). */
+    public static function esNuevo(int $firmadas, ?array $v = null): bool
     {
         $v ??= self::deFabrica();
-        if ($firmadas < max($v['minimo_firmadas'], 1)) {
-            return null;
-        }
-        return self::cuenta($firmadas, $procedentes, $v['veces_reclamo']);
-    }
-
-    /** 5 × (1 − veces × reclamos ÷ revisados), entre 0 y 5 */
-    private static function cuenta(int $revisados, int $reclamos, float $veces): float
-    {
-        $reclamos = min(max($reclamos, 0), $revisados);
-        return round(max(0.0, self::MAXIMO * (1 - $veces * $reclamos / $revisados)), 1);
+        return $firmadas < max($v['minimo_firmadas'], 1);
     }
 
     /**
-     * Ordena los mecánicos: primero por puntaje (los nuevos al final) y después por cantidad de firmadas.
-     * @param array<array{firmadas: int, procedentes: int}> $mecanicos
-     * @return array la misma lista con "puntaje" agregado, ordenada
+     * Ordena los mecánicos: primero los que ya tienen el mínimo, de más a menos firmadas; después los nuevos.
+     * @param array<array{firmadas: int}> $mecanicos
+     * @return array la misma lista con "nuevo" agregado, ordenada
      */
     public static function ordenar(array $mecanicos, ?array $v = null): array
     {
         foreach ($mecanicos as &$m) {
-            $m['puntaje'] = self::puntaje((int)$m['firmadas'], (int)$m['procedentes'], $v);
+            $m['nuevo'] = self::esNuevo((int)$m['firmadas'], $v);
         }
         unset($m);
         usort($mecanicos, static fn(array $a, array $b): int =>
-            [$b['puntaje'] ?? -1, $b['firmadas']] <=> [$a['puntaje'] ?? -1, $a['firmadas']]);
+            [$a['nuevo'], -$a['firmadas']] <=> [$b['nuevo'], -$b['firmadas']]);
         return $mecanicos;
     }
 
-    /** De fábrica: desde este puntaje la especialidad es buena (con la fórmula de arriba: hasta 1 reclamo cada 4 revisados) */
-    public const ESPECIALIDAD_BUENA = 2.5;
-
     /**
-     * Especialidad en un auto: el mismo puntaje del ranking, pero solo con las inspecciones de ese modelo
-     * o, si no revisó ninguno, de otros modelos de la marca (autos parecidos). Sin el mínimo de 3: una sola cuenta.
-     * @param array{modelo: int, reclamos_modelo: int, marca: int, reclamos_marca: int} $r de Taller::revisados
-     * @return array{en: string, revisados: int, reclamos: int, puntaje: float, buena: bool}|null null si no revisó ninguno
+     * Especialidad en un auto: cuántos de ese modelo firmó o, si no revisó ninguno, cuántos de otros modelos de la marca.
+     * @param array{modelo: int, marca: int} $r de Taller::revisados
+     * @return array{en: string, revisados: int}|null null si no revisó ninguno de esa marca
      */
-    public static function especialidad(array $r, ?array $v = null): ?array
+    public static function especialidad(array $r): ?array
     {
-        $v ??= self::deFabrica();
-        [$en, $revisados, $reclamos] = $r['modelo'] > 0
-            ? ['modelo', $r['modelo'], $r['reclamos_modelo']]
-            : ['marca', $r['marca'], $r['reclamos_marca']];
-        if ($revisados === 0) {
-            return null;
-        }
-        $reclamos = min($reclamos, $revisados);
-        $puntaje = self::cuenta($revisados, $reclamos, $v['veces_reclamo']);
-        return ['en' => $en, 'revisados' => $revisados, 'reclamos' => $reclamos, 'puntaje' => $puntaje,
-            'buena' => $puntaje >= $v['especialidad_buena']];
+        [$en, $revisados] = $r['modelo'] > 0 ? ['modelo', $r['modelo']] : ['marca', $r['marca']];
+        return $revisados > 0 ? ['en' => $en, 'revisados' => $revisados] : null;
     }
 
     /**
-     * Ordena por especialidad: 1) buena en ese modelo, 2) buena en la marca, 3) sin experiencia, 4) mala (le
-     * procedieron reclamos en esos autos). Dentro de cada grupo, mejor especialidad y más revisados primero; si
-     * empatan, queda el orden del ranking general (usort es estable).
-     * @param array<array{especialidad: ?array}> $mecanicos ya ordenados por ranking
+     * Ordena por especialidad: 1) revisó ese modelo, 2) revisó la marca, 3) sin experiencia en esos autos.
+     * Dentro de cada grupo, más revisados primero; si empatan, queda el orden general (usort es estable).
+     * @param array<array{especialidad: ?array}> $mecanicos ya ordenados con ordenar()
      */
     public static function porEspecialidad(array $mecanicos): array
     {
         $clave = static function (array $m): array {
             $e = $m['especialidad'];
             $grupo = match (true) {
-                $e === null                        => 3,
-                !$e['buena']                       => 4,
-                $e['en'] === 'modelo'              => 1,
-                default                            => 2,
+                $e === null           => 3,
+                $e['en'] === 'modelo' => 1,
+                default               => 2,
             };
-            return [$grupo, -($e['puntaje'] ?? 0), -($e['revisados'] ?? 0)];
+            return [$grupo, -($e['revisados'] ?? 0)];
         };
         usort($mecanicos, static fn(array $a, array $b): int => $clave($a) <=> $clave($b));
         return $mecanicos;

@@ -78,41 +78,33 @@ final class InspeccionesTest extends TestCase
     public function testDesgloseDeLaInspeccionDeReferencia(): void
     {
         self::assertSame(
-            ['precio' => 130000.0, 'monto_mecanico' => 100000.0, 'monto_autocar' => 30000.0, 'monto_fondo' => 10000.0],
-            Precio::desglose(130000, 23, 33.3333),
+            ['precio' => 130000.0, 'monto_mecanico' => 100000.0, 'monto_autocar' => 30000.0],
+            Precio::desglose(130000, 23),
         );
     }
 
     public function testLasPartesSiempreSumanElPrecio(): void
     {
         foreach ([120000, 140000, 99999, 1000] as $precio) {
-            $d = Precio::desglose($precio, 23, 33.3333);
+            $d = Precio::desglose($precio, 23);
             self::assertEqualsWithDelta($precio, $d['monto_mecanico'] + $d['monto_autocar'], 0.001);
-            self::assertLessThanOrEqual($d['monto_autocar'], $d['monto_fondo']);
             self::assertGreaterThanOrEqual(0, $d['monto_mecanico']);
         }
-    }
-
-    public function testTopeDeLaCompensacion(): void
-    {
-        self::assertSame(390000.0, Precio::topeCompensacion(130000, 3));
-        self::assertSame(200000.0, Precio::topeCompensacion(100000, 2));
     }
 
     public function testDesgloseConElPrecioSugeridoDel14DeNoviembre(): void
     {
         self::assertSame(
-            ['precio' => 100000.0, 'monto_mecanico' => 77000.0, 'monto_autocar' => 23000.0, 'monto_fondo' => 8000.0],
-            Precio::desglose(100000, 23, 33.3333),
+            ['precio' => 100000.0, 'monto_mecanico' => 77000.0, 'monto_autocar' => 23000.0],
+            Precio::desglose(100000, 23),
         );
     }
 
     public function testSiElAdminCambiaLaComisionCambiaElDesglose(): void
     {
-        $d = Precio::desglose(100000, 20, 50);
+        $d = Precio::desglose(100000, 20);
         self::assertSame(80000.0, $d['monto_mecanico']);
         self::assertSame(20000.0, $d['monto_autocar']);
-        self::assertSame(10000.0, $d['monto_fondo']);
     }
 
     // --- Patente
@@ -147,71 +139,50 @@ final class InspeccionesTest extends TestCase
 
     public function testConMenosDeTresFirmadasEsNuevoEnLaRed(): void
     {
-        self::assertNull(Ranking::puntaje(0, 0));
-        self::assertNull(Ranking::puntaje(2, 0));
+        self::assertTrue(Ranking::esNuevo(0));
+        self::assertTrue(Ranking::esNuevo(2));
+        self::assertFalse(Ranking::esNuevo(3));
     }
 
-    public function testPuntajeSegunLosReclamosQueProcedieron(): void
+    public function testElMinimoSaleDeParametros(): void
     {
-        self::assertSame(5.0, Ranking::puntaje(10, 0));
-        self::assertSame(4.0, Ranking::puntaje(10, 1));
-        self::assertSame(0.0, Ranking::puntaje(10, 5));
-        self::assertSame(0.0, Ranking::puntaje(3, 3)); // nunca negativo
+        self::assertTrue(Ranking::esNuevo(4, ['minimo_firmadas' => 5]));
+        self::assertFalse(Ranking::esNuevo(5, ['minimo_firmadas' => 5]));
+        self::assertSame(['minimo_firmadas' => 3], Ranking::deFabrica());
     }
 
-    public function testElRankingUsaLosValoresDeParametros(): void
-    {
-        $v = ['veces_reclamo' => 1.0, 'minimo_firmadas' => 5, 'especialidad_buena' => 4.0];
-        self::assertNull(Ranking::puntaje(4, 0, $v)); // con 5 de mínimo, 4 firmadas es nuevo
-        self::assertSame(4.5, Ranking::puntaje(10, 1, $v)); // 5 × (1 − 1 × 1 ÷ 10)
-        $e = Ranking::especialidad(['modelo' => 10, 'reclamos_modelo' => 2, 'marca' => 0, 'reclamos_marca' => 0], $v);
-        self::assertSame(4.0, $e['puntaje']);
-        self::assertTrue($e['buena']);
-        self::assertSame(Ranking::deFabrica(), ['veces_reclamo' => 2.0, 'minimo_firmadas' => 3, 'especialidad_buena' => 2.5]);
-    }
-
-    public function testOrdenPorPuntajeDespuesPorCantidadYLosNuevosAlFinal(): void
+    public function testOrdenPorExperienciaYLosNuevosAlFinal(): void
     {
         $orden = Ranking::ordenar([
-            ['id' => 'nuevo', 'firmadas' => 1, 'procedentes' => 0],
-            ['id' => 'pocas', 'firmadas' => 4, 'procedentes' => 0],
-            ['id' => 'reclamado', 'firmadas' => 20, 'procedentes' => 2],
-            ['id' => 'muchas', 'firmadas' => 30, 'procedentes' => 0],
+            ['id' => 'nuevo', 'firmadas' => 1],
+            ['id' => 'pocas', 'firmadas' => 4],
+            ['id' => 'otro-nuevo', 'firmadas' => 2],
+            ['id' => 'muchas', 'firmadas' => 30],
         ]);
-        self::assertSame(['muchas', 'pocas', 'reclamado', 'nuevo'], array_column($orden, 'id'));
-        self::assertSame(4.0, $orden[2]['puntaje']);
+        self::assertSame(['muchas', 'pocas', 'otro-nuevo', 'nuevo'], array_column($orden, 'id'));
+        self::assertSame([false, false, true, true], array_column($orden, 'nuevo'));
     }
 
-    public function testLaEspecialidadSaleDelModeloYSiNoDeLaMarcaYCuentaLosReclamos(): void
+    public function testLaEspecialidadSaleDelModeloYSiNoDeLaMarca(): void
     {
-        $e = Ranking::especialidad(['modelo' => 4, 'reclamos_modelo' => 1, 'marca' => 9, 'reclamos_marca' => 0]);
-        self::assertSame(['en' => 'modelo', 'revisados' => 4, 'reclamos' => 1, 'puntaje' => 2.5, 'buena' => true], $e);
-
-        $e = Ranking::especialidad(['modelo' => 0, 'reclamos_modelo' => 0, 'marca' => 2, 'reclamos_marca' => 1]);
-        self::assertSame('marca', $e['en']);
-        self::assertSame(0.0, $e['puntaje']);
-        self::assertFalse($e['buena']);
-
-        self::assertNull(Ranking::especialidad(['modelo' => 0, 'reclamos_modelo' => 0, 'marca' => 0, 'reclamos_marca' => 0]));
+        self::assertSame(['en' => 'modelo', 'revisados' => 4], Ranking::especialidad(['modelo' => 4, 'marca' => 9]));
+        self::assertSame(['en' => 'marca', 'revisados' => 2], Ranking::especialidad(['modelo' => 0, 'marca' => 2]));
+        self::assertNull(Ranking::especialidad(['modelo' => 0, 'marca' => 0]));
     }
 
-    public function testPorEspecialidadBuenaEnElModeloDespuesLaMarcaDespuesSinExperienciaYLaMalaAlFinal(): void
+    public function testPorEspecialidadPrimeroElModeloDespuesLaMarcaYDespuesSinExperiencia(): void
     {
-        $esp = static fn(int $modelo, int $reclamosModelo, int $marca = 0, int $reclamosMarca = 0): ?array =>
-            Ranking::especialidad(['modelo' => $modelo, 'reclamos_modelo' => $reclamosModelo, 'marca' => $marca, 'reclamos_marca' => $reclamosMarca]);
+        $esp = static fn(int $modelo, int $marca = 0): ?array => Ranking::especialidad(['modelo' => $modelo, 'marca' => $marca]);
         // En el orden del ranking general
         $orden = Ranking::porEspecialidad([
-            ['id' => 'mejor-ranking-sin-experiencia', 'especialidad' => $esp(0, 0)],
-            ['id' => 'mala-en-el-modelo', 'especialidad' => $esp(3, 2)],
-            ['id' => 'buena-en-la-marca', 'especialidad' => $esp(0, 0, 6, 0)],
-            ['id' => 'modelo-pocos', 'especialidad' => $esp(2, 0)],
-            ['id' => 'modelo-muchos', 'especialidad' => $esp(7, 0)],
-            ['id' => 'modelo-con-un-reclamo', 'especialidad' => $esp(8, 1)],
+            ['id' => 'mejor-ranking-sin-experiencia', 'especialidad' => $esp(0)],
+            ['id' => 'en-la-marca', 'especialidad' => $esp(0, 6)],
+            ['id' => 'modelo-pocos', 'especialidad' => $esp(2)],
+            ['id' => 'modelo-muchos', 'especialidad' => $esp(7)],
             ['id' => 'otro-sin-experiencia', 'especialidad' => null],
         ]);
         self::assertSame([
-            'modelo-muchos', 'modelo-pocos', 'modelo-con-un-reclamo', 'buena-en-la-marca',
-            'mejor-ranking-sin-experiencia', 'otro-sin-experiencia', 'mala-en-el-modelo',
+            'modelo-muchos', 'modelo-pocos', 'en-la-marca', 'mejor-ranking-sin-experiencia', 'otro-sin-experiencia',
         ], array_column($orden, 'id'));
     }
 
@@ -282,7 +253,7 @@ final class InspeccionesTest extends TestCase
         self::assertNotSame($a, $c);
     }
 
-    // --- Estados y plazo de reclamo
+    // --- Estados
 
     public function testTransicionesPermitidas(): void
     {
@@ -302,18 +273,4 @@ final class InspeccionesTest extends TestCase
         self::assertNull(Estados::pagoAl('aceptada'));
     }
 
-    public function testPlazoDeQuinceDiasParaReclamar(): void
-    {
-        $firma = new DateTimeImmutable('2026-11-01 10:00');
-        self::assertTrue(Estados::enPlazoDeReclamo($firma, new DateTimeImmutable('2026-11-16 10:00'), 15));
-        self::assertFalse(Estados::enPlazoDeReclamo($firma, new DateTimeImmutable('2026-11-16 10:01'), 15));
-        self::assertFalse(Estados::enPlazoDeReclamo($firma, new DateTimeImmutable('2026-10-31 10:00'), 15));
-    }
-
-    public function testElPlazoEsElQueTeniaLaInspeccion(): void
-    {
-        $firma = new DateTimeImmutable('2026-11-01 10:00');
-        self::assertFalse(Estados::enPlazoDeReclamo($firma, new DateTimeImmutable('2026-11-12 10:00'), 10));
-        self::assertTrue(Estados::enPlazoDeReclamo($firma, new DateTimeImmutable('2026-11-12 10:00'), 15));
-    }
 }

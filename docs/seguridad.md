@@ -56,7 +56,7 @@ Lo que dice "verificado" se probó contra producción (`https://autocar-zeta.ver
 - Cada ruta declara lo que pide en `src/routes.php`: `auth` (con sesión), `usuario` (compra y vende), o un permiso (`permiso:vehiculos.moderar`, `permiso:parametros.editar`…).
 - El rol **no se guarda en la sesión**: en cada pedido se leen de la base el usuario (si sigue activo) y los permisos de su rol (`rol`, `permiso`, `rol_permiso`). Una baja o un cambio de rol surten efecto al instante.
 - Roles: `usuario`, `mecanico`, `moderador` y `admin`. El equipo y los talleres no compran ni venden (403).
-- **Reglas de dueño y conflicto de interés**, aparte de los permisos: solo el dueño ve y cambia lo suyo (publicaciones, chats, inspecciones, búsquedas); nadie modera su propia publicación (409); nadie resuelve un reclamo en el que tiene interés; no se puede guardar en favoritos ni abrir un chat sobre un auto propio (409).
+- **Reglas de dueño y conflicto de interés**, aparte de los permisos: solo el dueño ve y cambia lo suyo (publicaciones, chats, inspecciones, búsquedas); nadie modera su propia publicación (409); no se puede guardar en favoritos ni abrir un chat sobre un auto propio (409).
 - **Cambios concurrentes:** los `UPDATE` de estado exigen el estado que se leyó (`AND estado = :desde`). Si dos personas deciden a la vez, la segunda recibe 409. Un solo pedido de inspección en curso por comprador y aviso, con índice único (`020-seguridad.sql`).
 
 ## 6. Datos que entran

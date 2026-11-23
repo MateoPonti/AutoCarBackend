@@ -28,54 +28,48 @@ final class Taller
         WHERE rp.rol_id = u.rol_id AND p.nombre = 'verificaciones.realizar')";
 
     /**
-     * Los mecánicos de la red con lo que hace falta para el ranking (B3): inspecciones firmadas y reclamos que
-     * procedieron. Ordenados con Ranking::ordenar. Con $localidad, solo los de esa localidad (sin distinguir mayúsculas).
+     * Los mecánicos de la red con lo que hace falta para el ranking (B3): cuántas inspecciones firmaron.
+     * Ordenados con Ranking::ordenar. Con $localidad, solo los de esa localidad (sin distinguir mayúsculas).
      */
     public static function red(?string $localidad): array
     {
         $where = self::EN_LA_RED . ($localidad !== null ? ' AND lower(t.localidad) = lower(:loc)' : '');
         $st = Database::pdo()->prepare(
             "SELECT t.usuario_id, u.nombre AS mecanico, t.nombre, t.direccion, t.localidad, t.precio_inspeccion,
-                    (SELECT COUNT(*) FROM inspeccion i WHERE i.mecanico_id = t.usuario_id AND i.estado = 'firmada') AS firmadas,
-                    (SELECT COUNT(*) FROM reclamo r JOIN inspeccion i ON i.id = r.inspeccion_id
-                      WHERE i.mecanico_id = t.usuario_id AND r.estado = 'procede') AS procedentes
+                    (SELECT COUNT(*) FROM inspeccion i WHERE i.mecanico_id = t.usuario_id AND i.estado = 'firmada') AS firmadas
              FROM taller t JOIN usuario u ON u.id = t.usuario_id
              WHERE $where ORDER BY t.nombre"
         );
         $st->execute($localidad !== null ? ['loc' => $localidad] : []);
         return Ranking::ordenar(array_map(static function (array $f): array {
             $f['firmadas'] = (int)$f['firmadas'];
-            $f['procedentes'] = (int)$f['procedentes'];
             return $f;
         }, $st->fetchAll()), Ranking::valores());
     }
 
     /**
-     * Cuántas inspecciones firmadas de esa marca hizo cada mecánico y en cuántas procedió un reclamo:
+     * Cuántas inspecciones firmadas de esa marca hizo cada mecánico:
      * "modelo" = del mismo modelo, "marca" = de otros modelos de la marca (los autos parecidos).
-     * Con eso sale la especialidad (Ranking::especialidad): haber revisado muchos no alcanza si salieron mal.
-     * @return array<int, array{modelo: int, reclamos_modelo: int, marca: int, reclamos_marca: int}> por mecanico_id
+     * Con eso sale la especialidad (Ranking::especialidad).
+     * @return array<int, array{modelo: int, marca: int}> por mecanico_id
      */
     public static function revisados(string $marca, ?string $modelo): array
     {
         $st = Database::pdo()->prepare(
             "SELECT i.mecanico_id,
                     COUNT(*) FILTER (WHERE lower(i.modelo) = lower(:m1)) AS modelo,
-                    COUNT(*) FILTER (WHERE lower(i.modelo) = lower(:m2) AND r.inspeccion_id IS NOT NULL) AS reclamos_modelo,
-                    COUNT(*) FILTER (WHERE lower(i.modelo) IS DISTINCT FROM lower(:m3)) AS marca,
-                    COUNT(*) FILTER (WHERE lower(i.modelo) IS DISTINCT FROM lower(:m4) AND r.inspeccion_id IS NOT NULL) AS reclamos_marca
+                    COUNT(*) FILTER (WHERE lower(i.modelo) IS DISTINCT FROM lower(:m2)) AS marca
              FROM inspeccion i
-             LEFT JOIN (SELECT DISTINCT inspeccion_id FROM reclamo WHERE estado = 'procede') r ON r.inspeccion_id = i.id
              WHERE i.estado = 'firmada' AND lower(i.marca) = lower(:marca)
              GROUP BY i.mecanico_id"
         );
         $m = $modelo ?? '';
-        $st->execute(['marca' => $marca, 'm1' => $m, 'm2' => $m, 'm3' => $m, 'm4' => $m]);
+        $st->execute(['marca' => $marca, 'm1' => $m, 'm2' => $m]);
         $porMecanico = [];
         foreach ($st->fetchAll() as $f) {
             $porMecanico[(int)$f['mecanico_id']] = [
-                'modelo' => (int)$f['modelo'], 'reclamos_modelo' => (int)$f['reclamos_modelo'],
-                'marca'  => (int)$f['marca'],  'reclamos_marca'  => (int)$f['reclamos_marca'],
+                'modelo' => (int)$f['modelo'],
+                'marca'  => (int)$f['marca'],
             ];
         }
         return $porMecanico;
@@ -110,9 +104,7 @@ final class Taller
             'precio_inspeccion' => (float)$m['precio_inspeccion'],
             'desglose'          => Precio::desgloseActual((float)$m['precio_inspeccion']),
             'firmadas'          => $m['firmadas'],
-            'reclamos_procedentes' => $m['procedentes'],
-            'puntaje'           => $m['puntaje'],
-            'nuevo'             => $m['puntaje'] === null,
+            'nuevo'             => $m['nuevo'],
         ];
     }
 

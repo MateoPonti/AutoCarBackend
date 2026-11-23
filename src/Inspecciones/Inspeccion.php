@@ -5,7 +5,6 @@ namespace AutoCar\Inspecciones;
 
 use AutoCar\Comparador\Clave;
 use AutoCar\Core\Database;
-use AutoCar\Parametros\Parametros;
 use AutoCar\Pagos\Cobros;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -23,22 +22,18 @@ final class Inspeccion
 
     private const COLUMNAS = 'i.id, i.comprador_id, i.mecanico_id, i.vehiculo_id, i.url, i.fuente, i.titulo, i.anio,
         i.kilometraje, i.precio_publicado, i.localidad, i.estado, i.fecha_turno, i.motivo_rechazo, i.precio,
-        i.monto_mecanico, i.monto_autocar, i.monto_fondo, i.tope_veces, i.dias_reclamo, i.pago, i.conclusion, i.resumen, i.firmado_por,
+        i.monto_mecanico, i.monto_autocar, i.pago, i.conclusion, i.resumen, i.firmado_por,
         i.taller_firma, i.firmada_at, i.huella, i.patente, i.created_at, i.updated_at, i.turno_confirmado_at, i.credito_usado,
         c.tipo AS credito_tipo, c.monto AS credito_monto, i.marca, i.modelo,
         EXISTS (SELECT 1 FROM inspeccion_patente_foto pf WHERE pf.inspeccion_id = i.id) AS tiene_foto_patente, u.nombre AS comprador_nombre,
         (SELECT v.estado FROM vehiculo v WHERE v.id = i.vehiculo_id) AS vehiculo_estado,
-        mu.nombre AS mecanico_nombre, t.nombre AS taller_nombre, t.direccion AS taller_direccion, t.localidad AS taller_localidad,
-        r.id AS reclamo_id, r.item_codigo AS reclamo_item, r.descripcion AS reclamo_descripcion, r.estado AS reclamo_estado,
-        r.compensacion AS reclamo_compensacion, r.respuesta AS reclamo_respuesta, r.created_at AS reclamo_created_at,
-        r.resuelto_at AS reclamo_resuelto_at';
+        mu.nombre AS mecanico_nombre, t.nombre AS taller_nombre, t.direccion AS taller_direccion, t.localidad AS taller_localidad';
 
-    // El comprador, el mecánico con su taller y el reclamo (si hay) vienen en la misma consulta
+    // El comprador y el mecánico con su taller vienen en la misma consulta
     private const DESDE = 'FROM inspeccion i
         JOIN usuario u ON u.id = i.comprador_id
         JOIN usuario mu ON mu.id = i.mecanico_id
         LEFT JOIN taller t ON t.usuario_id = i.mecanico_id
-        LEFT JOIN reclamo r ON r.inspeccion_id = i.id
         LEFT JOIN credito c ON c.inspeccion_id = i.id';
 
     // Cómo se ordena cada pestaña de la bandeja del mecánico
@@ -117,15 +112,14 @@ final class Inspeccion
 
     /**
      * Alta del pedido (B4). $datos ya validados con Pedido::validar; $montos de Precio::desgloseActual.
-     * Guarda también el tope y los días de reclamo de hoy: si el admin los cambia, esta inspección sigue con los suyos.
      * → id
      */
     public static function crear(int $compradorId, array $datos, array $montos): int
     {
         $st = self::pdo()->prepare(
             'INSERT INTO inspeccion (comprador_id, mecanico_id, vehiculo_id, url, url_clave, fuente, titulo, anio, kilometraje,
-               precio_publicado, localidad, precio, monto_mecanico, monto_autocar, monto_fondo, tope_veces, dias_reclamo, marca, modelo, origen)
-             VALUES (:c, :m, :v, :url, :clave, :fuente, :titulo, :anio, :km, :pp, :loc, :precio, :mm, :ma, :mf, :tope, :dias, :marca, :modelo, :origen)
+               precio_publicado, localidad, precio, monto_mecanico, monto_autocar, marca, modelo, origen)
+             VALUES (:c, :m, :v, :url, :clave, :fuente, :titulo, :anio, :km, :pp, :loc, :precio, :mm, :ma, :marca, :modelo, :origen)
              RETURNING id'
         );
         $st->execute([
@@ -134,17 +128,9 @@ final class Inspeccion
             'fuente' => $datos['fuente'], 'titulo' => $datos['titulo'], 'anio' => $datos['anio'],
             'km' => $datos['kilometraje'], 'pp' => $datos['precio_publicado'], 'loc' => $datos['localidad'],
             'precio' => $montos['precio'], 'mm' => $montos['monto_mecanico'], 'ma' => $montos['monto_autocar'],
-            'mf' => $montos['monto_fondo'], 'tope' => Parametros::valor('tope_veces'),
-            'dias' => (int)Parametros::valor('dias_reclamo'),
             'marca' => $datos['marca'] ?? null, 'modelo' => $datos['modelo'] ?? null, 'origen' => $datos['origen'] ?? null,
         ]);
         return (int)$st->fetchColumn();
-    }
-
-    /** Hasta cuándo puede reclamar el comprador, o null si no está firmada. */
-    public static function reclamoHasta(?string $firmadaAt, int $dias): ?DateTimeImmutable
-    {
-        return $firmadaAt === null ? null : (new DateTimeImmutable($firmadaAt))->modify('+' . $dias . ' days');
     }
 
     /** @return array<string, int> cantidad por estado (todos los estados, con 0 si no hay) */
@@ -270,55 +256,6 @@ final class Inspeccion
         return $st->fetchAll(PDO::FETCH_COLUMN);
     }
 
-    /**
-     * El historial que trae el informe: las otras inspecciones firmadas del mismo auto (misma patente), la más nueva
-     * primero. Si esta ya está firmada, solo las de antes (si firmaron en el mismo segundo, desempata el id). No se busca por patente desde afuera: lo ven los que ven
-     * esta inspección (el comprador que la pagó, el mecánico y quien resuelve reclamos). De cada una va un resumen y
-     * qué ítems salieron observados o con falla; las notas y las fotos no. Nada del comprador ni del dueño.
-     */
-    public static function anteriores(int $id, ?string $patente, ?string $firmadaAt): array
-    {
-        if ($patente === null) {
-            return [];
-        }
-        $st = self::pdo()->prepare(
-            "SELECT i.firmada_at, i.titulo, i.anio, i.kilometraje, i.conclusion, i.taller_firma,
-                    (SELECT string_agg(it.codigo || ':' || it.resultado, ',') FROM inspeccion_item it
-                      WHERE it.inspeccion_id = i.id AND it.resultado <> 'ok') AS fallas,
-                    EXISTS (SELECT 1 FROM reclamo r WHERE r.inspeccion_id = i.id AND r.estado = 'procede') AS reclamo_procedente
-               FROM inspeccion i
-              WHERE i.patente = :p AND i.estado = 'firmada' AND i.id <> :id
-                AND (CAST(:hasta AS TIMESTAMPTZ) IS NULL OR (i.firmada_at, i.id) < (CAST(:hasta AS TIMESTAMPTZ), :id2))
-              ORDER BY i.firmada_at DESC, i.id DESC LIMIT 20"
-        );
-        $st->execute(['p' => $patente, 'id' => $id, 'id2' => $id, 'hasta' => $firmadaAt]);
-        $lista = [];
-        foreach ($st->fetchAll() as $f) {
-            // "frenos:falla,motor:observado" → [{codigo, resultado}], en el orden del checklist
-            $porCodigo = [];
-            foreach (array_filter(explode(',', (string)$f['fallas'])) as $par) {
-                [$codigo, $resultado] = explode(':', $par);
-                $porCodigo[$codigo] = $resultado;
-            }
-            $fallas = [];
-            foreach (array_keys(Checklist::ITEMS) as $codigo) {
-                if (isset($porCodigo[$codigo])) {
-                    $fallas[] = ['codigo' => $codigo, 'resultado' => $porCodigo[$codigo]];
-                }
-            }
-            $lista[] = [
-                'firmada_at'         => (new DateTimeImmutable($f['firmada_at']))->format(DATE_ATOM),
-                'titulo'             => $f['titulo'],
-                'anio'               => $f['anio'] === null ? null : (int)$f['anio'],
-                'kilometraje'        => $f['kilometraje'] === null ? null : (int)$f['kilometraje'],
-                'conclusion'         => $f['conclusion'],
-                'fallas'             => $fallas,
-                'taller'             => $f['taller_firma'],
-                'reclamo_procedente' => (bool)$f['reclamo_procedente'],
-            ];
-        }
-        return $lista;
-    }
 
     /** Cierra el informe. Se llama dentro de una transacción con la fila bloqueada y el estado ya revisado. */
     public static function firmar(int $id, string $firmadoPor, string $taller, DateTimeImmutable $momento, string $huella): void
@@ -379,10 +316,6 @@ final class Inspeccion
             'turno_confirmado_at' => $fecha($i['turno_confirmado_at']),
             'monto_mecanico'   => (float)$i['monto_mecanico'],
             'monto_autocar'    => (float)$i['monto_autocar'],
-            'monto_fondo'      => (float)$i['monto_fondo'],
-            // Con los que se pidió (si el admin cambia los parámetros, esta inspección sigue con estos)
-            'tope_veces'       => (float)$i['tope_veces'],
-            'dias_reclamo'     => (int)$i['dias_reclamo'],
             'pago'             => $i['pago'],
             'conclusion'       => $i['conclusion'],
             'resumen'          => $i['resumen'],
@@ -403,25 +336,8 @@ final class Inspeccion
                 'direccion' => $i['taller_direccion'],
                 'localidad' => $i['taller_localidad'],
             ],
-            'reclamo'          => $i['reclamo_id'] === null ? null : [
-                'id'           => (int)$i['reclamo_id'],
-                'estado'       => $i['reclamo_estado'],
-                'item_codigo'  => $i['reclamo_item'],
-                'descripcion'  => $i['reclamo_descripcion'],
-                'compensacion' => $numero($i['reclamo_compensacion']),
-                'respuesta'    => $i['reclamo_respuesta'],
-                'created_at'   => $fecha($i['reclamo_created_at']),
-                'resuelto_at'  => $fecha($i['reclamo_resuelto_at']),
-            ],
         ];
-        // El comprador puede reclamar una vez, hasta los días de reclamo de esta inspección después de la firma
-        $hasta = self::reclamoHasta($i['firmada_at'], (int)$i['dias_reclamo']);
-        $datos['reclamo_hasta'] = $hasta?->format(DATE_ATOM);
-        $datos['puede_reclamar'] = $i['estado'] === 'firmada' && $i['reclamo_id'] === null
-            && Estados::enPlazoDeReclamo(new DateTimeImmutable($i['firmada_at']), new DateTimeImmutable(), (int)$i['dias_reclamo']);
         if ($items !== null) {
-            // Con el detalle va el historial del auto (las otras inspecciones de la misma patente)
-            $datos['anteriores'] = self::anteriores((int)$i['id'], $i['patente'], $i['firmada_at']);
             // Idea A: el costo total (precio del aviso + el presupuesto vigente más barato de cada arreglo)
             $datos['presupuestos'] = [];
             $datos['costo_total'] = null;
