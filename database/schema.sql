@@ -1734,3 +1734,96 @@ CREATE TABLE IF NOT EXISTS cobro (
   updated_at    TIMESTAMPTZ   NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_cobro_orden ON cobro (orden_id);
+
+-- 032: afiliación con las plataformas del metabuscador (convenio simulado): clics de salida, tarifa por clic y meses cobrados
+CREATE TABLE IF NOT EXISTS convenio_plataforma (
+  fuente      VARCHAR(30)   PRIMARY KEY,               -- la misma clave que usa el metabuscador (mercadolibre, kavak…)
+  nombre      VARCHAR(60)   NOT NULL,
+  tarifa_clic NUMERIC(12,2) NOT NULL CHECK (tarifa_clic >= 0),
+  activo      BOOLEAN       NOT NULL DEFAULT true,     -- sin convenio activo los clics se cuentan, pero no se cobran
+  updated_at  TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+
+INSERT INTO convenio_plataforma (fuente, nombre, tarifa_clic) VALUES
+  ('mercadolibre', 'MercadoLibre', 150),
+  ('kavak',        'Kavak',        200),
+  ('autocosmos',   'Autocosmos',   150)
+ON CONFLICT (fuente) DO NOTHING;
+
+-- Un clic hacia el aviso de otra plataforma. "valido" = el que se cobra: de una cuenta personal y no repetido
+-- (el mismo usuario y el mismo auto cuentan una vez cada 24 horas). Los demás quedan para ver el tráfico total.
+CREATE TABLE IF NOT EXISTS clic_salida (
+  id         BIGINT       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  usuario_id INTEGER      REFERENCES usuario(id) ON DELETE SET NULL,
+  fuente     VARCHAR(30)  NOT NULL,
+  auto_id    VARCHAR(200) NOT NULL,
+  origen     VARCHAR(20),                                -- para_vos, destacado o metabuscador (desde dónde se tocó)
+  valido     BOOLEAN      NOT NULL,
+  created_at TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_clic_salida_fecha ON clic_salida (created_at, fuente);
+CREATE INDEX IF NOT EXISTS idx_clic_salida_repetido ON clic_salida (usuario_id, auto_id, created_at);
+
+-- Un mes cerrado que el admin marcó cobrado, con lo que se cobró en ese momento (si después cambia la tarifa, no se
+-- mueve). tipo empresa queda para el abono de las concesionarias.
+CREATE TABLE IF NOT EXISTS cobro_afiliacion (
+  tipo        VARCHAR(12)   NOT NULL CHECK (tipo IN ('plataforma', 'empresa')),
+  socio       VARCHAR(60)   NOT NULL,                  -- la fuente de la plataforma (o el id de la empresa)
+  mes         DATE          NOT NULL CHECK (mes = date_trunc('month', mes)::date),
+  cantidad    INTEGER       NOT NULL,                  -- clics válidos del mes
+  monto       NUMERIC(14,2) NOT NULL,
+  cobrado_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  cobrado_por INTEGER       REFERENCES usuario(id) ON DELETE SET NULL,
+  PRIMARY KEY (tipo, socio, mes)
+);
+
+-- 033: empresas (concesionarias), visitas a las publicaciones y su precio contra el mercado, y límite de autos de un particular
+INSERT INTO rol (nombre, descripcion) VALUES
+  ('empresa', 'Concesionaria o agencia: publica sin límite, con su insignia, su vitrina y su panel')
+ON CONFLICT (nombre) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS empresa (
+  usuario_id     INTEGER      PRIMARY KEY REFERENCES usuario(id) ON DELETE CASCADE,
+  razon_social   VARCHAR(100) NOT NULL,                 -- el nombre que se ve en la insignia y la vitrina
+  cuit           VARCHAR(13)  NOT NULL,                 -- 30-12345678-9
+  localidad      VARCHAR(100) NOT NULL,
+  telefono       VARCHAR(30)  NOT NULL,
+  sitio_web      VARCHAR(200),
+  estado         VARCHAR(10)  NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'aprobado', 'rechazado')),
+  motivo_rechazo VARCHAR(300),
+  resuelto_por   INTEGER      REFERENCES usuario(id) ON DELETE SET NULL,
+  resuelto_at    TIMESTAMPTZ,
+  created_at     TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  updated_at     TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_empresa_estado ON empresa (estado, created_at);
+
+CREATE TABLE IF NOT EXISTS vehiculo_visita (
+  vehiculo_id INTEGER     NOT NULL REFERENCES vehiculo(id) ON DELETE CASCADE,
+  visitante   VARCHAR(64) NOT NULL,                     -- u:<id> con sesión; si no, una marca anónima del día
+  dia         DATE        NOT NULL,                     -- en hora de Argentina
+  PRIMARY KEY (vehiculo_id, visitante, dia)
+);
+CREATE INDEX IF NOT EXISTS idx_vehiculo_visita_dia ON vehiculo_visita (dia, vehiculo_id);
+
+CREATE TABLE IF NOT EXISTS vehiculo_mercado (
+  vehiculo_id    INTEGER       PRIMARY KEY REFERENCES vehiculo(id) ON DELETE CASCADE,
+  precio         NUMERIC(14,2) NOT NULL,                -- con qué datos del auto se calculó (si cambian, se recalcula)
+  kilometraje    INTEGER       NOT NULL,
+  anio           SMALLINT      NOT NULL,
+  suficientes    BOOLEAN       NOT NULL,                -- hay al menos 5 autos parecidos
+  diferencia_pct NUMERIC(7,1),                          -- % contra el precio típico de los parecidos
+  mediana_precio NUMERIC(14,2),
+  mediana_km     INTEGER,
+  comparables    INTEGER       NOT NULL,
+  calculado_at   TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+
+ALTER TABLE parametro DROP CONSTRAINT IF EXISTS parametro_unidad_check;
+ALTER TABLE parametro ADD CONSTRAINT parametro_unidad_check
+  CHECK (unidad IN ('porcentaje', 'pesos', 'dias', 'veces', 'horas', 'puntos', 'autos'));
+
+INSERT INTO parametro (clave, valor, minimo, maximo, unidad, descripcion, orden) VALUES
+  ('limite_autos_particular', 3,     1, 50,       'autos', 'Autos activos (publicados o en revisión) que puede tener un particular; las empresas no tienen límite', 37),
+  ('abono_empresa_mensual',   50000, 0, 10000000, 'pesos', 'Abono mensual de cada empresa (incluye mantenimiento y aparición); el mismo para todas', 38)
+ON CONFLICT (clave) DO NOTHING;

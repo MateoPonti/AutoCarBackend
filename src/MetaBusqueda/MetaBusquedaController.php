@@ -161,6 +161,37 @@ final class MetaBusquedaController
         Response::json(['avisos' => self::intentar(static fn() => Avisos::delUsuario($docs, (int)Auth::id(), $sinVer))]);
     }
 
+    /**
+     * GET /api/meta-busquedas/{id}/novedades: la página de novedades de una búsqueda propia.
+     * → {busqueda, cotizacion_dolar, corrida: {actualizado, disponible, nuevos, bajaron, retirados, ..., items},
+     *    por_dia: [{fecha, nuevo, bajo, retirado}] (últimos 30 días, de los avisos de esta búsqueda), sin_ver}
+     * No cuenta como búsqueda en las estadísticas (eso es abrir los resultados).
+     */
+    public function novedades(int $id): void
+    {
+        $docs = self::docs();
+        $usuario = (int)Auth::id();
+        $b = self::intentar(static fn() => Busqueda::delUsuarioPorId($docs, $usuario, $id));
+        if ($b === null) {
+            self::noExiste();
+        }
+        $reporte = new Reporte(new Mercado($docs, Database::pdo()));
+        $corrida = self::intentar(static fn() => $reporte->novedadesDe($b));
+        $avisos = array_values(array_filter(
+            self::intentar(static fn() => Avisos::delUsuario($docs, $usuario, false, PHP_INT_MAX)),
+            static fn(array $a): bool => $a['busqueda_id'] === $id));
+        Response::json([
+            'busqueda'         => Busqueda::paraApi($b),
+            'cotizacion_dolar' => Cotizacion::actual(),
+            'corrida'          => $corrida,
+            'por_dia'          => Avisos::porDia($avisos, new \DateTimeImmutable(), self::DIAS_NOVEDADES),
+            'sin_ver'          => count(array_filter($avisos, static fn(array $a): bool => !$a['visto'])),
+        ]);
+    }
+
+    /** Días que muestra el gráfico de novedades */
+    private const DIAS_NOVEDADES = 30;
+
     /** Marca como vistos los avisos de una búsqueda propia. */
     public function marcarVistos(int $id): void
     {

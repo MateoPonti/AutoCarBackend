@@ -72,6 +72,13 @@ jobs:
         id: comparador
         if: ${{ steps.corridas.outputs.hay == 'si' && env.FIRESTORE_CREDENCIALES_JSON != '' }}
         run: php -d memory_limit=1G bin/armar-modelos.php
+      # El ranking de Explorar: el precio contra el mercado de las publicaciones de AutoCar (las lee de la API pública del
+      # back de este entorno, la de MARCAS_URL) queda en un documento de Firestore que el back copia a Neon
+      - name: Precio contra el mercado de los autos de Explorar
+        id: explorar
+        if: ${{ steps.comparador.outcome == 'success' && env.MARCAS_URL != '' }}
+        continue-on-error: true
+        run: php -d memory_limit=1G bin/precios-explorar.php
       - name: Metabuscador (carga la corrida de hoy)
         id: metabuscador
         if: ${{ steps.corridas.outputs.hay == 'si' && env.FIRESTORE_CREDENCIALES_JSON != '' }}
@@ -83,6 +90,7 @@ jobs:
           if grep -q "No se importó\|No se pudo leer" importar.log; then exit 1; fi
           grep "^Advertencia" importar.log | while read -r linea; do echo "::warning::$linea"; done
           exit 0
+
 
       - name: Resultado
         if: ${{ always() }}

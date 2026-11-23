@@ -9,6 +9,7 @@ use AutoCar\Catalogo\Vehiculo;
 use AutoCar\Core\Database;
 use AutoCar\Core\Request;
 use AutoCar\Core\Response;
+use AutoCar\Parametros\Parametros;
 use Throwable;
 
 /**
@@ -52,6 +53,7 @@ final class PublicacionController
         if ($errores) {
             Response::error(422, 'validacion', 'Revisá los datos ingresados.', $errores);
         }
+        self::controlarLimite();
 
         // Vehículo y fotos en una transacción: o se guarda todo o nada
         $pdo = Database::pdo();
@@ -83,6 +85,10 @@ final class PublicacionController
         $errores += self::marcaYModelo($datos, $errores);
         if ($errores) {
             Response::error(422, 'validacion', 'Revisá los datos ingresados.', $errores);
+        }
+        // Editar una rechazada la vuelve a revisión: vuelve a contar para el límite
+        if (!in_array($actual['estado'], Vehiculo::ACTIVOS, true)) {
+            self::controlarLimite($id);
         }
         Vehiculo::actualizar($id, $datos);
         Response::json(['vehiculo' => Vehiculo::paraApi(Vehiculo::find($id)) + ['fotos' => Foto::rutasDe($id)]]);
@@ -128,6 +134,23 @@ final class PublicacionController
         }
         Vehiculo::cambiarEstado($id, 'pendiente');
         Response::json(['vehiculo' => Vehiculo::paraApi(Vehiculo::find($id)) + ['fotos' => Foto::rutasDe($id)]]);
+    }
+
+    /**
+     * Un particular tiene hasta limite_autos_particular autos activos (publicados o en revisión); los borradores no
+     * existen (una publicación nace en revisión). Las empresas no tienen límite. A los que ya tenían más no se les baja
+     * nada: solo no pueden sumar otro hasta quedar por debajo. 409 limite_particular.
+     */
+    private static function controlarLimite(?int $excepto = null): void
+    {
+        if ((Auth::usuario()['rol'] ?? '') !== 'usuario') {
+            return;
+        }
+        $limite = (int)Parametros::valor('limite_autos_particular');
+        if (Vehiculo::activosDe((int)Auth::id(), $excepto) >= $limite) {
+            Response::error(409, 'limite_particular', "Una cuenta personal puede tener hasta $limite autos publicados o en revisión. "
+                . 'Marcá alguno como vendido o dalo de baja, o sumá tu concesionaria para publicar sin límite.');
+        }
     }
 
     /** PATCH /api/mis-vehiculos/{id}/estado  {"estado": "vendido"} */

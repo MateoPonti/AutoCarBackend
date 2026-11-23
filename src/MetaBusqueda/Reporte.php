@@ -105,6 +105,15 @@ final class Reporte
         return $salida;
     }
 
+    /** Lo que cambió en la última corrida de cada plataforma para la búsqueda $b (la página de novedades). */
+    public function novedadesDe(array $b): array
+    {
+        $recolecciones = $this->mercado->ultimasRecolecciones();
+        return [
+            'actualizado' => array_map(static fn(array $r): array => ['fuente' => $r['fuente'], 'fecha' => $r['fecha']], $recolecciones),
+        ] + $this->novedades($b, $recolecciones);
+    }
+
     private function novedades(array $b, array $recolecciones): array
     {
         $totales = [Novedades::NUEVO => 0, Novedades::BAJO => 0, Novedades::SUBIO => 0, Novedades::RESERVADO => 0, Novedades::RETIRADO => 0];

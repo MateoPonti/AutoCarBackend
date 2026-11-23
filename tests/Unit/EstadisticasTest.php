@@ -107,6 +107,59 @@ final class EstadisticasTest extends TestCase
         self::assertNull($o[0]['preferido']);
     }
 
+    public function testCuantoTuvoQueInteractuarParaComprarCadaTipoDeUsuario(): void
+    {
+        $plata = [['uso' => 'trabajo', 'ingresos' => 30000.0], ['uso' => 'familia', 'ingresos' => 15000.0]];
+        $actividad = [['uso' => 'trabajo', 'activos' => 3, 'interacciones' => 20], ['uso' => 'familia', 'activos' => 5, 'interacciones' => 60]];
+        $compradores = [
+            ['uso' => 'trabajo', 'interacciones' => 4, 'dias' => 1.5],
+            ['uso' => 'trabajo', 'interacciones' => 8, 'dias' => 3.5],
+            ['uso' => 'familia', 'interacciones' => 18, 'dias' => 12.0],
+            ['uso' => 'familia', 'interacciones' => 0, 'dias' => null], // pagó sin pasar por el metabuscador
+        ];
+        $v = PorPerfil::filasValor($plata, $actividad, $compradores);
+        $porUso = array_column($v['por_uso'], null, 'uso');
+
+        self::assertSame(array_keys(PorPerfil::usos()), array_column($v['por_uso'], 'uso'));
+        self::assertSame(20, $porUso['trabajo']['interacciones']);
+        self::assertSame(30000.0, $porUso['trabajo']['ingresos']);
+        self::assertSame(6.0, $porUso['trabajo']['interacciones_hasta_comprar']);
+        self::assertSame(2.5, $porUso['trabajo']['dias_hasta_comprar']);
+        self::assertSame(18.0, $porUso['familia']['interacciones_hasta_comprar']);
+        self::assertSame(1, $porUso['familia']['compradores_sin_interacciones']);
+        // Sin datos: sin división por cero
+        self::assertNull($porUso['personal']['interacciones_hasta_comprar']);
+        // Total: 80 interacciones; mediana de 4, 8 y 18
+        self::assertSame(80, $v['total']['interacciones']);
+        self::assertSame(8.0, $v['total']['interacciones_hasta_comprar']);
+        self::assertSame(4, $v['total']['compradores']);
+    }
+
+    public function testLaGananciaDeCadaRecomendacionPorPersonaQueLaVioTocoYPago(): void
+    {
+        $fila = PorPerfil::conGanancia(['origen' => 'para_vos', 'vieron' => 92, 'tocaron' => 44, 'pagaron' => 13, 'ganancia' => 165000]);
+        self::assertSame(165000.0, $fila['ganancia']);
+        self::assertSame(1793.0, $fila['por_vio']);   // 165.000 ÷ 92
+        self::assertSame(3750.0, $fila['por_toco']);  // 165.000 ÷ 44
+        self::assertSame(12692.0, $fila['por_pago']); // 165.000 ÷ 13
+        self::assertSame('para_vos', $fila['origen']);
+
+        // Sin nadie en un paso, no hay división por cero
+        $vacia = PorPerfil::conGanancia(['vieron' => 0, 'tocaron' => 0, 'pagaron' => 0]);
+        self::assertSame(0.0, $vacia['ganancia']);
+        self::assertNull($vacia['por_vio']);
+
+        // El embudo por tipo de usuario trae la ganancia de cada origen
+        $embudo = PorPerfil::filasEmbudo(
+            [['uso' => 'familia', 'origen' => 'para_vos', 'tipo' => 'mostrado', 'n' => 10]],
+            [['uso' => 'familia', 'origen' => 'para_vos', 'n' => 2, 'firmadas' => 1, 'ganancia' => 15000]],
+        );
+        $familia = array_values(array_filter($embudo, static fn(array $f): bool => $f['uso'] === 'familia'))[0];
+        $paraVos = array_values(array_filter($familia['origenes'], static fn(array $o): bool => $o['origen'] === 'para_vos'))[0];
+        self::assertSame(15000.0, $paraVos['ganancia']);
+        self::assertSame(1500.0, $paraVos['por_vio']);
+    }
+
     public function testElPeriodoEsUnoDeLosPermitidos(): void
     {
         self::assertSame(7, Panel::dias('7'));

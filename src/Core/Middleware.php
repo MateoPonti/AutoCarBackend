@@ -11,6 +11,8 @@ use AutoCar\Auth\Auth;
  *   null                 → ruta pública
  *   'auth'               → hace falta la cookie de sesión válida (401)
  *   'usuario'            → sesión de una cuenta personal (rol usuario): comprar y vender (403 para el equipo y los talleres)
+ *   'vendedor'           → una cuenta personal o una empresa (concesionaria): publicar autos
+ *   'empresa'            → sesión de una empresa: su panel
  *   'permiso:a.b|c.d'    → sesión válida y al menos uno de esos permisos, según el rol consultado en la base (403)
  * Con guard, todo lo que cambia datos (POST, PUT, PATCH, DELETE) exige además el header X-CSRF-Token (403).
  * Las reglas que dependen del dato (que la publicación sea tuya, no reportarte a vos mismo...) van en el controlador.
@@ -26,6 +28,17 @@ final class Middleware
             if ((Auth::usuario()['rol'] ?? '') !== 'usuario') {
                 Response::error(403, 'cuenta_del_equipo',
                     'Las cuentas del equipo y de los talleres no compran ni venden. Usá una cuenta personal.');
+            }
+        } elseif ($guard === 'vendedor') {
+            Auth::requireLogin();
+            if (!in_array(Auth::usuario()['rol'] ?? '', ['usuario', 'empresa'], true)) {
+                Response::error(403, 'cuenta_del_equipo',
+                    'Las cuentas del equipo y de los talleres no publican autos. Usá una cuenta personal o de empresa.');
+            }
+        } elseif ($guard === 'empresa') {
+            Auth::requireLogin();
+            if ((Auth::usuario()['rol'] ?? '') !== 'empresa') {
+                Response::error(403, 'solo_empresas', 'Esta sección es de las cuentas de empresa.');
             }
         } elseif ($guard !== null && str_starts_with($guard, 'permiso:')) {
             Auth::requirePermiso(...explode('|', substr($guard, strlen('permiso:'))));

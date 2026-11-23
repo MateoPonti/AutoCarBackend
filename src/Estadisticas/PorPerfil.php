@@ -5,6 +5,7 @@ namespace AutoCar\Estadisticas;
 
 use AutoCar\Auth\Preferencias;
 use AutoCar\Core\Database;
+use AutoCar\MetaBusqueda\Estadistica;
 use PDO;
 
 /**
@@ -29,12 +30,105 @@ final class PorPerfil
     /** Todo junto, para GET /api/admin/metricas. $dias ya viene validado (Panel::dias). */
     public static function todo(int $dias): array
     {
+        $plata = self::plata($dias);
         return [
             'usos'         => self::usos(),
-            'plata'        => self::plata($dias),
+            'plata'        => $plata,
             'embudo'       => self::embudo($dias),
             'metabuscador' => self::metabuscador($dias),
             'ordenes'      => self::ordenes($dias),
+            'valor'        => self::valor($dias, $plata),
+        ];
+    }
+
+    /** Lo que cuenta como interacción: acciones del usuario (buscar, cambiar el orden, tocar "Mandale un mecánico") */
+    public const INTERACCIONES = ['busco', 'orden', 'tocado'];
+    /** Hasta cuántos días antes de pagar se cuentan las interacciones de un comprador */
+    public const DIAS_ANTES_DE_COMPRAR = 90;
+
+    /**
+     * Cuánto tuvo que interactuar cada tipo de usuario para comprar (y cuántas interacciones tuvo en el período).
+     * "mostrado" no cuenta: es que el sistema le mostró algo, no que el usuario hizo algo. Cuánta ganancia deja cada
+     * recomendación está en el embudo (conGanancia), atribuida por el origen de cada inspección.
+     * @param list<array<string, mixed>> $plata
+     */
+    public static function valor(int $dias, array $plata): array
+    {
+        $pdo = Database::pdo();
+        $desde = "now() - make_interval(days => $dias)"; // entero validado
+        $tipos = "'" . implode("', '", self::INTERACCIONES) . "'";
+        $actividad = $pdo->query(
+            "SELECT COALESCE(p.uso, '" . self::SIN_PERFIL . "') AS uso,
+                    COUNT(DISTINCT e.usuario_id) AS activos, COUNT(*) AS interacciones
+               FROM evento e LEFT JOIN usuario_preferencia p ON p.usuario_id = e.usuario_id
+              WHERE e.tipo IN ($tipos) AND e.created_at >= $desde
+              GROUP BY 1"
+        )->fetchAll(PDO::FETCH_ASSOC);
+        // Cada comprador del período, en su primer pago: cuántas interacciones tuvo en los 90 días anteriores y
+        // cuántos días pasaron desde la primera de esas
+        $antes = self::DIAS_ANTES_DE_COMPRAR;
+        $compradores = $pdo->query(
+            "WITH primera AS (SELECT comprador_id AS usuario_id, MIN(created_at) AS pago
+                                FROM inspeccion WHERE created_at >= $desde GROUP BY 1)
+             SELECT COALESCE(p.uso, '" . self::SIN_PERFIL . "') AS uso,
+                    COUNT(e.created_at) AS interacciones,
+                    EXTRACT(EPOCH FROM pr.pago - MIN(e.created_at)) / 86400 AS dias
+               FROM primera pr
+               LEFT JOIN evento e ON e.usuario_id = pr.usuario_id AND e.tipo IN ($tipos)
+                    AND e.created_at <= pr.pago AND e.created_at > pr.pago - make_interval(days => $antes)
+               LEFT JOIN usuario_preferencia p ON p.usuario_id = pr.usuario_id
+              GROUP BY pr.usuario_id, pr.pago, p.uso"
+        )->fetchAll(PDO::FETCH_ASSOC);
+        return self::filasValor($plata, $actividad, $compradores);
+    }
+
+    /**
+     * Función pura. Por tipo de usuario y en total:
+     *   interacciones_hasta_comprar y dias_hasta_comprar = medianas de los compradores que interactuaron antes de pagar
+     *   (los que pagaron sin pasar por el metabuscador no tienen interacciones registradas: se cuentan aparte).
+     * @param list<array<string, mixed>> $plata filas de filasPlata (uso, ingresos)
+     * @param list<array<string, mixed>> $actividad {uso, activos, interacciones}
+     * @param list<array<string, mixed>> $compradores uno por comprador: {uso, interacciones, dias}
+     */
+    public static function filasValor(array $plata, array $actividad, array $compradores): array
+    {
+        $ingresos = array_column($plata, 'ingresos', 'uso');
+        $act = array_column($actividad, null, 'uso');
+        $porUso = [];
+        foreach ($compradores as $c) {
+            $porUso[$c['uso']][] = $c;
+        }
+        $fila = static function (float $ingresos, int $activos, int $interacciones, array $compradores): array {
+            $con = array_values(array_filter($compradores, static fn(array $c): bool => (int)$c['interacciones'] > 0));
+            $medInter = Estadistica::mediana(array_map(static fn(array $c): int => (int)$c['interacciones'], $con));
+            $medDias = Estadistica::mediana(array_map(static fn(array $c): float => (float)$c['dias'], $con));
+            return [
+                'ingresos'                    => $ingresos,
+                'activos'                     => $activos,
+                'interacciones'               => $interacciones,
+                'compradores'                 => count($compradores),
+                'compradores_sin_interacciones' => count($compradores) - count($con),
+                'interacciones_hasta_comprar' => $medInter !== null ? round($medInter, 1) : null,
+                'dias_hasta_comprar'          => $medDias !== null ? round($medDias, 1) : null,
+            ];
+        };
+
+        $salida = [];
+        $total = ['ingresos' => 0.0, 'activos' => 0, 'interacciones' => 0, 'compradores' => []];
+        foreach (self::usos() as $uso => $nombre) {
+            $i = (float)($ingresos[$uso] ?? 0);
+            $a = (int)($act[$uso]['activos'] ?? 0);
+            $n = (int)($act[$uso]['interacciones'] ?? 0);
+            $c = $porUso[$uso] ?? [];
+            $salida[] = ['uso' => $uso, 'nombre' => $nombre] + $fila($i, $a, $n, $c);
+            $total['ingresos'] += $i;
+            $total['activos'] += $a;
+            $total['interacciones'] += $n;
+            $total['compradores'] = array_merge($total['compradores'], $c);
+        }
+        return [
+            'total'   => $fila($total['ingresos'], $total['activos'], $total['interacciones'], $total['compradores']),
+            'por_uso' => $salida,
         ];
     }
 
@@ -121,7 +215,9 @@ final class PorPerfil
         )->fetchAll(PDO::FETCH_ASSOC);
         $pagos = $pdo->query(
             "SELECT COALESCE(p.uso, '" . self::SIN_PERFIL . "') AS uso, i.origen, COUNT(DISTINCT i.comprador_id) AS n,
-                    COUNT(DISTINCT i.comprador_id) FILTER (WHERE i.estado = 'firmada') AS firmadas
+                    COUNT(DISTINCT i.comprador_id) FILTER (WHERE i.estado = 'firmada') AS firmadas,
+                    COALESCE(SUM(i.monto_autocar - i.credito_usado) FILTER (WHERE i.estado = 'firmada'
+                             AND i.pago IN ('liberado', 'reembolsado')), 0) AS ganancia
                FROM inspeccion i LEFT JOIN usuario_preferencia p ON p.usuario_id = i.comprador_id
               WHERE i.origen IS NOT NULL AND i.created_at >= $desde
               GROUP BY 1, 2"
@@ -153,6 +249,7 @@ final class PorPerfil
         foreach ($pagos as $p) {
             $cuenta[$p['uso']][$p['origen']]['pagaron'] = (int)$p['n'];
             $cuenta[$p['uso']][$p['origen']]['firmadas'] = (int)($p['firmadas'] ?? 0);
+            $cuenta[$p['uso']][$p['origen']]['ganancia'] = (float)($p['ganancia'] ?? 0);
         }
         foreach ($ordenaron as $o) {
             $cuenta[$o['uso']][$o['origen']]['ordenaron'][$o['orden']] = (int)$o['n'];
@@ -164,7 +261,7 @@ final class PorPerfil
                 $c = $cuenta[$uso][$origen] ?? [];
                 $vieron = $c['vieron'] ?? 0;
                 $pagaron = $c['pagaron'] ?? 0;
-                $origenes[] = [
+                $origenes[] = self::conGanancia([
                     'origen'     => $origen,
                     'vieron'     => $vieron,
                     'tocaron'    => $c['tocaron'] ?? 0,
@@ -178,11 +275,30 @@ final class PorPerfil
                     ],
                     // Pagaron ÷ vieron, en %. Sin nadie que la viera no hay conversión
                     'conversion' => $vieron > 0 ? round(min($pagaron / $vieron, 1) * 100, 1) : null,
-                ];
+                    'ganancia'   => $c['ganancia'] ?? 0.0,
+                ]);
             }
             $salida[] = ['uso' => $uso, 'nombre' => $nombre, 'origenes' => $origenes, 'mejor' => self::mejorOrigen($origenes)];
         }
         return $salida;
+    }
+
+    /**
+     * Agrega a una fila del embudo cuánta ganancia dejó cada paso. "ganancia" es la comisión de AutoCar (menos créditos)
+     * de las inspecciones pedidas en el período desde esa recomendación que ya se firmaron y se cobraron (o se
+     * reembolsaron por un reclamo), igual que el informe de plata. Función pura:
+     *   por_vio = ganancia ÷ vieron; por_toco = ganancia ÷ tocaron "Mandale un mecánico"; por_pago = ganancia ÷ pagaron.
+     * @param array<string, mixed> $fila con vieron, tocaron, pagaron y ganancia
+     */
+    public static function conGanancia(array $fila): array
+    {
+        $ganancia = (float)($fila['ganancia'] ?? 0);
+        $por = static fn(int $cuantos): ?float => $cuantos > 0 ? round($ganancia / $cuantos) : null;
+        return ['ganancia' => $ganancia] + $fila + [
+            'por_vio'  => $por((int)($fila['vieron'] ?? 0)),
+            'por_toco' => $por((int)($fila['tocaron'] ?? 0)),
+            'por_pago' => $por((int)($fila['pagaron'] ?? 0)),
+        ];
     }
 
     /**

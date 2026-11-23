@@ -148,22 +148,24 @@ final class Panel
             "SELECT (SELECT COUNT(DISTINCT usuario_id) FROM evento WHERE origen = :o1 AND tipo = 'mostrado' AND created_at >= $desde) AS vieron,
                     (SELECT COUNT(DISTINCT usuario_id) FROM evento WHERE origen = :o2 AND tipo = 'tocado' AND created_at >= $desde) AS tocaron,
                     (SELECT COUNT(DISTINCT comprador_id) FROM inspeccion WHERE origen = :o3 AND created_at >= $desde) AS pagaron,
-                    (SELECT COUNT(DISTINCT comprador_id) FROM inspeccion WHERE origen = :o4 AND estado = 'firmada' AND created_at >= $desde) AS firmadas"
+                    (SELECT COUNT(DISTINCT comprador_id) FROM inspeccion WHERE origen = :o4 AND estado = 'firmada' AND created_at >= $desde) AS firmadas,
+                    (SELECT COALESCE(SUM(monto_autocar - credito_usado), 0) FROM inspeccion WHERE origen = :o5 AND estado = 'firmada' AND pago IN ('liberado', 'reembolsado') AND created_at >= $desde) AS ganancia"
         );
         foreach (Eventos::ORIGENES as $origen) {
-            $st->execute(['o1' => $origen, 'o2' => $origen, 'o3' => $origen, 'o4' => $origen]);
-            $origenes[] = ['origen' => $origen] + array_map('intval', $st->fetch(PDO::FETCH_ASSOC));
+            $st->execute(['o1' => $origen, 'o2' => $origen, 'o3' => $origen, 'o4' => $origen, 'o5' => $origen]);
+            $origenes[] = PorPerfil::conGanancia(['origen' => $origen] + array_map('intval', $st->fetch(PDO::FETCH_ASSOC)));
         }
         $total = array_map('intval', $pdo->query(
             "SELECT (SELECT COUNT(DISTINCT usuario_id) FROM evento WHERE tipo = 'mostrado' AND created_at >= $desde) AS vieron,
                     (SELECT COUNT(DISTINCT usuario_id) FROM evento WHERE tipo = 'tocado' AND created_at >= $desde) AS tocaron,
                     (SELECT COUNT(DISTINCT comprador_id) FROM inspeccion WHERE origen IS NOT NULL AND created_at >= $desde) AS pagaron,
                     (SELECT COUNT(DISTINCT comprador_id) FROM inspeccion WHERE origen IS NOT NULL AND estado = 'firmada' AND created_at >= $desde) AS firmadas,
-                    (SELECT COUNT(*) FROM inspeccion WHERE origen IS NULL AND created_at >= $desde) AS sin_origen"
+                    (SELECT COUNT(*) FROM inspeccion WHERE origen IS NULL AND created_at >= $desde) AS sin_origen,
+                    (SELECT COALESCE(SUM(monto_autocar - credito_usado), 0) FROM inspeccion WHERE origen IS NOT NULL AND estado = 'firmada' AND pago IN ('liberado', 'reembolsado') AND created_at >= $desde) AS ganancia"
         )->fetch(PDO::FETCH_ASSOC));
         $sinOrigen = $total['sin_origen'];
         unset($total['sin_origen']);
-        return ['origenes' => $origenes, 'total' => $total, 'sin_origen' => $sinOrigen];
+        return ['origenes' => $origenes, 'total' => PorPerfil::conGanancia($total), 'sin_origen' => $sinOrigen];
     }
 
     /**

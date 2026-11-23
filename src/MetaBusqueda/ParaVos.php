@@ -89,7 +89,67 @@ final class ParaVos
         }
         $puntaje = round($suma / array_sum($pesos), 2);
 
-        return ['puntaje' => $puntaje, 'motivo' => self::motivo($aportes, $diferencia, $auto, $medianaKm, $dias)];
+        return [
+            'puntaje' => $puntaje,
+            'motivo'  => self::motivo($aportes, $diferencia, $auto, $medianaKm, $dias),
+            'mensaje' => self::mensaje($uso, $pesos, $aportes, $diferencia, $auto, $medianaKm, $dias),
+        ];
+    }
+
+    /** Cómo se nombra cada perfil en el mensaje: "Como lo buscás …" */
+    private const COMO_LO_BUSCAS = [
+        'personal'   => 'para vos',
+        'familia'    => 'para la familia',
+        'trabajo'    => 'para trabajar',
+        'aplicacion' => 'para manejar con aplicaciones',
+    ];
+
+    /** Qué prioriza la fórmula cuando esa cosa es la que más pesa en el perfil */
+    private const PRIORIZAMOS = [
+        'precio' => 'priorizamos el precio',
+        'km'     => 'priorizamos pocos kilómetros',
+        'dias'   => 'buscamos margen para negociar',
+        'anio'   => 'priorizamos autos nuevos',
+    ];
+
+    /**
+     * El mensaje de los primeros de "Más recomendados": nombra el perfil y lo que más sumó para ESE auto (peso × factor).
+     * Si eso es lo que más pesa en el perfil, lo dice ("priorizamos pocos kilómetros"); si no, solo que le conviene.
+     * Sale todo de datos del auto y de lo que el usuario contestó: no se inventa nada. null si nada suma a favor.
+     * Ej.: "Como lo buscás para la familia, priorizamos pocos kilómetros: tiene 32 % menos km que autos parecidos,
+     * y además está 8 % más barato."
+     */
+    private static function mensaje(string $uso, array $pesos, array $aportes, float $diferencia, array $auto,
+        float $medianaKm, int $dias): ?string
+    {
+        arsort($aportes);
+        $favor = array_keys(array_filter($aportes, static fn(float $a): bool => $a > 0.05));
+        if ($favor === []) {
+            return null;
+        }
+        $km = (int)round(abs($medianaKm - $auto['km']) / $medianaKm * 100);
+        $pct = str_replace('.', ',', (string)abs($diferencia));
+        // La primera razón, completa; la segunda, corta
+        $largo = [
+            'precio' => "está $pct % más barato que autos parecidos",
+            'km'     => "tiene $km % menos km que autos parecidos",
+            'dias'   => "lleva $dias días publicado, así que hay margen para negociar",
+            'anio'   => "es un {$auto['anio']}, de los más nuevos de tu búsqueda",
+        ];
+        $corto = [
+            'precio' => "está $pct % más barato",
+            'km'     => "tiene $km % menos km",
+            'dias'   => "lleva $dias días publicado",
+            'anio'   => "es un {$auto['anio']}",
+        ];
+
+        $primera = $favor[0];
+        $foco = $pesos[$primera] >= max($pesos) ? self::PRIORIZAMOS[$primera] : 'este te conviene';
+        $texto = 'Como lo buscás ' . (self::COMO_LO_BUSCAS[$uso] ?? 'así') . ", $foco: " . $largo[$primera];
+        if (isset($favor[1])) {
+            $texto .= ', y además ' . $corto[$favor[1]];
+        }
+        return $texto . '.';
     }
 
     private static function limitar(float $valor): float
