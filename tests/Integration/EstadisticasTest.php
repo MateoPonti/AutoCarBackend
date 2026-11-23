@@ -139,7 +139,8 @@ final class EstadisticasTest extends ApiTestCase
 
         $p = self::delUso($despues['plata'], 'trabajo');
         self::assertSame(self::delUso($antes['plata'], 'trabajo')['pagaron'] + 1, $p['pagaron']);
-        self::assertEqualsWithDelta($p['ingresos'] - $p['perdida'], $p['neta'], 0.01);
+        self::assertArrayHasKey('ingresos', $p);
+        self::assertArrayNotHasKey('perdida', $p); // sin reclamos desde el 23/11
 
         // Valor por interacción: buscó y eligió un orden (2 interacciones; "mostrado" no cuenta) y después pagó
         $v = self::delUso($despues['valor']['por_uso'], 'trabajo');
