@@ -45,17 +45,15 @@ final class EstadisticasTest extends TestCase
         self::assertSame('recomendado', Eventos::orden('para_vos'));
     }
 
-    public function testLaPlataPorTipoDeUsuarioTieneUnaFilaPorPerfilYLaNeta(): void
+    public function testLaPlataPorTipoDeUsuarioTieneUnaFilaPorPerfil(): void
     {
         $filas = PorPerfil::filasPlata(
-            [['uso' => 'familia', 'pagaron' => '3', 'compradores' => '2', 'ingresos' => '69000', 'por_cobrar' => '23000']],
-            [['uso' => 'familia', 'perdida' => '50000', 'reclamos' => '1'], ['uso' => 'trabajo', 'perdida' => '10000', 'reclamos' => '1']]
+            [['uso' => 'familia', 'pagaron' => '3', 'compradores' => '2', 'ingresos' => '69000', 'por_cobrar' => '23000']]
         );
         self::assertSame(['personal', 'familia', 'trabajo', 'aplicacion', 'sin_perfil'], array_column($filas, 'uso'));
         self::assertSame(3, $filas[1]['pagaron']);
-        self::assertSame(1, $filas[1]['reclamos_procedieron']);
-        self::assertEqualsWithDelta(19000.0, $filas[1]['neta'], 0.01);
-        self::assertEqualsWithDelta(-10000.0, $filas[2]['neta'], 0.01); // un reclamo sin ingresos del período
+        self::assertEqualsWithDelta(69000.0, $filas[1]['ingresos'], 0.01);
+        self::assertEqualsWithDelta(23000.0, $filas[1]['por_cobrar'], 0.01);
         self::assertSame(0, $filas[0]['pagaron']);
     }
 

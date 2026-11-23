@@ -13,8 +13,7 @@ use DateTimeImmutable;
  *   también se le devuelve todo al comprador.
  *   pedida o aceptada → caida: la publicación de AutoCar se vendió, se dio de baja o se rechazó antes del turno
  *   (la pasa el sistema, ver AutoVendido). También se le devuelve todo al comprador.
- * Firmada no cambia más. Después de firmar, el comprador tiene unos días para reclamar (una sola vez): los que
- * decía el parámetro dias_reclamo cuando pidió la inspección (quedan guardados en inspeccion.dias_reclamo).
+ * Firmada no cambia más: no hay reclamo después (el informe es para decidir antes de comprar).
  */
 final class Estados
 {
@@ -83,10 +82,5 @@ final class Estados
             return [$motivo, 'Contale al comprador por qué la rechazás (entre ' . self::MOTIVO_MIN . ' y ' . self::MOTIVO_MAX . ' caracteres).'];
         }
         return [$motivo, null];
-    }
-
-    public static function enPlazoDeReclamo(DateTimeImmutable $firmadaAt, DateTimeImmutable $ahora, int $dias): bool
-    {
-        return $ahora >= $firmadaAt && $ahora <= $firmadaAt->modify('+' . $dias . ' days');
     }
 }

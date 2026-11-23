@@ -4,10 +4,10 @@ declare(strict_types=1);
 namespace AutoCar\Tests\Integration;
 
 /**
- * Auto vendido (turno que confirma el vendedor y que se cae solo, crédito al comprador y cupón) y fondo de garantía
- * (devolución, compensación y franquicia del mecánico), de punta a punta por la API.
+ * Auto vendido (turno que confirma el vendedor y que se cae solo, crédito al comprador y cupón), de punta a punta por
+ * la API.
  */
-final class AutoVendidoYFondoTest extends ApiTestCase
+final class AutoVendidoTest extends ApiTestCase
 {
     use ConInspecciones;
 
@@ -120,37 +120,6 @@ final class AutoVendidoYFondoTest extends ApiTestCase
         $this->venderComo($vendedor, $vehiculo);
         $this->ingresar($comprador);
         self::assertNull($this->pedir('GET', "/api/inspecciones/$id")['json']['inspeccion']['credito']);
-    }
-
-    public function testElReclamoQueProcedeSaleDelFondoYElMecanicoPagaLaFranquicia(): void
-    {
-        $this->ingresarComoAdmin();
-        $antes = $this->pedir('GET', '/api/admin/fondo')['json']['fondo'];
-
-        [$mecanicoId, $mecanico] = $this->ingresarComoMecanico();
-        $comprador = $this->ingresarComoUsuario();
-        $id = $this->pedir('POST', '/api/inspecciones', ['url' => 'https://auto.mercadolibre.com.ar/MLA-2222-gol-_JM', 'mecanico_id' => $mecanicoId])['json']['inspeccion']['id'];
-        $this->ingresar($mecanico);
-        $i = $this->aceptarYFirmar($id);
-        $this->ingresar($comprador);
-        $this->pedir('POST', "/api/inspecciones/$id/reclamo", ['descripcion' => 'Tenía un golpe en el zócalo y no lo marcó']);
-
-        $this->ingresarComoAdmin();
-        $reclamoId = $this->pedir('GET', '/api/admin/reclamos?estado=abierto')['json']['items'];
-        $reclamoId = array_values(array_filter($reclamoId, static fn($r) => $r['inspeccion']['id'] === $id))[0]['id'];
-        $r = $this->pedir('PATCH', "/api/admin/reclamos/$reclamoId", ['procede' => true, 'compensacion' => 50000, 'respuesta' => 'Se veía a simple vista']);
-        self::assertSame(200, $r['status'], json_encode($r['json']));
-        self::assertEquals($i['precio'], $r['json']['reclamo']['devolucion']);
-        self::assertEquals(round($i['monto_mecanico'] * 0.4), $r['json']['reclamo']['franquicia']);
-
-        $despues = $this->pedir('GET', '/api/admin/fondo')['json']['fondo'];
-        $esperado = $i['monto_fondo'] + $r['json']['reclamo']['franquicia'] - $i['precio'] - 50000;
-        self::assertEqualsWithDelta($esperado, $despues['saldo'] - $antes['saldo'], 0.01);
-        self::assertSame($antes['reclamos'] + 1, $despues['reclamos']);
-        self::assertGreaterThan(0, $despues['supuesto']['inspecciones_por_reclamo']);
-
-        $this->ingresarComoUsuario();
-        self::assertSame(403, $this->pedir('GET', '/api/admin/fondo')['status']);
     }
 
     /** Con la sesión del mecánico y la inspección ya aceptada: completa el checklist, sube la chapa y firma. */

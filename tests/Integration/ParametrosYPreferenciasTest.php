@@ -96,22 +96,25 @@ final class ParametrosYPreferenciasTest extends ApiTestCase
         $antes = $this->pedir('GET', '/api/admin/parametros')['json'];
         $claves = array_column($antes['parametros'], 'clave');
         self::assertContains('comision_autocar', $claves);
-        self::assertContains('dias_reclamo', $claves);
+        self::assertContains('credito_vendido', $claves);
+        foreach (['parte_fondo', 'tope_veces', 'dias_reclamo', 'franquicia', 'ranking_veces_reclamo'] as $sinUso) {
+            self::assertNotContains($sinUso, $claves); // se fueron con los reclamos (034)
+        }
 
         $fuera = $this->pedir('PUT', '/api/admin/parametros', ['valores' => ['comision_autocar' => 770]]);
         self::assertSame(422, $fuera['status']);
         self::assertArrayHasKey('comision_autocar', $fuera['json']['errores']);
 
-        // JSON manda 15.0 como 15: se compara como número con decimales
-        $original = (float)array_column($antes['parametros'], 'valor', 'clave')['dias_reclamo'];
+        // JSON manda 30.0 como 30: se compara como número con decimales
+        $original = (float)array_column($antes['parametros'], 'valor', 'clave')['credito_vendido'];
         $nuevo = $original === 20.0 ? 21 : 20;
-        $r = $this->pedir('PUT', '/api/admin/parametros', ['valores' => ['dias_reclamo' => $nuevo]]);
+        $r = $this->pedir('PUT', '/api/admin/parametros', ['valores' => ['credito_vendido' => $nuevo]]);
         self::assertSame(200, $r['status'], json_encode($r['json']));
-        self::assertSame((float)$nuevo, (float)array_column($r['json']['parametros'], 'valor', 'clave')['dias_reclamo']);
-        self::assertSame('dias_reclamo', $r['json']['cambios'][0]['clave']);
+        self::assertSame((float)$nuevo, (float)array_column($r['json']['parametros'], 'valor', 'clave')['credito_vendido']);
+        self::assertSame('credito_vendido', $r['json']['cambios'][0]['clave']);
         self::assertSame($original, (float)$r['json']['cambios'][0]['valor_anterior']);
 
         // Lo dejo como estaba para las otras pruebas
-        $this->pedir('PUT', '/api/admin/parametros', ['valores' => ['dias_reclamo' => $original]]);
+        $this->pedir('PUT', '/api/admin/parametros', ['valores' => ['credito_vendido' => $original]]);
     }
 }
