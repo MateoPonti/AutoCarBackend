@@ -47,6 +47,9 @@ final class Vehiculo
         } elseif (($f['completa'] ?? '') === '0') {
             $where[] = 'NOT ' . self::COMPLETA_SQL;
         }
+        if ($soloDisponibles && ($f['zona'] ?? '') !== '') {
+            $where[] = Localidad::condicion($f['zona'], $params);
+        }
         if (($f['marca'] ?? '') !== '') {
             $where[] = 'marca = :marca';
             $params['marca'] = $f['marca'];

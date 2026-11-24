@@ -40,6 +40,7 @@ $router->get('/api/vehiculos', [CatalogoController::class, 'index']);
 $router->get('/api/vehiculos/{id}', [CatalogoController::class, 'detalle']);
 // Comparador de precios: la publicación frente a los autos iguales de MercadoLibre, Kavak y Autocosmos
 $router->get('/api/vehiculos/{id}/comparacion', [ComparadorController::class, 'vehiculo']);
+$router->get('/api/zonas', [CatalogoController::class, 'zonas']);
 $router->get('/api/marcas', [CatalogoController::class, 'marcas']);
 $router->get('/api/marcas-modelos', [CatalogoController::class, 'marcasModelos']);
 $router->get('/api/fotos/{id}', [PublicacionController::class, 'foto']); // controla visibilidad adentro

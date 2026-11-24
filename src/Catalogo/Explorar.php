@@ -3,8 +3,6 @@ declare(strict_types=1);
 
 namespace AutoCar\Catalogo;
 
-use AutoCar\Auth\Auth;
-use AutoCar\Auth\Preferencias;
 use AutoCar\Core\Database;
 use AutoCar\Core\Response;
 
@@ -14,34 +12,9 @@ final class Explorar
     public function index(): void
     {
         $db = Database::pdo();
-        $usuario = Auth::id();
-        $preferida = $usuario ? (Preferencias::delUsuario($usuario)['localidad'] ?? '') : '';
-        $zona = $_GET['zona'] ?? '';
-        $zona = is_string($zona) ? trim($zona) : '';
-        if (mb_strlen($zona) > 100) {
-            Response::error(422, 'validacion', 'La localidad puede tener hasta 100 caracteres.');
-        }
-        $conteos = $db->query("SELECT localidad, count(*) AS cantidad FROM vehiculo
-             WHERE estado = 'disponible' AND trim(localidad) <> ''
-             GROUP BY localidad ORDER BY cantidad DESC, localidad");
-        $zonas = [];
-        foreach ($conteos as $fila) {
-            $nombre = Localidad::nombre($fila['localidad']);
-            if ($nombre === '') {
-                continue;
-            }
-            $clave = Localidad::clave($nombre);
-            $zonas[$clave] ??= ['nombre' => $nombre, 'cantidad' => 0, 'variantes' => []];
-            $zonas[$clave]['cantidad'] += (int)$fila['cantidad'];
-            $zonas[$clave]['variantes'][] = $fila['localidad'];
-        }
-        uasort($zonas, static fn($a, $b) => $b['cantidad'] <=> $a['cantidad'] ?: strcasecmp($a['nombre'], $b['nombre']));
-        $localidades = array_column($zonas, 'nombre');
-        $localidad = Localidad::nombre($zona ?: ($preferida ?: ($localidades[0] ?? '')));
-        $grupo = $zonas[Localidad::clave($localidad)] ?? null;
-        $localidad = $grupo['nombre'] ?? $localidad;
-        $variantes = $grupo['variantes'] ?? [];
-        $marcadores = $variantes ? implode(', ', array_fill(0, count($variantes), '?')) : 'NULL';
+        $zona = CatalogoController::filtros($_GET)['zona'];
+        $params = [];
+        $condicion = $zona === '' ? '' : ' AND ' . Localidad::condicion($zona, $params);
         // Instalaciones anteriores a la migración 033 todavía no tienen vitrinas.
         $empresas = $db->query("SELECT to_regclass('empresa')")->fetchColumn();
         $vitrinas = $empresas ? "
@@ -53,12 +26,9 @@ final class Explorar
 
         $vigentes = Verificacion::VIGENTES;
         $st = $db->prepare("WITH disponibles AS (
-              SELECT id, usuario_id, marca, modelo, anio, kilometraje, localidad, created_at FROM vehiculo WHERE estado = 'disponible'
+              SELECT id, usuario_id, marca, modelo, anio, kilometraje, localidad, created_at FROM vehiculo WHERE estado = 'disponible' $condicion
             ), verificados AS ($vigentes), grupos(id, tipo, concesionaria) AS (
               SELECT id, 'verificados', NULL::text FROM verificados
-              UNION ALL
-              SELECT id, 'localidad', NULL::text FROM disponibles
-               WHERE localidad IN ($marcadores)
               $vitrinas
             ), por_vendedor AS (
               SELECT g.*, v.created_at,
@@ -75,10 +45,9 @@ final class Explorar
               LEFT JOIN LATERAL (SELECT id FROM vehiculo_foto WHERE vehiculo_id = v.id ORDER BY orden, id LIMIT 1) f ON true
              WHERE p.puesto <= 12
              ORDER BY p.tipo, p.puesto");
-        $st->execute($variantes);
+        $st->execute($params);
         $filas = [
             'verificados' => ['tipo' => 'verificados', 'nombre' => 'Autos verificados', 'items' => []],
-            'localidad' => ['tipo' => 'localidad', 'nombre' => $localidad, 'items' => []],
             'asociadas' => ['tipo' => 'asociadas', 'nombre' => 'Concesionarias asociadas', 'items' => []],
         ];
         foreach ($st as $v) {
@@ -92,7 +61,6 @@ final class Explorar
             ];
         }
         header('Cache-Control: private, no-store');
-        Response::json(['filas' => array_values($filas), 'localidades' => $localidades,
-            'zona_personalizada' => $zona !== '' || $preferida !== '']);
+        Response::json(['filas' => array_values($filas)]);
     }
 }
