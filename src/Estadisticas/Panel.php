@@ -8,8 +8,8 @@ use PDO;
 
 /**
  * Los números del panel de estadísticas del admin para un período (los últimos 7, 30 o 90 días), comparados con el
- * período anterior del mismo largo. "Compró" = pagó la inspección: el pago se hace al pedirla (simulado hasta que
- * haya Mercado Pago), así que cuenta cada inspección pedida, aunque después se haya reembolsado.
+ * período anterior del mismo largo. "Compró" = pagó la inspección: el pago se hace al pedirla (con Mercado
+ * Pago), así que cuenta cada inspección pedida, aunque después se haya reembolsado.
  * Las fechas se agrupan en la hora de Argentina.
  */
 final class Panel
@@ -27,9 +27,9 @@ final class Panel
     /**
      * Totales del período y del anterior: nuevos usuarios, inspecciones pagadas, compradores, firmadas,
      * facturado y ganancia de AutoCar.
-     * Los ingresos incluyen cobros de afiliación por fecha de cobro y la comisión de AutoCar de las firmadas (también las que se reembolsaron antes del
-     * 23/11 por un reclamo, cuando existían) menos los créditos usados; por cobrar = la comisión de las firmadas que
-     * todavía no se cobraron. Sin reclamos no hay pérdida: lo que gana AutoCar son los ingresos.
+     * Los ingresos incluyen cobros de afiliación por fecha de cobro y la comisión de AutoCar de las firmadas (también las
+     * pocas reembolsadas antes del 23/11, cuando había reclamos) menos los créditos usados; por cobrar = la comisión de
+     * las firmadas que todavía no se cobraron.
      * @return array{actual: array<string, float|int>, anterior: array<string, float|int>}
      */
     public static function resumen(int $dias): array
@@ -46,7 +46,9 @@ final class Panel
             "WITH r AS (SELECT now() - make_interval(days => $desde) AS desde, now() - make_interval(days => $corrimiento) AS hasta),
              cobros AS (
                 SELECT COALESCE(sum(monto) FILTER (WHERE tipo = 'plataforma'), 0) AS ingresos_clics,
-                       COALESCE(sum(monto) FILTER (WHERE tipo = 'empresa'), 0) AS ingresos_abonos
+                       COALESCE(sum(monto) FILTER (WHERE tipo = 'empresa'), 0) AS ingresos_abonos,
+                       count(*) FILTER (WHERE tipo = 'empresa') AS abonos_cobrados,
+                       count(DISTINCT socio) FILTER (WHERE tipo = 'empresa') AS concesionarias
                   FROM cobro_afiliacion, r WHERE cobrado_at >= r.desde AND cobrado_at < r.hasta
              ), pendientes AS (
                 SELECT count(*) AS clics_pendientes, COALESCE(sum(c.tarifa_clic), 0) AS clics_por_cobrar
@@ -54,8 +56,12 @@ final class Panel
                  WHERE s.valido AND c.activo AND s.created_at >= r.desde AND s.created_at < r.hasta
                    AND NOT EXISTS (SELECT 1 FROM cobro_afiliacion a WHERE a.tipo = 'plataforma'
                         AND a.socio = s.fuente AND a.mes = date_trunc('month', s.created_at AT TIME ZONE '" . self::ZONA . "')::date)
+             ), clics AS (
+                SELECT count(*) AS clics_validos, COALESCE(sum(c.tarifa_clic) FILTER (WHERE c.activo), 0) AS clics_valor
+                  FROM clic_salida s LEFT JOIN convenio_plataforma c ON c.fuente = s.fuente CROSS JOIN r
+                 WHERE s.valido AND s.created_at >= r.desde AND s.created_at < r.hasta
              )
-             SELECT cobros.*, pendientes.*, (SELECT COUNT(*) FROM usuario, r WHERE created_at >= r.desde AND created_at < r.hasta) AS nuevos_usuarios,
+             SELECT cobros.*, pendientes.*, clics.*, (SELECT COUNT(*) FROM usuario, r WHERE created_at >= r.desde AND created_at < r.hasta) AS nuevos_usuarios,
                     (SELECT COUNT(*) FROM inspeccion, r WHERE created_at >= r.desde AND created_at < r.hasta) AS pagaron,
                     (SELECT COUNT(DISTINCT comprador_id) FROM inspeccion, r WHERE created_at >= r.desde AND created_at < r.hasta) AS compradores,
                     (SELECT COUNT(*) FROM inspeccion, r WHERE firmada_at >= r.desde AND firmada_at < r.hasta) AS firmadas,
@@ -70,7 +76,7 @@ final class Panel
                         AND firmada_at >= r.desde AND firmada_at < r.hasta) AS ingresos,
                     (SELECT COALESCE(SUM(monto_autocar - credito_usado), 0) FROM inspeccion, r
                       WHERE estado = 'firmada' AND pago = 'retenido' AND firmada_at >= r.desde AND firmada_at < r.hasta) AS por_cobrar
-               FROM cobros CROSS JOIN pendientes"
+               FROM cobros CROSS JOIN pendientes CROSS JOIN clics"
         );
         $t = $st->fetch();
         return [
@@ -88,6 +94,12 @@ final class Panel
             'clics_por_cobrar' => (float)$t['clics_por_cobrar'],
             'ingresos'        => (float)$t['ingresos'] + (float)$t['ingresos_clics'] + (float)$t['ingresos_abonos'],
             'por_cobrar'      => (float)$t['por_cobrar'],
+            // Para comparar cantidad contra plata en cada fuente: los clics válidos del período y lo que valen con la
+            // tarifa de hoy (cobrados o no: la liquidación es mensual), y cuántos abonos de concesionarias se cobraron
+            'clics_validos'   => (int)$t['clics_validos'],
+            'clics_valor'     => (float)$t['clics_valor'],
+            'abonos_cobrados' => (int)$t['abonos_cobrados'],
+            'concesionarias'  => (int)$t['concesionarias'],
         ];
     }
 
