@@ -6,6 +6,7 @@ namespace AutoCar\Tests\Unit;
 use AutoCar\Estadisticas\Eventos;
 use AutoCar\Estadisticas\Panel;
 use AutoCar\Estadisticas\PorPerfil;
+use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 
 final class EstadisticasTest extends TestCase
@@ -43,6 +44,22 @@ final class EstadisticasTest extends TestCase
         self::assertSame('nuevos', Eventos::orden('nuevos'));
         self::assertSame('recomendado', Eventos::orden(null));
         self::assertSame('recomendado', Eventos::orden('para_vos'));
+    }
+
+    public function testCadaPeriodoSeComparaConOtroDelMismoLargo(): void
+    {
+        $ahora = new DateTimeImmutable('2026-11-24T15:00:00-03:00');
+        // 7 días: contra los mismos 7 días del mes pasado
+        $siete = Panel::rangos(7, $ahora);
+        self::assertSame('2026-11-17', $siete['actual'][0]->format('Y-m-d'));
+        self::assertSame('2026-10-17', $siete['anterior'][0]->format('Y-m-d'));
+        self::assertSame('2026-10-24', $siete['anterior'][1]->format('Y-m-d'));
+        // 30 días y 3 meses: contra el tramo de antes, pegado al actual
+        foreach ([30, 90] as $dias) {
+            $r = Panel::rangos($dias, $ahora);
+            self::assertEquals($r['actual'][0], $r['anterior'][1]);
+            self::assertSame($dias, $r['anterior'][0]->diff($r['anterior'][1])->days);
+        }
     }
 
     public function testLaPlataPorTipoDeUsuarioTieneUnaFilaPorPerfil(): void
