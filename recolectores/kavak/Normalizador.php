@@ -45,6 +45,7 @@ final class Normalizador
             'moneda'         => 'ARS',
             'reservado'      => in_array('Reservado', (array)($tarjeta['etiquetas'] ?? []), true),
             'ubicacion'      => $tarjeta['ubicacion'] ?? null,
+            'foto'           => $tarjeta['foto'] ?? null,
             'url'            => $tarjeta['url'] ?? null,
         ];
     }

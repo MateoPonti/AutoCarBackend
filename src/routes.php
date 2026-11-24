@@ -35,6 +35,7 @@ use AutoCar\Core\Router;
 /** @var Router $router */
 
 // Público
+$router->get('/api/explorar', [\AutoCar\Catalogo\Explorar::class, 'index']);
 $router->get('/api/vehiculos', [CatalogoController::class, 'index']);
 $router->get('/api/vehiculos/{id}', [CatalogoController::class, 'detalle']);
 // Comparador de precios: la publicación frente a los autos iguales de MercadoLibre, Kavak y Autocosmos

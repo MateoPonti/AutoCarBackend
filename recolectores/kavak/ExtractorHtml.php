@@ -53,6 +53,7 @@ final class ExtractorHtml
                 'etiqueta_precio' => $etiqueta,
                 'etiquetas'       => $etiquetas,
                 'ubicacion'       => $texto('.//*[contains(@class, "footerInfo")]'),
+                'foto'            => $xp->evaluate('string(.//img[1]/@src)', $card),
                 'url'             => $card->getAttribute('href'),
             ];
         }

@@ -244,6 +244,42 @@ final class Importador
         return $this->clavesConocidas === null || isset($this->clavesConocidas[Clave::marca($marca)]);
     }
 
+    /** Recupera las portadas de una corrida archivada por fuente e ID sin registrar una corrida nueva. */
+    public function completarFotos(array $datos): int
+    {
+        $fuente = $datos['fuente'] ?? null;
+        if (!is_string($fuente) || !preg_match('/^[a-z0-9_-]{1,30}$/', $fuente) || !is_array($datos['autos'] ?? null)) {
+            throw new InvalidArgumentException('La corrida debe incluir la fuente y la lista de autos.');
+        }
+        $porModelo = [];
+        foreach ($datos['autos'] as $crudo) {
+            $auto = is_array($crudo) ? self::validarAuto($crudo) : null;
+            if ($auto !== null && $auto['imagen_url'] !== null) {
+                $clave = Catalogo::claveDe($auto['marca'], $auto['modelo']);
+                $porModelo[$clave][Catalogo::idAuto($fuente, $auto['id_externo'])] = $auto['imagen_url'];
+            }
+        }
+        $total = 0;
+        foreach ($porModelo as $clave => $fotos) {
+            $modelo = Catalogo::leer($this->docs, (string)$clave);
+            if ($modelo === null) {
+                continue;
+            }
+            $cambios = 0;
+            foreach ($fotos as $id => $url) {
+                if (isset($modelo['autos'][$id]) && empty($modelo['autos'][$id]['imagen_url'])) {
+                    $modelo['autos'][$id]['imagen_url'] = $url;
+                    $cambios++;
+                }
+            }
+            if ($cambios > 0) {
+                $this->docs->escribir(Catalogo::documentos($modelo));
+                $total += $cambios;
+            }
+        }
+        return $total;
+    }
+
     /** @param array<string, mixed> $a */
     public static function validarAuto(array $a): ?array
     {
@@ -277,9 +313,14 @@ final class Importador
         $contado = $creible($contado);
         $transmision = $a['transmision'] ?? null;
         $url = $texto($a['url'] ?? null, 500);
+        $imagen = $texto($a['foto'] ?? null, 1500);
+        if ($imagen !== null && str_starts_with($imagen, '//')) {
+            $imagen = 'https:' . $imagen;
+        }
 
         return [
             'id_externo'     => $id,
+            'imagen_url'     => $imagen !== null && str_starts_with($imagen, 'https://') && filter_var($imagen, FILTER_VALIDATE_URL) ? $imagen : null,
             'marca'          => $marca,
             'modelo'         => $modelo,
             'version'        => $texto($a['version'] ?? null, 120),

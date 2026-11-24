@@ -73,6 +73,23 @@ final class EstadisticasTest extends ApiTestCase
         }
     }
 
+    public function testPlataDistingueClicsPendientesYLiquidacionesCobradas(): void
+    {
+        $antes = $this->metricas(90)['resumen']['actual'];
+        $db = Entorno::pdo();
+        $db->exec("INSERT INTO convenio_plataforma (fuente, nombre, tarifa_clic) VALUES ('prueba_plata', 'Prueba', 125)");
+        $db->exec("INSERT INTO clic_salida (fuente, auto_id, valido, created_at) VALUES
+            ('prueba_plata', 'vigente', true, now()), ('prueba_plata', 'repetido', false, now()),
+            ('prueba_plata', 'liquidado', true, now() - interval '1 month')");
+        $db->exec("INSERT INTO cobro_afiliacion (tipo, socio, mes, cantidad, monto) VALUES
+            ('plataforma', 'prueba_plata', date_trunc('month', (now() AT TIME ZONE 'America/Argentina/Buenos_Aires') - interval '1 month'), 1, 95)");
+        $m = $this->metricas(90)['resumen']['actual'];
+        self::assertEquals($antes['clics_por_cobrar'] + 125, $m['clics_por_cobrar']);
+        self::assertEquals($antes['clics_pendientes'] + 1, $m['clics_pendientes']);
+        self::assertEquals($antes['ingresos_clics'] + 95, $m['ingresos_clics']);
+        self::assertEquals($antes['ingresos'] + 95, $m['ingresos']);
+    }
+
     public function testLosEventosSonSoloDeCuentasPersonalesYElPeriodoSeValida(): void
     {
         $this->ingresarComoAdmin();

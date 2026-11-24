@@ -366,6 +366,8 @@ final class Reporte
             'fuente'         => $a['fuente'],
             'marca'          => $a['marca'],
             'modelo'         => $a['modelo'],
+            'foto'           => $a['foto'] ?? null,
+            'imagen_url'     => $a['imagen_url'] ?? null,
             'version'        => $a['version'],
             'anio'           => $a['anio'],
             'km'             => $a['km'],
