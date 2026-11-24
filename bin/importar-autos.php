@@ -4,6 +4,7 @@
  * Uso: php bin/importar-autos.php archivo.json [archivo.json ...]
  *      php bin/importar-autos.php --hoy      (la corrida de hoy de cada fuente en storage/mercado/{fuente}/AAAA-MM-DD.json)
  *      php bin/importar-autos.php --revisar-marcas archivo.json [...]   (no importa nada: ver más abajo)
+ *      php bin/importar-autos.php --completar-fotos archivo.json [...]   (usar entre corridas del importador)
  * Los autos con una marca que no está en el catálogo (MARCAS_URL o la tabla marca) no se cargan y se avisa en la salida.
  * --revisar-marcas muestra solo esos autos (marca como la escribió el sitio, modelo y link) para ver si es una marca
  * nueva (se agrega a la tabla marca con una migración y entran en la carga siguiente) o un error del que publicó.
@@ -28,19 +29,20 @@ Config::load($raiz . '/.env');
 
 $archivos = array_slice($argv, 1);
 $revisar = ($archivos[0] ?? null) === '--revisar-marcas';
-if ($revisar) {
+$soloFotos = ($archivos[0] ?? null) === '--completar-fotos';
+if ($revisar || $soloFotos) {
     $archivos = array_slice($archivos, 1);
 }
 if ($archivos === ['--hoy']) {
     $archivos = glob($raiz . '/storage/mercado/*/' . date('Y-m-d') . '.json') ?: [];
 }
 if ($archivos === []) {
-    fwrite(STDERR, "Uso: php bin/importar-autos.php [--revisar-marcas] archivo.json [...] | --hoy\n");
+    fwrite(STDERR, "Uso: php bin/importar-autos.php [--revisar-marcas | --completar-fotos] archivo.json [...] | --hoy\n");
     exit(1);
 }
 
 // El catálogo (las mismas marcas y modelos que se pueden publicar). Sin lista, se importa todo sin apartar ninguna.
-$catalogo = leerCatalogo();
+$catalogo = $soloFotos ? null : leerCatalogo();
 if ($revisar && $catalogo === null) {
     exit(1);
 }
@@ -60,6 +62,11 @@ foreach ($archivos as $archivo) {
         continue;
     }
     try {
+        if ($soloFotos) {
+            $cantidad = $importador->completarFotos($datos);
+            echo "$archivo · $cantidad fotos recuperadas.\n";
+            continue;
+        }
         $r = $importador->importar($datos);
     } catch (Throwable $e) {
         fwrite(STDERR, "No se importó $archivo: " . $e->getMessage() . "\n");
