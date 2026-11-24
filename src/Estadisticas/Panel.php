@@ -27,7 +27,7 @@ final class Panel
     /**
      * Totales del período y del anterior: nuevos usuarios, inspecciones pagadas, compradores, firmadas,
      * facturado y ganancia de AutoCar.
-     * El informe de plata: ingresos = la comisión de AutoCar de las firmadas (también las que se reembolsaron antes del
+     * Los ingresos incluyen cobros de afiliación por fecha de cobro y la comisión de AutoCar de las firmadas (también las que se reembolsaron antes del
      * 23/11 por un reclamo, cuando existían) menos los créditos usados; por cobrar = la comisión de las firmadas que
      * todavía no se cobraron. Sin reclamos no hay pérdida: lo que gana AutoCar son los ingresos.
      * @return array{actual: array<string, float|int>, anterior: array<string, float|int>}
@@ -43,8 +43,19 @@ final class Panel
         // $dias y $corrimiento son enteros (dias() valida el período): van en la consulta como números
         $desde = $dias + $corrimiento;
         $st = Database::pdo()->query(
-            "WITH r AS (SELECT now() - make_interval(days => $desde) AS desde, now() - make_interval(days => $corrimiento) AS hasta)
-             SELECT (SELECT COUNT(*) FROM usuario, r WHERE created_at >= r.desde AND created_at < r.hasta) AS nuevos_usuarios,
+            "WITH r AS (SELECT now() - make_interval(days => $desde) AS desde, now() - make_interval(days => $corrimiento) AS hasta),
+             cobros AS (
+                SELECT COALESCE(sum(monto) FILTER (WHERE tipo = 'plataforma'), 0) AS ingresos_clics,
+                       COALESCE(sum(monto) FILTER (WHERE tipo = 'empresa'), 0) AS ingresos_abonos
+                  FROM cobro_afiliacion, r WHERE cobrado_at >= r.desde AND cobrado_at < r.hasta
+             ), pendientes AS (
+                SELECT count(*) AS clics_pendientes, COALESCE(sum(c.tarifa_clic), 0) AS clics_por_cobrar
+                  FROM clic_salida s JOIN convenio_plataforma c ON c.fuente = s.fuente CROSS JOIN r
+                 WHERE s.valido AND c.activo AND s.created_at >= r.desde AND s.created_at < r.hasta
+                   AND NOT EXISTS (SELECT 1 FROM cobro_afiliacion a WHERE a.tipo = 'plataforma'
+                        AND a.socio = s.fuente AND a.mes = date_trunc('month', s.created_at AT TIME ZONE '" . self::ZONA . "')::date)
+             )
+             SELECT cobros.*, pendientes.*, (SELECT COUNT(*) FROM usuario, r WHERE created_at >= r.desde AND created_at < r.hasta) AS nuevos_usuarios,
                     (SELECT COUNT(*) FROM inspeccion, r WHERE created_at >= r.desde AND created_at < r.hasta) AS pagaron,
                     (SELECT COUNT(DISTINCT comprador_id) FROM inspeccion, r WHERE created_at >= r.desde AND created_at < r.hasta) AS compradores,
                     (SELECT COUNT(*) FROM inspeccion, r WHERE firmada_at >= r.desde AND firmada_at < r.hasta) AS firmadas,
@@ -58,7 +69,8 @@ final class Panel
                       WHERE estado = 'firmada' AND pago IN ('liberado', 'reembolsado')
                         AND firmada_at >= r.desde AND firmada_at < r.hasta) AS ingresos,
                     (SELECT COALESCE(SUM(monto_autocar - credito_usado), 0) FROM inspeccion, r
-                      WHERE estado = 'firmada' AND pago = 'retenido' AND firmada_at >= r.desde AND firmada_at < r.hasta) AS por_cobrar"
+                      WHERE estado = 'firmada' AND pago = 'retenido' AND firmada_at >= r.desde AND firmada_at < r.hasta) AS por_cobrar
+               FROM cobros CROSS JOIN pendientes"
         );
         $t = $st->fetch();
         return [
@@ -69,7 +81,12 @@ final class Panel
             'facturado'       => (float)$t['facturado'],
             'ganancia'        => (float)$t['ganancia'],
             'mecanicos'       => (float)$t['mecanicos'], // pagado a los mecánicos (mismo criterio que ganancias.mecanicos)
-            'ingresos'        => (float)$t['ingresos'],
+            'ingresos_inspecciones' => (float)$t['ingresos'],
+            'ingresos_clics'  => (float)$t['ingresos_clics'],
+            'ingresos_abonos' => (float)$t['ingresos_abonos'],
+            'clics_pendientes' => (int)$t['clics_pendientes'],
+            'clics_por_cobrar' => (float)$t['clics_por_cobrar'],
+            'ingresos'        => (float)$t['ingresos'] + (float)$t['ingresos_clics'] + (float)$t['ingresos_abonos'],
             'por_cobrar'      => (float)$t['por_cobrar'],
         ];
     }
@@ -92,6 +109,7 @@ final class Panel
              u AS (SELECT {$grupo('created_at')} AS fecha, COUNT(*) AS n FROM usuario GROUP BY 1),
              p AS (SELECT {$grupo('created_at')} AS fecha, COUNT(*) AS n FROM inspeccion GROUP BY 1),
              b AS (SELECT {$grupo('created_at')} AS fecha, COUNT(DISTINCT usuario_id) AS n FROM evento WHERE tipo = 'busco' GROUP BY 1),
+             a AS (SELECT {$grupo('cobrado_at')} AS fecha, SUM(monto) AS monto FROM cobro_afiliacion GROUP BY 1),
              g AS (SELECT {$grupo('firmada_at')} AS fecha, COUNT(*) AS firmadas,
                           SUM(precio - credito_usado) FILTER (WHERE pago = 'liberado') AS facturado,
                           SUM(monto_autocar - credito_usado) FILTER (WHERE pago = 'liberado') AS ganancia,
@@ -101,8 +119,8 @@ final class Panel
              SELECT to_char(f.fecha, 'YYYY-MM-DD') AS fecha,
                     COALESCE(u.n, 0) AS nuevos_usuarios, COALESCE(p.n, 0) AS pagaron, COALESCE(g.firmadas, 0) AS firmadas,
                     COALESCE(g.facturado, 0) AS facturado, COALESCE(g.ganancia, 0) AS ganancia,
-                    COALESCE(g.ingresos, 0) AS ingresos, COALESCE(b.n, 0) AS buscaron
-               FROM f LEFT JOIN u USING (fecha) LEFT JOIN p USING (fecha) LEFT JOIN b USING (fecha) LEFT JOIN g USING (fecha)
+                    COALESCE(g.ingresos, 0) + COALESCE(a.monto, 0) AS ingresos, COALESCE(b.n, 0) AS buscaron
+               FROM f LEFT JOIN u USING (fecha) LEFT JOIN p USING (fecha) LEFT JOIN b USING (fecha) LEFT JOIN g USING (fecha) LEFT JOIN a USING (fecha)
               ORDER BY f.fecha"
         );
         $puntos = array_map(static fn(array $x): array => [
