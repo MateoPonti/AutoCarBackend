@@ -18,7 +18,10 @@ name: Scraper
 
 on:
   schedule:
-    - cron: '0 9 * * *' # todos los días a las 09:00 UTC = 06:00 en Argentina
+    # Todos los días a las 03:17 UTC = 00:17 en Argentina. GitHub demora los programados (en la hora en punto, horas:
+    # el de las 09:00 arrancaba entre las 16:30 y las 19:45 UTC, y alguno no corrió): bien temprano y en un minuto no
+    # redondo, para que aun con demora la corrida esté cargada a la mañana.
+    - cron: '17 3 * * *'
   workflow_dispatch:
 
 permissions:
