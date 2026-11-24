@@ -50,7 +50,7 @@ final class EstadisticasTest extends TestCase
         $filas = PorPerfil::filasPlata(
             [['uso' => 'familia', 'pagaron' => '3', 'compradores' => '2', 'ingresos' => '69000', 'por_cobrar' => '23000']]
         );
-        self::assertSame(['personal', 'familia', 'trabajo', 'aplicacion', 'sin_perfil'], array_column($filas, 'uso'));
+        self::assertSame(['personal', 'familia', 'trabajo', 'aplicacion'], array_column($filas, 'uso')); // el perfil es obligatorio
         self::assertSame(3, $filas[1]['pagaron']);
         self::assertEqualsWithDelta(69000.0, $filas[1]['ingresos'], 0.01);
         self::assertEqualsWithDelta(23000.0, $filas[1]['por_cobrar'], 0.01);
@@ -87,10 +87,10 @@ final class EstadisticasTest extends TestCase
     {
         $m = PorPerfil::filasMetabuscador([
             ['uso' => 'trabajo', 'buscaron' => '5', 'compraron' => '2', 'desde_metabuscador' => '1'],
-            ['uso' => 'sin_perfil', 'buscaron' => '3', 'compraron' => '0', 'desde_metabuscador' => '0'],
+            ['uso' => 'personal', 'buscaron' => '3', 'compraron' => '0', 'desde_metabuscador' => '0'],
         ]);
         self::assertSame(['buscaron' => 8, 'compraron' => 2, 'desde_metabuscador' => 1], $m['total']);
-        self::assertCount(5, $m['por_uso']);
+        self::assertCount(4, $m['por_uso']);
     }
 
     public function testElOrdenPreferidoEsElQueMasCompradoresEligieron(): void

@@ -117,8 +117,10 @@ final class AdminMetricasController
 
     /**
      * Lo que dejan las inspecciones, el ingreso de AutoCar (ver Precio.php: la comisión de AutoCar; sin fondo de
-     * garantía desde el 23/11: lo que antes se apartaba para el fondo también cuenta como de AutoCar). El pago es SIMULADO hasta que haya Mercado Pago: queda retenido al pedir, se libera al firmar
-     * y se reembolsa si el mecánico rechaza, el comprador cancela o el auto se vende antes del turno.
+     * garantía desde el 23/11: lo que antes se apartaba para el fondo también cuenta como de AutoCar). El comprador paga con
+     * Mercado Pago (Pagos\Cobros); el estado del pago queda retenido al pedir, se libera al firmar y se reembolsa si el
+     * mecánico rechaza, el comprador cancela o el auto se vende antes del turno. El pago al mecánico se registra acá,
+     * pero todavía no se le transfiere.
      * Los créditos que usan los compradores (un auto anterior se vendió) los pone AutoCar de su parte.
      */
     private static function ganancias(): array
@@ -140,7 +142,7 @@ final class AdminMetricasController
         return [
             'disponible'       => true,
             'simulado'         => true,
-            'aclaracion'       => 'Pago simulado: todavía no hay cobros reales (Mercado Pago está pendiente).',
+            'aclaracion'       => 'Los compradores pagan la inspección con Mercado Pago. Lo que le toca al mecánico se registra, pero todavía no se le transfiere.',
             'inspecciones'     => array_map('intval', $porEstado),
             'facturado'        => (float)$g['facturado'],   // lo que pagaron los compradores (inspecciones firmadas)
             'autocar'          => (float)$g['autocar'],     // ganancia de AutoCar: la comisión menos los créditos
