@@ -87,6 +87,7 @@ final class Catalogo
         $url = $fuente === 'mercadolibre' && self::urlMercadoLibre($a['id_externo']) !== null ? null : $a['url'];
         $x = array_merge($x, [
             'version' => $a['version'], 'anio' => $a['anio'], 'transmision' => $a['transmision'],
+            'imagen_url' => $a['imagen_url'] ?? $x['imagen_url'] ?? null,
             'ubicacion' => $a['ubicacion'], 'url' => $url, 'ultima_vez' => $fecha,
             'estado' => $a['reservado'] ? 'reservado' : 'activo',
         ]);
@@ -165,6 +166,7 @@ final class Catalogo
             'version'        => $a['version'],
             'anio'           => (int)$a['anio'],
             'transmision'    => $a['transmision'],
+            'imagen_url'     => $a['imagen_url'] ?? null,
             'ubicacion'      => $a['ubicacion'],
             'url'            => $a['url'] ?? ($a['fuente'] === 'mercadolibre' ? self::urlMercadoLibre($a['id_externo']) : null),
             'primera_vez'    => $a['primera_vez'],
