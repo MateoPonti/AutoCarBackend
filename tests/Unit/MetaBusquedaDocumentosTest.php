@@ -78,6 +78,36 @@ final class MetaBusquedaDocumentosTest extends TestCase
         self::assertSame(['Logan'], array_column($j['otros_modelos'], 'modelo'));
     }
 
+    public function testFotosEnResultadosDestacadosYRecuperacionDesdeUnArchivo(): void
+    {
+        $autos = self::primeraSemana();
+        $foto = 'https://http2.mlstatic.com/fiesta.webp';
+        $autos[1]['foto'] = $foto;
+        $this->importar(self::SEMANA_1, $autos);
+        $b = $this->busqueda();
+        $antes = $this->reporte($b);
+        self::assertContains($foto, array_column($antes['resultados']['items'], 'imagen_url'));
+        self::assertNull($antes['destacados']['mas_barato']['auto']['imagen_url']);
+
+        $archivo = ['fuente' => 'kavak', 'autos' => [
+            self::coche('a1', ['foto' => '//images.kavak.services/a1.webp', 'precio' => 9999999]),
+            self::coche('a2', ['foto' => 'https://example.org/reemplazo.jpg']),
+            self::coche('a3', ['foto' => 'javascript:alert(1)']),
+            self::coche('no-existe', ['foto' => $foto]),
+        ]];
+        $importador = new Importador($this->docs);
+        self::assertSame(1, $importador->completarFotos($archivo));
+        self::assertSame(0, $importador->completarFotos($archivo));
+        $despues = $this->reporte($b);
+        self::assertSame($antes['actualizado'], $despues['actualizado']);
+        self::assertSame($antes['resultados']['total'], $despues['resultados']['total']);
+        self::assertSame(13000000.0, $despues['destacados']['mas_barato']['auto']['precio']);
+        self::assertSame('https://images.kavak.services/a1.webp', $despues['destacados']['mas_barato']['auto']['imagen_url']);
+        self::assertContains($foto, array_column($despues['resultados']['items'], 'imagen_url'));
+        $this->importar(self::SEMANA_2, self::primeraSemana());
+        self::assertSame('https://images.kavak.services/a1.webp', $this->reporte($b)['destacados']['mas_barato']['auto']['imagen_url']);
+    }
+
     public function testDosSemanasGeneranNovedadesAvisosYEstados(): void
     {
         $semana1 = self::primeraSemana();

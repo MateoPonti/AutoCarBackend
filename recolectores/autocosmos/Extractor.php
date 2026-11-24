@@ -62,7 +62,7 @@ final class Extractor
                 'reservado'      => false,
                 'ubicacion'      => trim($ciudad . ($provincia !== null ? " - $provincia" : ''), ' -') ?: null,
                 'url'            => 'https://www.autocosmos.com.ar' . $href,
-                'foto'           => $prop('image'),
+                'foto'           => $prop('image') ?: ($prop('image', 'data-src') ?: $prop('image', 'src')),
             ];
         }
         return array_values($avisos);
