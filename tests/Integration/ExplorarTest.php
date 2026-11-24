@@ -13,8 +13,32 @@ final class ExplorarTest extends ApiTestCase
         self::assertSame(200, $r['status'], json_encode($r['json']));
         $filas = $r['json']['filas'];
         self::assertSame('verificados', $filas[0]['tipo']);
-        self::assertContains('marca', array_column($filas, 'tipo'));
+        self::assertSame(['verificados', 'localidad', 'asociadas'], array_column($filas, 'tipo'));
         return array_column($filas[0]['items'], 'id');
+    }
+
+    public function testLaLocalidadElegidaTienePrioridadSobreLaDelPerfil(): void
+    {
+        $a = $this->vehiculoDisponible();
+        $b = $this->vehiculoDisponible();
+        $actualizar = Entorno::pdo()->prepare('UPDATE vehiculo SET localidad = ? WHERE id = ?');
+        $actualizar->execute(['Mercedes', $a]);
+        $actualizar->execute(['Luján', $b]);
+        $anonimo = $this->pedir('GET', '/api/explorar')['json'];
+        self::assertFalse($anonimo['zona_personalizada']);
+        self::assertContains('Luján', $anonimo['localidades']);
+
+        $this->ingresarComoUsuario();
+        $this->pedir('PUT', '/api/me/preferencias', ['uso' => 'familia', 'localidad' => 'mercedes']);
+        $inicio = $this->pedir('GET', '/api/explorar')['json'];
+        self::assertTrue($inicio['zona_personalizada']);
+        self::assertSame('Mercedes', $inicio['filas'][1]['nombre']);
+        self::assertContains($a, array_column($inicio['filas'][1]['items'], 'id'));
+        $elegida = $this->pedir('GET', '/api/explorar?zona=' . rawurlencode('Luján'))['json'];
+        self::assertSame(['Luján'], array_values(array_unique(array_column($elegida['filas'][1]['items'], 'localidad'))));
+        self::assertContains($b, array_column($elegida['filas'][1]['items'], 'id'));
+        $vacia = $this->pedir('GET', '/api/explorar?zona=SinAvisos')['json'];
+        self::assertSame([], $vacia['filas'][1]['items']);
     }
 
     public function testSoloLaUltimaFirmaFavorableVigenteDelAutoDisponibleLoVerifica(): void

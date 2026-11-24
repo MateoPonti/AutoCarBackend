@@ -88,6 +88,12 @@ final class EmpresasTest extends ApiTestCase
         $visitas->execute([$ids[0]]);
         self::assertSame(1, (int)$visitas->fetchColumn());
 
+        $filas = array_column($this->pedir('GET', '/api/explorar')['json']['filas'], 'items', 'tipo');
+        $asociadas = array_column($filas['asociadas'], null, 'id');
+        self::assertSame($datos['razon_social'], $asociadas[$ids[0]]['empresa']['nombre']);
+        self::assertArrayNotHasKey($ids[1], $asociadas, 'La publicación pendiente no entra al carrusel');
+        self::assertNotContains(null, array_column($filas['asociadas'], 'empresa'));
+
         // Vitrina pública
         $vitrina = $this->pedir('GET', "/api/empresas/$empresaId")['json'];
         self::assertSame($datos['razon_social'], $vitrina['empresa']['nombre']);
