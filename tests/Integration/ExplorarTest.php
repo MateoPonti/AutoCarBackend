@@ -41,6 +41,32 @@ final class ExplorarTest extends ApiTestCase
         self::assertSame([], $vacia['filas'][1]['items']);
     }
 
+    public function testLasVariantesDeUnaZonaCompartenOpcionYPublicaciones(): void
+    {
+        $actualizar = Entorno::pdo()->prepare('UPDATE vehiculo SET localidad = ? WHERE id = ?');
+        $ids = [];
+        foreach (['Mercedes', 'Mercedes, Buenos Aires', 'Mercedes, Mercedes, Bs.',
+                  'Mercedes, Corrientes', 'Luján', 'Lujan, Buenos Aires'] as $zona) {
+            $ids[$zona] = $this->vehiculoDisponible();
+            $actualizar->execute([$zona, $ids[$zona]]);
+        }
+        $r = $this->pedir('GET', '/api/explorar?zona=Mercedes%2C%20Bs.%20As.')['json'];
+        self::assertSame('Mercedes', $r['filas'][1]['nombre']);
+        self::assertSame(['Mercedes'], array_values(array_unique(array_column($r['filas'][1]['items'], 'localidad'))));
+        $autos = array_column($r['filas'][1]['items'], 'id');
+        foreach (array_slice($ids, 0, 3) as $id) {
+            self::assertContains($id, $autos);
+        }
+        self::assertNotContains($ids['Mercedes, Corrientes'], $autos);
+        self::assertContains('Mercedes, Corrientes', $r['localidades']);
+        self::assertNotContains('Mercedes, Buenos Aires', $r['localidades']);
+        self::assertNotContains('Lujan, Buenos Aires', $r['localidades']);
+        $lujan = $this->pedir('GET', '/api/explorar?zona=lujan')['json']['filas'][1];
+        self::assertSame('Luján', $lujan['nombre']);
+        self::assertContains($ids['Luján'], array_column($lujan['items'], 'id'));
+        self::assertContains($ids['Lujan, Buenos Aires'], array_column($lujan['items'], 'id'));
+    }
+
     public function testSoloLaUltimaFirmaFavorableVigenteDelAutoDisponibleLoVerifica(): void
     {
         [$mecanicoId, $mecanico] = $this->ingresarComoMecanico();

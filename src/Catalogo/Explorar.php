@@ -21,16 +21,27 @@ final class Explorar
         if (mb_strlen($zona) > 100) {
             Response::error(422, 'validacion', 'La localidad puede tener hasta 100 caracteres.');
         }
-        $localidades = $db->query("SELECT min(trim(localidad)) FROM vehiculo
+        $conteos = $db->query("SELECT localidad, count(*) AS cantidad FROM vehiculo
              WHERE estado = 'disponible' AND trim(localidad) <> ''
-             GROUP BY lower(trim(localidad)) ORDER BY count(*) DESC, lower(trim(localidad))")->fetchAll(\PDO::FETCH_COLUMN);
-        $localidad = $zona ?: ($preferida ?: ($localidades[0] ?? ''));
-        foreach ($localidades as $nombre) {
-            if (mb_strtolower($nombre) === mb_strtolower($localidad)) {
-                $localidad = $nombre;
-                break;
+             GROUP BY localidad ORDER BY cantidad DESC, localidad");
+        $zonas = [];
+        foreach ($conteos as $fila) {
+            $nombre = Localidad::nombre($fila['localidad']);
+            if ($nombre === '') {
+                continue;
             }
+            $clave = Localidad::clave($nombre);
+            $zonas[$clave] ??= ['nombre' => $nombre, 'cantidad' => 0, 'variantes' => []];
+            $zonas[$clave]['cantidad'] += (int)$fila['cantidad'];
+            $zonas[$clave]['variantes'][] = $fila['localidad'];
         }
+        uasort($zonas, static fn($a, $b) => $b['cantidad'] <=> $a['cantidad'] ?: strcasecmp($a['nombre'], $b['nombre']));
+        $localidades = array_column($zonas, 'nombre');
+        $localidad = Localidad::nombre($zona ?: ($preferida ?: ($localidades[0] ?? '')));
+        $grupo = $zonas[Localidad::clave($localidad)] ?? null;
+        $localidad = $grupo['nombre'] ?? $localidad;
+        $variantes = $grupo['variantes'] ?? [];
+        $marcadores = $variantes ? implode(', ', array_fill(0, count($variantes), '?')) : 'NULL';
         // Instalaciones anteriores a la migración 033 todavía no tienen vitrinas.
         $empresas = $db->query("SELECT to_regclass('empresa')")->fetchColumn();
         $vitrinas = $empresas ? "
@@ -47,7 +58,7 @@ final class Explorar
               SELECT id, 'verificados', NULL::text FROM verificados
               UNION ALL
               SELECT id, 'localidad', NULL::text FROM disponibles
-               WHERE trim(localidad) <> '' AND lower(trim(localidad)) = lower(trim(:localidad))
+               WHERE localidad IN ($marcadores)
               $vitrinas
             ), por_vendedor AS (
               SELECT g.*, v.created_at,
@@ -64,7 +75,7 @@ final class Explorar
               LEFT JOIN LATERAL (SELECT id FROM vehiculo_foto WHERE vehiculo_id = v.id ORDER BY orden, id LIMIT 1) f ON true
              WHERE p.puesto <= 12
              ORDER BY p.tipo, p.puesto");
-        $st->execute(['localidad' => $localidad]);
+        $st->execute($variantes);
         $filas = [
             'verificados' => ['tipo' => 'verificados', 'nombre' => 'Autos verificados', 'items' => []],
             'localidad' => ['tipo' => 'localidad', 'nombre' => $localidad, 'items' => []],
@@ -75,7 +86,7 @@ final class Explorar
                 'verificado' => (bool)$v['verificado'],
                 'empresa' => $v['concesionaria'] === null ? null : ['id' => (int)$v['usuario_id'], 'nombre' => $v['concesionaria']],
                 'id' => (int)$v['id'], 'marca' => $v['marca'], 'modelo' => $v['modelo'], 'anio' => (int)$v['anio'],
-                'kilometraje' => (int)$v['kilometraje'], 'precio' => (float)$v['precio'], 'localidad' => $v['localidad'],
+                'kilometraje' => (int)$v['kilometraje'], 'precio' => (float)$v['precio'], 'localidad' => Localidad::nombre($v['localidad']),
                 'transmision' => $v['transmision'], 'combustible' => $v['combustible'], 'estado' => $v['estado'],
                 'foto' => $v['foto_id'] ? '/api/fotos/' . $v['foto_id'] : null, 'imagen_url' => $v['imagen_url'],
             ];
