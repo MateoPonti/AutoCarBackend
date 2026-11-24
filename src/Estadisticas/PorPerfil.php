@@ -10,21 +10,20 @@ use PDO;
 
 /**
  * Las estadísticas del admin separadas por tipo de usuario: la respuesta a "¿Para qué buscás el auto?"
- * (Auth\Preferencias::USOS). El que no contestó queda en "sin_perfil".
+ * (Auth\Preferencias::USOS). Es obligatoria, así que solo cuentan los usuarios que la contestaron.
  * Sirve para decidir qué cambiar: si a "Para la familia" casi todos eligen "Menos km", conviene subir el peso de los km
  * de ese perfil en la fórmula de "para vos" (Parámetros).
  * Todo cuenta compradores distintos en el período (los últimos N días), salvo "veces" en los órdenes.
  */
 final class PorPerfil
 {
-    public const SIN_PERFIL = 'sin_perfil';
     /** Los orígenes que son del metabuscador (la publicación de AutoCar no) */
     private const DEL_METABUSCADOR = ['para_vos', 'destacado', 'metabuscador'];
 
     /** @return array<string, string> clave → texto, en el orden en que se muestran */
     public static function usos(): array
     {
-        return Preferencias::USOS + [self::SIN_PERFIL => 'Sin perfil'];
+        return Preferencias::USOS;
     }
 
     /** Todo junto, para GET /api/admin/metricas. $dias ya viene validado (Panel::dias). */
@@ -58,9 +57,9 @@ final class PorPerfil
         $desde = "now() - make_interval(days => $dias)"; // entero validado
         $tipos = "'" . implode("', '", self::INTERACCIONES) . "'";
         $actividad = $pdo->query(
-            "SELECT COALESCE(p.uso, '" . self::SIN_PERFIL . "') AS uso,
+            "SELECT p.uso,
                     COUNT(DISTINCT e.usuario_id) AS activos, COUNT(*) AS interacciones
-               FROM evento e LEFT JOIN usuario_preferencia p ON p.usuario_id = e.usuario_id
+               FROM evento e JOIN usuario_preferencia p ON p.usuario_id = e.usuario_id
               WHERE e.tipo IN ($tipos) AND e.created_at >= $desde
               GROUP BY 1"
         )->fetchAll(PDO::FETCH_ASSOC);
@@ -70,13 +69,13 @@ final class PorPerfil
         $compradores = $pdo->query(
             "WITH primera AS (SELECT comprador_id AS usuario_id, MIN(created_at) AS pago
                                 FROM inspeccion WHERE created_at >= $desde GROUP BY 1)
-             SELECT COALESCE(p.uso, '" . self::SIN_PERFIL . "') AS uso,
+             SELECT p.uso,
                     COUNT(e.created_at) AS interacciones,
                     EXTRACT(EPOCH FROM pr.pago - MIN(e.created_at)) / 86400 AS dias
                FROM primera pr
                LEFT JOIN evento e ON e.usuario_id = pr.usuario_id AND e.tipo IN ($tipos)
                     AND e.created_at <= pr.pago AND e.created_at > pr.pago - make_interval(days => $antes)
-               LEFT JOIN usuario_preferencia p ON p.usuario_id = pr.usuario_id
+               JOIN usuario_preferencia p ON p.usuario_id = pr.usuario_id
               GROUP BY pr.usuario_id, pr.pago, p.uso"
         )->fetchAll(PDO::FETCH_ASSOC);
         return self::filasValor($plata, $actividad, $compradores);
@@ -134,8 +133,8 @@ final class PorPerfil
 
     /**
      * La plata del período por tipo de usuario, con las mismas cuentas que el informe de plata (Panel::totales):
-     * ingresos = comisión de AutoCar de las firmadas ya cobradas (o reembolsadas por un reclamo antes del 23/11), menos
-     * los créditos. Sin reclamos no hay pérdida.
+     * ingresos = comisión de AutoCar de las firmadas ya cobradas (o reembolsadas antes del 23/11, cuando había reclamos),
+     * menos los créditos.
      * @return list<array<string, mixed>>
      */
     public static function plata(int $dias): array
@@ -143,14 +142,14 @@ final class PorPerfil
         $pdo = Database::pdo();
         $desde = "now() - make_interval(days => $dias)"; // entero validado
         $inspecciones = $pdo->query(
-            "SELECT COALESCE(p.uso, '" . self::SIN_PERFIL . "') AS uso,
+            "SELECT p.uso,
                     COUNT(*) FILTER (WHERE i.created_at >= $desde) AS pagaron,
                     COUNT(DISTINCT i.comprador_id) FILTER (WHERE i.created_at >= $desde) AS compradores,
                     COALESCE(SUM(i.monto_autocar - i.credito_usado) FILTER (WHERE i.estado = 'firmada'
                              AND i.pago IN ('liberado', 'reembolsado') AND i.firmada_at >= $desde), 0) AS ingresos,
                     COALESCE(SUM(i.monto_autocar - i.credito_usado) FILTER (WHERE i.estado = 'firmada'
                              AND i.pago = 'retenido' AND i.firmada_at >= $desde), 0) AS por_cobrar
-               FROM inspeccion i LEFT JOIN usuario_preferencia p ON p.usuario_id = i.comprador_id
+               FROM inspeccion i JOIN usuario_preferencia p ON p.usuario_id = i.comprador_id
               WHERE i.created_at >= $desde OR i.firmada_at >= $desde
               GROUP BY 1"
         )->fetchAll(PDO::FETCH_ASSOC);
@@ -190,27 +189,27 @@ final class PorPerfil
         $pdo = Database::pdo();
         $desde = "now() - make_interval(days => $dias)"; // entero validado
         $eventos = $pdo->query(
-            "SELECT COALESCE(p.uso, '" . self::SIN_PERFIL . "') AS uso, e.origen, e.tipo, COUNT(DISTINCT e.usuario_id) AS n
-               FROM evento e LEFT JOIN usuario_preferencia p ON p.usuario_id = e.usuario_id
+            "SELECT p.uso, e.origen, e.tipo, COUNT(DISTINCT e.usuario_id) AS n
+               FROM evento e JOIN usuario_preferencia p ON p.usuario_id = e.usuario_id
               WHERE e.tipo IN ('mostrado', 'tocado') AND e.created_at >= $desde
               GROUP BY 1, 2, 3"
         )->fetchAll(PDO::FETCH_ASSOC);
         $pagos = $pdo->query(
-            "SELECT COALESCE(p.uso, '" . self::SIN_PERFIL . "') AS uso, i.origen, COUNT(DISTINCT i.comprador_id) AS n,
+            "SELECT p.uso, i.origen, COUNT(DISTINCT i.comprador_id) AS n,
                     COUNT(DISTINCT i.comprador_id) FILTER (WHERE i.estado = 'firmada') AS firmadas,
                     COALESCE(SUM(i.monto_autocar - i.credito_usado) FILTER (WHERE i.estado = 'firmada'
                              AND i.pago IN ('liberado', 'reembolsado')), 0) AS ganancia
-               FROM inspeccion i LEFT JOIN usuario_preferencia p ON p.usuario_id = i.comprador_id
+               FROM inspeccion i JOIN usuario_preferencia p ON p.usuario_id = i.comprador_id
               WHERE i.origen IS NOT NULL AND i.created_at >= $desde
               GROUP BY 1, 2"
         )->fetchAll(PDO::FETCH_ASSOC);
         // De los que vieron cada recomendación, cuántos ordenaron la lista por precio, km o fecha de publicación
         $ordenaron = $pdo->query(
-            "SELECT COALESCE(p.uso, '" . self::SIN_PERFIL . "') AS uso, m.origen, o.ref AS orden, COUNT(DISTINCT m.usuario_id) AS n
+            "SELECT p.uso, m.origen, o.ref AS orden, COUNT(DISTINCT m.usuario_id) AS n
                FROM (SELECT DISTINCT usuario_id, origen FROM evento WHERE tipo = 'mostrado' AND created_at >= $desde) m
                JOIN (SELECT DISTINCT usuario_id, ref FROM evento WHERE tipo = 'orden' AND created_at >= $desde) o
                  ON o.usuario_id = m.usuario_id
-               LEFT JOIN usuario_preferencia p ON p.usuario_id = m.usuario_id
+               JOIN usuario_preferencia p ON p.usuario_id = m.usuario_id
               GROUP BY 1, 2, 3"
         )->fetchAll(PDO::FETCH_ASSOC);
         return self::filasEmbudo($eventos, $pagos, $ordenaron);
@@ -312,12 +311,12 @@ final class PorPerfil
                   c AS (SELECT DISTINCT comprador_id AS usuario_id FROM inspeccion WHERE created_at >= $desde),
                   m AS (SELECT DISTINCT comprador_id AS usuario_id FROM inspeccion
                          WHERE created_at >= $desde AND origen IN ($origenes))
-             SELECT COALESCE(p.uso, '" . self::SIN_PERFIL . "') AS uso,
+             SELECT p.uso,
                     COUNT(*) AS buscaron, COUNT(c.usuario_id) AS compraron, COUNT(m.usuario_id) AS desde_metabuscador
                FROM b
                LEFT JOIN c ON c.usuario_id = b.usuario_id
                LEFT JOIN m ON m.usuario_id = b.usuario_id
-               LEFT JOIN usuario_preferencia p ON p.usuario_id = b.usuario_id
+               JOIN usuario_preferencia p ON p.usuario_id = b.usuario_id
               GROUP BY 1"
         )->fetchAll(PDO::FETCH_ASSOC);
         return self::filasMetabuscador($filas);
@@ -351,9 +350,9 @@ final class PorPerfil
     {
         $desde = "now() - make_interval(days => $dias)"; // entero validado
         $filas = Database::pdo()->query(
-            "SELECT COALESCE(p.uso, '" . self::SIN_PERFIL . "') AS uso, e.ref AS orden,
+            "SELECT p.uso, e.ref AS orden,
                     COUNT(DISTINCT e.usuario_id) AS usuarios, COUNT(*) AS veces
-               FROM evento e LEFT JOIN usuario_preferencia p ON p.usuario_id = e.usuario_id
+               FROM evento e JOIN usuario_preferencia p ON p.usuario_id = e.usuario_id
               WHERE e.tipo = 'orden' AND e.created_at >= $desde
               GROUP BY 1, 2"
         )->fetchAll(PDO::FETCH_ASSOC);

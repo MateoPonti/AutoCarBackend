@@ -96,6 +96,10 @@ final class EstadisticasTest extends ApiTestCase
         self::assertEquals($antes['clics_pendientes'] + 1, $m['clics_pendientes']);
         self::assertEquals($antes['ingresos_clics'] + 95, $m['ingresos_clics']);
         self::assertEquals($antes['ingresos'] + 305, $m['ingresos']);
+        // Cantidad contra plata: el clic válido de este mes y el del mes pasado cuentan (el repetido no), con la tarifa de hoy
+        self::assertSame($antes['clics_validos'] + 2, $m['clics_validos']);
+        self::assertEquals($antes['clics_valor'] + 250, $m['clics_valor']);
+        self::assertSame($antes['abonos_cobrados'] + 1, $m['abonos_cobrados']);
     }
 
     public function testLosEventosSonSoloDeCuentasPersonalesYElPeriodoSeValida(): void
@@ -116,7 +120,7 @@ final class EstadisticasTest extends ApiTestCase
     public function testPorTipoDeUsuarioCuentaLaBusquedaElOrdenLaRecomendacionYLaPlata(): void
     {
         $antes = $this->metricas()['por_perfil'];
-        self::assertSame(['personal', 'familia', 'trabajo', 'aplicacion', 'sin_perfil'], array_keys($antes['usos']));
+        self::assertSame(['personal', 'familia', 'trabajo', 'aplicacion'], array_keys($antes['usos']));
 
         [$mecanicoId] = $this->ingresarComoMecanico();
         $this->ingresarComoUsuario();
