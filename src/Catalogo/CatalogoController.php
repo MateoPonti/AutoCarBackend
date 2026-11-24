@@ -77,7 +77,11 @@ final class CatalogoController
     public static function conInsignia(array $filas): array
     {
         $insignias = Empresa::insignias(array_column($filas, 'usuario_id'));
-        return array_map(static fn(array $v): array => Vehiculo::paraApi($v) + ['empresa' => $insignias[(int)$v['usuario_id']] ?? null], $filas);
+        $verificados = Verificacion::dePublicaciones(array_column($filas, 'id'));
+        return array_map(static fn(array $v): array => Vehiculo::paraApi($v) + [
+            'empresa' => $insignias[(int)$v['usuario_id']] ?? null,
+            'verificado' => isset($verificados[$v['id']]),
+        ], $filas);
     }
 
     public function detalle(int $id): void
@@ -89,8 +93,7 @@ final class CatalogoController
         }
         $vendedor = Usuario::porId((int)$v['usuario_id']);
         Visitas::registrar($id, (int)$v['usuario_id']); // para el panel de la empresa (cuentan todas, también sin sesión)
-        Response::json(['vehiculo' => Vehiculo::paraApi($v) + [
-            'empresa'  => Empresa::insignias([(int)$v['usuario_id']])[(int)$v['usuario_id']] ?? null,
+        Response::json(['vehiculo' => self::conInsignia([$v])[0] + [
             'fotos'    => Foto::rutasDe($id),
             // Página pública: del vendedor solo el nombre y desde cuándo está (nunca el email)
             'vendedor' => $vendedor === null ? null : [
