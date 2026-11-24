@@ -40,19 +40,11 @@ final class Explorar
               JOIN usuario u ON u.id = e.usuario_id JOIN rol r ON r.id = u.rol_id
              WHERE e.estado = 'aprobado' AND u.activo AND r.nombre = 'empresa'" : '';
 
+        $vigentes = Verificacion::VIGENTES;
         $st = $db->prepare("WITH disponibles AS (
               SELECT id, usuario_id, marca, modelo, anio, kilometraje, localidad, created_at FROM vehiculo WHERE estado = 'disponible'
-            ), ultimas_firmas AS (
-              SELECT DISTINCT ON (i.vehiculo_id) i.vehiculo_id, i.firmada_at, i.conclusion,
-                     i.marca, i.modelo, i.anio, i.kilometraje
-                FROM inspeccion i JOIN disponibles v ON v.id = i.vehiculo_id
-               WHERE i.estado = 'firmada' AND i.fuente = 'autocar'
-               ORDER BY i.vehiculo_id, i.firmada_at DESC, i.id DESC
-            ), grupos(id, tipo, concesionaria) AS (
-              SELECT v.id, 'verificados', NULL::text
-                FROM disponibles v JOIN ultimas_firmas i ON i.vehiculo_id = v.id
-               WHERE i.conclusion = 'recomendable' AND i.firmada_at > now() - interval '90 days'
-                 AND (i.marca, i.modelo, i.anio, i.kilometraje) = (v.marca, v.modelo, v.anio, v.kilometraje)
+            ), verificados AS ($vigentes), grupos(id, tipo, concesionaria) AS (
+              SELECT id, 'verificados', NULL::text FROM verificados
               UNION ALL
               SELECT id, 'localidad', NULL::text FROM disponibles
                WHERE trim(localidad) <> '' AND lower(trim(localidad)) = lower(trim(:localidad))
@@ -66,8 +58,9 @@ final class Explorar
               SELECT g.*, row_number() OVER (PARTITION BY tipo ORDER BY turno, created_at DESC, id DESC) AS puesto
                 FROM por_vendedor g
             )
-            SELECT p.tipo, p.concesionaria, v.*, f.id AS foto_id
+            SELECT p.tipo, p.concesionaria, v.*, f.id AS foto_id, (ver.id IS NOT NULL) AS verificado
               FROM posiciones p JOIN vehiculo v USING (id)
+              LEFT JOIN verificados ver ON ver.id = v.id
               LEFT JOIN LATERAL (SELECT id FROM vehiculo_foto WHERE vehiculo_id = v.id ORDER BY orden, id LIMIT 1) f ON true
              WHERE p.puesto <= 12
              ORDER BY p.tipo, p.puesto");
@@ -79,6 +72,7 @@ final class Explorar
         ];
         foreach ($st as $v) {
             $filas[$v['tipo']]['items'][] = [
+                'verificado' => (bool)$v['verificado'],
                 'empresa' => $v['concesionaria'] === null ? null : ['id' => (int)$v['usuario_id'], 'nombre' => $v['concesionaria']],
                 'id' => (int)$v['id'], 'marca' => $v['marca'], 'modelo' => $v['modelo'], 'anio' => (int)$v['anio'],
                 'kilometraje' => (int)$v['kilometraje'], 'precio' => (float)$v['precio'], 'localidad' => $v['localidad'],

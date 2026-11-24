@@ -53,6 +53,9 @@ final class ExplorarTest extends ApiTestCase
         $this->ingresar($mecanico);
         $this->aceptarYFirmar($id);
         self::assertContains($auto, $this->verificados());
+        self::assertTrue($this->pedir('GET', "/api/vehiculos/$auto")['json']['vehiculo']['verificado']);
+        $catalogo = array_column($this->pedir('GET', '/api/vehiculos?orden=recientes')['json']['items'], null, 'id');
+        self::assertTrue($catalogo[$auto]['verificado']);
 
         $db = Entorno::pdo();
         $db->prepare("UPDATE inspeccion SET firmada_at = now() - interval '91 days' WHERE id = ?")->execute([$id]);
