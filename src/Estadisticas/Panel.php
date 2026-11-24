@@ -101,7 +101,9 @@ final class Panel
                       WHERE estado = 'firmada' AND pago = 'retenido' AND firmada_at >= r.desde AND firmada_at < r.hasta) AS por_cobrar
                FROM cobros CROSS JOIN pendientes CROSS JOIN clics"
         );
-        $st->execute(['desde' => $desde->format(DATE_ATOM), 'hasta' => $hasta->format(DATE_ATOM)]);
+        // Con microsegundos: redondeado al segundo, lo que pasó en el último segundo quedaba afuera del período
+        $exacto = 'Y-m-d\TH:i:s.uP';
+        $st->execute(['desde' => $desde->format($exacto), 'hasta' => $hasta->format($exacto)]);
         $t = $st->fetch();
         return [
             'nuevos_usuarios' => (int)$t['nuevos_usuarios'],
