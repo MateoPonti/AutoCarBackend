@@ -5,13 +5,12 @@ namespace AutoCar\Tests\Unit;
 
 use AutoCar\Inspecciones\AutoVendido;
 use AutoCar\Inspecciones\Estados;
-use AutoCar\Inspecciones\Fondo;
 use AutoCar\Inspecciones\Precio;
 use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 
-/** Auto vendido (turno que se cae, crédito y cupón) y fondo de garantía: las reglas que no necesitan base. */
-final class AutoVendidoYFondoTest extends TestCase
+/** Auto vendido (turno que se cae, crédito y cupón): las reglas que no necesitan base. */
+final class AutoVendidoTest extends TestCase
 {
     public function testElTurnoSeCaeSiTodaviaNoPaso(): void
     {
@@ -45,22 +44,9 @@ final class AutoVendidoYFondoTest extends TestCase
         self::assertSame('reembolsado', Estados::pagoAl('caida'));
     }
 
-    public function testFranquiciaYCredito(): void
+    public function testCredito(): void
     {
-        self::assertSame(30800.0, Precio::franquicia(77000, 40));
-        self::assertSame(21560.0, Precio::franquicia(53900, 40));
         self::assertSame(30000.0, Precio::credito(100000, 30));
         self::assertSame(0.0, Precio::credito(100000, 0));
-    }
-
-    public function testElSupuestoDelFondo(): void
-    {
-        // $ 100.000, 23 %, un tercio al fondo, tope 3× y franquicia 40 %: entran $ 8.000 y un reclamo cuesta
-        // $ 100.000 + $ 300.000 − $ 30.800 = $ 369.200 → cierra con menos de 1 reclamo cada ~46 inspecciones
-        $s = Fondo::supuesto(100000, 23, 33.3333, 3, 40);
-        self::assertSame(8000.0, $s['aporte_por_inspeccion']);
-        self::assertSame(369200.0, $s['costo_reclamo']);
-        self::assertSame(46.2, $s['inspecciones_por_reclamo']);
-        self::assertNull(Fondo::supuesto(100000, 23, 0, 3, 40)['inspecciones_por_reclamo']);
     }
 }

@@ -36,8 +36,8 @@ final class SeguridadTest extends ApiTestCase
         $this->ingresarComoUsuario();
         $id = $this->pedir('POST', '/api/inspecciones', ['url' => self::ML, 'mecanico_id' => $mecanicoId])['json']['inspeccion']['id'];
 
-        $copia = "INSERT INTO inspeccion (comprador_id, mecanico_id, url, url_clave, fuente, precio, monto_mecanico, monto_autocar, monto_fondo)
-            SELECT comprador_id, mecanico_id, url, url_clave, fuente, precio, monto_mecanico, monto_autocar, monto_fondo
+        $copia = "INSERT INTO inspeccion (comprador_id, mecanico_id, url, url_clave, fuente, precio, monto_mecanico, monto_autocar)
+            SELECT comprador_id, mecanico_id, url, url_clave, fuente, precio, monto_mecanico, monto_autocar
               FROM inspeccion WHERE id = :id";
         try {
             Entorno::pdo()->prepare($copia)->execute(['id' => $id]);

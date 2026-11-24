@@ -18,9 +18,8 @@ final class ParametrosYPreferenciasTest extends TestCase
             ['valor' => $valor, 'minimo' => $minimo, 'maximo' => $maximo, 'unidad' => $unidad];
         return [
             'comision_autocar' => $p(23, 0, 50, 'porcentaje'),
-            'parte_fondo'      => $p(33.3333, 0, 100, 'porcentaje'),
-            'tope_veces'       => $p(3, 0, 10, 'veces'),
-            'dias_reclamo'     => $p(15, 1, 60, 'dias'),
+            'credito_vendido'  => $p(30, 0, 100, 'porcentaje'),
+            'dias_presupuesto' => $p(15, 1, 90, 'dias'),
             'precio_minimo'    => $p(70000, 1000, 10000000, 'pesos'),
             'precio_sugerido'  => $p(100000, 1000, 10000000, 'pesos'),
             'precio_maximo'    => $p(150000, 1000, 10000000, 'pesos'),
@@ -31,7 +30,7 @@ final class ParametrosYPreferenciasTest extends TestCase
 
     public function testSoloDevuelveLosQueCambian(): void
     {
-        [$cambian, $errores] = Parametros::validar(self::actuales(), ['comision_autocar' => '20', 'dias_reclamo' => 15]);
+        [$cambian, $errores] = Parametros::validar(self::actuales(), ['comision_autocar' => '20', 'dias_presupuesto' => 15]);
         self::assertSame([], $errores);
         self::assertSame(['comision_autocar' => 20.0], $cambian);
     }
@@ -41,16 +40,16 @@ final class ParametrosYPreferenciasTest extends TestCase
         // 770 % en vez de 77 %: el error típico que frena el mínimo y el máximo
         [, $errores] = Parametros::validar(self::actuales(), ['comision_autocar' => 770]);
         self::assertArrayHasKey('comision_autocar', $errores);
-        [, $errores] = Parametros::validar(self::actuales(), ['dias_reclamo' => 0]);
-        self::assertArrayHasKey('dias_reclamo', $errores);
+        [, $errores] = Parametros::validar(self::actuales(), ['dias_presupuesto' => 0]);
+        self::assertArrayHasKey('dias_presupuesto', $errores);
     }
 
     public function testDiasYPesosSinDecimalesYSoloNumeros(): void
     {
-        [, $errores] = Parametros::validar(self::actuales(), ['dias_reclamo' => 10.5, 'precio_maximo' => 'mucho']);
-        self::assertArrayHasKey('dias_reclamo', $errores);
+        [, $errores] = Parametros::validar(self::actuales(), ['dias_presupuesto' => 10.5, 'precio_maximo' => 'mucho']);
+        self::assertArrayHasKey('dias_presupuesto', $errores);
         self::assertArrayHasKey('precio_maximo', $errores);
-        [, $errores] = Parametros::validar(self::actuales(), ['parte_fondo' => 40.5]);
+        [, $errores] = Parametros::validar(self::actuales(), ['credito_vendido' => 40.5]);
         self::assertSame([], $errores);
     }
 

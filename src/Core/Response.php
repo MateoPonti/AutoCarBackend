@@ -26,6 +26,16 @@ final class Response
         exit;
     }
 
+    /** Redirección (302) a otra dirección. Solo con direcciones que salen de datos propios, nunca de lo que llega. */
+    public static function redireccion(string $url): never
+    {
+        http_response_code(302);
+        header('Location: ' . $url);
+        header('Cache-Control: no-store');
+        header('Referrer-Policy: no-referrer');
+        exit;
+    }
+
     public static function noContent(): never
     {
         http_response_code(204);

@@ -55,19 +55,21 @@ final class EstadisticasTest extends ApiTestCase
         self::assertSame($antes['serie']['puntos'][6]['pagaron'] + 1, $despues['serie']['puntos'][6]['pagaron']);
     }
 
-    public function testElInformeDePlataTraeGananciaPerdidaYNeta(): void
+    public function testElInformeDePlataTraeIngresosSinPerdidaPorReclamos(): void
     {
         $m = $this->metricas(90);
         foreach (['actual', 'anterior'] as $periodo) {
             $t = $m['resumen'][$periodo];
-            foreach (['ingresos', 'perdida', 'neta', 'por_cobrar', 'reclamos_procedieron'] as $clave) {
+            foreach (['ingresos', 'por_cobrar', 'mecanicos'] as $clave) {
                 self::assertArrayHasKey($clave, $t);
             }
-            self::assertEqualsWithDelta($t['ingresos'] - $t['perdida'], $t['neta'], 0.01);
-            self::assertEqualsWithDelta($t['reclamos'], $t['perdida'], 0.01);
+            foreach (['perdida', 'neta', 'reclamos', 'reclamos_procedieron'] as $clave) {
+                self::assertArrayNotHasKey($clave, $t); // sin reclamos desde el 23/11
+            }
         }
         foreach ($m['serie']['puntos'] as $p) {
-            self::assertEqualsWithDelta($p['ingresos'] - $p['reclamos'], $p['neta'], 0.01);
+            self::assertArrayHasKey('ingresos', $p);
+            self::assertArrayNotHasKey('reclamos', $p);
         }
     }
 
@@ -129,16 +131,32 @@ final class EstadisticasTest extends ApiTestCase
         $eAntes = self::origen(self::delUso($antes['embudo'], 'trabajo'), 'metabuscador');
         self::assertSame($eAntes['vieron'] + 1, $e['vieron']);
         self::assertSame($eAntes['pagaron'] + 1, $e['pagaron']);
+        // La inspección no está firmada todavía: no suma ganancia, pero el origen trae cuánto deja cada paso
+        self::assertSame($eAntes['ganancia'], $e['ganancia']);
+        self::assertArrayHasKey('por_vio', $e);
+        self::assertArrayHasKey('por_pago', $despues['valor']['total'] + self::origen(self::delUso($despues['embudo'], 'trabajo'), 'para_vos'));
+        self::assertArrayHasKey('ganancia', $this->metricas()['embudo']['total']);
 
         $p = self::delUso($despues['plata'], 'trabajo');
         self::assertSame(self::delUso($antes['plata'], 'trabajo')['pagaron'] + 1, $p['pagaron']);
-        self::assertEqualsWithDelta($p['ingresos'] - $p['perdida'], $p['neta'], 0.01);
+        self::assertArrayHasKey('ingresos', $p);
+        self::assertArrayNotHasKey('perdida', $p); // sin reclamos desde el 23/11
+
+        // Valor por interacción: buscó y eligió un orden (2 interacciones; "mostrado" no cuenta) y después pagó
+        $v = self::delUso($despues['valor']['por_uso'], 'trabajo');
+        $vAntes = self::delUso($antes['valor']['por_uso'], 'trabajo');
+        self::assertSame($vAntes['interacciones'] + 2, $v['interacciones']);
+        self::assertSame($vAntes['activos'] + 1, $v['activos']);
+        self::assertSame($vAntes['compradores'] + 1, $v['compradores']);
+        self::assertSame($vAntes['compradores_sin_interacciones'], $v['compradores_sin_interacciones']);
+        self::assertNotNull($v['interacciones_hasta_comprar']);
+        self::assertSame($antes['valor']['total']['interacciones'] + 2, $despues['valor']['total']['interacciones']);
     }
 
-    public function testLasInspeccionesDelPeriodoTraenEstadosReclamosYMecanicos(): void
+    public function testLasInspeccionesDelPeriodoTraenEstadosYMecanicos(): void
     {
         $i = $this->metricas(30)['inspecciones'];
-        foreach (['pedidas', 'precio_promedio', 'horas_hasta_firma', 'por_estado', 'conclusiones', 'reclamos', 'top_mecanicos'] as $clave) {
+        foreach (['pedidas', 'precio_promedio', 'horas_hasta_firma', 'por_estado', 'conclusiones', 'top_mecanicos'] as $clave) {
             self::assertArrayHasKey($clave, $i);
         }
         self::assertSame(array_sum($i['por_estado']), $i['pedidas']);

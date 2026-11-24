@@ -44,15 +44,15 @@ final class InspeccionesMecanicoTest extends ApiTestCase
     private function pedidaA(int $mecanicoId): array
     {
         $email = $this->registrar();
-        $d = Precio::desglose(130000, 23, 33.3333);
+        $d = Precio::desglose(130000, 23);
         $st = Entorno::pdo()->prepare(
             "INSERT INTO inspeccion (comprador_id, mecanico_id, url, fuente, titulo, anio, kilometraje, localidad,
-               precio, monto_mecanico, monto_autocar, monto_fondo)
+               precio, monto_mecanico, monto_autocar)
              VALUES (:c, :m, 'https://auto.mercadolibre.com.ar/MLA-1-gol-_JM', 'mercadolibre', 'VW Gol Trend', 2018,
-               98000, 'Luján', :p, :mm, :ma, :mf) RETURNING id"
+               98000, 'Luján', :p, :mm, :ma) RETURNING id"
         );
         $st->execute(['c' => self::idDe($email), 'm' => $mecanicoId, 'p' => $d['precio'],
-            'mm' => $d['monto_mecanico'], 'ma' => $d['monto_autocar'], 'mf' => $d['monto_fondo']]);
+            'mm' => $d['monto_mecanico'], 'ma' => $d['monto_autocar']]);
         return [(int)$st->fetchColumn(), $email];
     }
 
@@ -301,8 +301,8 @@ final class InspeccionesMecanicoTest extends ApiTestCase
         self::assertSame('pedida', $detalle['json']['inspeccion']['estado']);
         self::assertSame([], $detalle['json']['inspeccion']['items']);
 
-        $this->ingresarComoAdmin(); // quien resuelve reclamos también
-        self::assertSame(200, $this->pedir('GET', "/api/inspecciones/$id")['status']);
+        $this->ingresarComoAdmin(); // sin reclamos no hay quién más la vea: solo el comprador y el mecánico
+        self::assertSame(404, $this->pedir('GET', "/api/inspecciones/$id")['status']);
     }
 
     public function testCambiarDatosSinTokenCsrfDa403(): void

@@ -38,8 +38,8 @@ final class ParametroController
     }
 
     /**
-     * GET /api/parametros (público) → {clave: valor}: el front los usa para el desglose del precio, el rango que
-     * acepta el formulario del taller y los días para reclamar. No hay nada secreto: son las reglas del sitio.
+     * GET /api/parametros (público) → {clave: valor}: el front los usa para el desglose del precio, y el rango que
+     * acepta el formulario del taller. No hay nada secreto: son las reglas del sitio.
      */
     public function publicos(): void
     {

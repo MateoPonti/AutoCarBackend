@@ -148,7 +148,8 @@ final class Mercado
         $st = $this->pdo->query(
             "SELECT id, marca, modelo, version, anio, transmision, localidad, kilometraje, precio, created_at, imagen_url,
                     (SELECT id FROM vehiculo_foto WHERE vehiculo_id = vehiculo.id ORDER BY orden, id LIMIT 1) AS foto_id
-               FROM vehiculo WHERE estado = 'disponible'"
+               FROM vehiculo WHERE estado = 'disponible'
+                AND usuario_id NOT IN (" . \AutoCar\Empresas\Empresa::APROBADAS_SQL . ")"
         );
         $autos = array_map(static fn(array $f): array => [
             'id'             => (int)$f['id'],

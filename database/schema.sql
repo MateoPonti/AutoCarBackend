@@ -36,14 +36,12 @@ INSERT INTO permiso (nombre, descripcion) VALUES
   ('verificaciones.ver',      'Ver las verificaciones de vehículos asignadas al taller'),
   ('verificaciones.realizar', 'Cargar el resultado de una verificación'),
   ('metricas.ver',            'Ver las métricas de la aplicación'),
-  ('reclamos.resolver',       'Ver los reclamos de inspecciones y decidir si proceden'),
-  ('parametros.editar',       'Cambiar los parámetros del negocio (comisión, fondo, tope, días de reclamo, precios)')
+  ('parametros.editar',       'Cambiar los parámetros del negocio (comisión, precios, crédito, ranking)')
 ON CONFLICT (nombre) DO NOTHING;
 
 INSERT INTO rol_permiso (rol_id, permiso_id)
 SELECT r.id, p.id FROM (VALUES
   ('moderador', 'vehiculos.moderar'),
-  ('moderador', 'reclamos.resolver'),
   ('mecanico',  'verificaciones.ver'),
   ('mecanico',  'verificaciones.realizar')
 ) AS rp(rol, permiso)
@@ -1448,9 +1446,6 @@ CREATE TABLE IF NOT EXISTS inspeccion (
   precio           NUMERIC(11,2) NOT NULL CHECK (precio > 0),
   monto_mecanico   NUMERIC(11,2) NOT NULL,
   monto_autocar    NUMERIC(11,2) NOT NULL,
-  monto_fondo      NUMERIC(11,2) NOT NULL,   -- parte de monto_autocar que va al fondo de garantía
-  tope_veces       NUMERIC(6,2)  NOT NULL DEFAULT 3,   -- con los que se pidió (parámetros, 021-preferencias-y-parametros.sql)
-  dias_reclamo     SMALLINT      NOT NULL DEFAULT 15,
   credito_usado    NUMERIC(11,2) NOT NULL DEFAULT 0,   -- crédito del comprador descontado del precio (024)
   marca            VARCHAR(60),   -- del catálogo, para las fallas típicas por modelo (026); obligatorios para firmar
   modelo           VARCHAR(60),
@@ -1473,7 +1468,6 @@ CREATE TABLE IF NOT EXISTS inspeccion (
   CONSTRAINT inspeccion_modelo_fk FOREIGN KEY (marca, modelo) REFERENCES modelo (marca, nombre) ON UPDATE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_inspeccion_modelo ON inspeccion (marca, modelo) WHERE estado = 'firmada';
-CREATE INDEX IF NOT EXISTS idx_inspeccion_patente ON inspeccion (patente) WHERE patente IS NOT NULL;
 
 -- Foto de la chapa que sube el mecánico antes de firmar (022-patente.sql)
 CREATE TABLE IF NOT EXISTS inspeccion_patente_foto (
@@ -1508,24 +1502,6 @@ CREATE TABLE IF NOT EXISTS inspeccion_item_foto (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (inspeccion_id, codigo)
 );
-
--- Un solo reclamo por inspección. Si procede, el pago se reembolsa y el mecánico baja en el ranking.
-CREATE TABLE IF NOT EXISTS reclamo (
-  id            INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  inspeccion_id INTEGER       NOT NULL UNIQUE REFERENCES inspeccion(id),
-  item_codigo   VARCHAR(20),
-  descripcion   VARCHAR(1000) NOT NULL CHECK (length(descripcion) > 0),
-  estado        VARCHAR(10)   NOT NULL DEFAULT 'abierto' CHECK (estado IN ('abierto', 'procede', 'no_procede')),
-  compensacion  NUMERIC(11,2) CHECK (compensacion >= 0),
-  devolucion    NUMERIC(11,2) CHECK (devolucion >= 0),   -- lo que pagó el comprador, que le devuelve el fondo (024)
-  franquicia    NUMERIC(11,2) CHECK (franquicia >= 0),   -- lo que el mecánico le paga al fondo (024)
-  respuesta     VARCHAR(1000),
-  resuelto_por  INTEGER       REFERENCES usuario(id),
-  created_at    TIMESTAMPTZ   NOT NULL DEFAULT now(),
-  resuelto_at   TIMESTAMPTZ
-);
-
-CREATE INDEX IF NOT EXISTS idx_reclamo_estado ON reclamo (estado, created_at);
 
 -- Idea A, costo total (025-presupuestos.sql, Inspecciones\Presupuestos): cada arreglo del informe firmado se le pide a
 -- otros talleres de la red, nunca al que inspeccionó. Cada uno responde con un monto, vigente unos días.
@@ -1664,14 +1640,10 @@ CREATE INDEX IF NOT EXISTS idx_parametro_cambio_fecha ON parametro_cambio (creat
 -- Valores decididos el 14/11 (ideas-14-11-2026/decisiones-14-11-2026.md del front)
 INSERT INTO parametro (clave, valor, minimo, maximo, unidad, descripcion, orden) VALUES
   ('comision_autocar', 23,      0,    50,       'porcentaje', 'Parte del precio de la inspección que se queda AutoCar (el resto es del mecánico)', 1),
-  ('parte_fondo',      33.3333, 0,    100,      'porcentaje', 'Parte de lo de AutoCar que va al fondo de garantía', 2),
-  ('tope_veces',       3,       0,    10,       'veces',      'Tope de la compensación de un reclamo, en veces el precio de la inspección', 3),
-  ('dias_reclamo',     15,      1,    60,       'dias',       'Días que tiene el comprador para reclamar después de la firma', 4),
   ('precio_minimo',    70000,   1000, 10000000, 'pesos',      'Precio mínimo que puede cobrar un taller por la inspección', 5),
   ('precio_sugerido',  100000,  1000, 10000000, 'pesos',      'Precio que se le sugiere al taller', 6),
   ('precio_maximo',    150000,  1000, 10000000, 'pesos',      'Precio máximo que puede cobrar un taller por la inspección', 7),
   ('cotizacion_dolar', 1450,    1,    100000,   'pesos',      'Cotización del dólar: con ella se muestran en pesos los autos publicados en dólares en el metabuscador', 8), -- 023
-  ('franquicia',       40,      0,    100,      'porcentaje', 'Parte de lo que cobró el mecánico que paga al fondo si un reclamo procede', 9),  -- 024
   ('credito_vendido',  30,      0,    100,      'porcentaje', 'Crédito para el comprador, en % del precio, si el auto se vendió (firmada con el auto vendido o cupón)', 10),
   ('horas_cupon',      48,      1,    720,      'horas',      'Horas después de la firma en las que, si el auto se vende con el turno confirmado, el comprador recibe el cupón', 11),
   ('presupuestos_por_arreglo', 3, 1, 10,       'veces',      'A cuántos talleres de la red se les pide presupuesto por cada arreglo del informe', 12),  -- 025
@@ -1703,9 +1675,7 @@ INSERT INTO parametro (clave, valor, minimo, maximo, unidad, descripcion, orden)
 ON CONFLICT (clave) DO NOTHING;
 -- 030: el ranking de los mecánicos en Parámetros (ver Inspecciones\Ranking)
 INSERT INTO parametro (clave, valor, minimo, maximo, unidad, descripcion, orden) VALUES
-  ('ranking_veces_reclamo',      2,   0, 10, 'veces',  'Ranking de mecánicos: cuánto baja el puntaje cada reclamo que procedió (el "2" de la fórmula)', 34),
-  ('ranking_minimo_firmadas',    3,   1, 50, 'veces',  'Ranking de mecánicos: inspecciones firmadas que hacen falta para tener puntaje (antes es "Nuevo en la red")', 35),
-  ('ranking_especialidad_buena', 2.5, 0, 5,  'puntos', 'Ranking de mecánicos: desde qué puntaje en un modelo o marca la especialidad es buena', 36)
+  ('ranking_minimo_firmadas',    3,   1, 50, 'veces',  'Ranking de mecánicos: inspecciones firmadas que hacen falta para dejar de ser "Nuevo en la red"', 35)
 ON CONFLICT (clave) DO NOTHING;
 
 -- Preferencias del comprador: "¿Para qué buscás el auto?" (021-preferencias-y-parametros.sql, Auth\Preferencias)
@@ -1734,3 +1704,96 @@ CREATE TABLE IF NOT EXISTS cobro (
   updated_at    TIMESTAMPTZ   NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_cobro_orden ON cobro (orden_id);
+
+-- 032: afiliación con las plataformas del metabuscador (convenio simulado): clics de salida, tarifa por clic y meses cobrados
+CREATE TABLE IF NOT EXISTS convenio_plataforma (
+  fuente      VARCHAR(30)   PRIMARY KEY,               -- la misma clave que usa el metabuscador (mercadolibre, kavak…)
+  nombre      VARCHAR(60)   NOT NULL,
+  tarifa_clic NUMERIC(12,2) NOT NULL CHECK (tarifa_clic >= 0),
+  activo      BOOLEAN       NOT NULL DEFAULT true,     -- sin convenio activo los clics se cuentan, pero no se cobran
+  updated_at  TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+
+INSERT INTO convenio_plataforma (fuente, nombre, tarifa_clic) VALUES
+  ('mercadolibre', 'MercadoLibre', 150),
+  ('kavak',        'Kavak',        200),
+  ('autocosmos',   'Autocosmos',   150)
+ON CONFLICT (fuente) DO NOTHING;
+
+-- Un clic hacia el aviso de otra plataforma. "valido" = el que se cobra: de una cuenta personal y no repetido
+-- (el mismo usuario y el mismo auto cuentan una vez cada 24 horas). Los demás quedan para ver el tráfico total.
+CREATE TABLE IF NOT EXISTS clic_salida (
+  id         BIGINT       GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  usuario_id INTEGER      REFERENCES usuario(id) ON DELETE SET NULL,
+  fuente     VARCHAR(30)  NOT NULL,
+  auto_id    VARCHAR(200) NOT NULL,
+  origen     VARCHAR(20),                                -- para_vos, destacado o metabuscador (desde dónde se tocó)
+  valido     BOOLEAN      NOT NULL,
+  created_at TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_clic_salida_fecha ON clic_salida (created_at, fuente);
+CREATE INDEX IF NOT EXISTS idx_clic_salida_repetido ON clic_salida (usuario_id, auto_id, created_at);
+
+-- Un mes cerrado que el admin marcó cobrado, con lo que se cobró en ese momento (si después cambia la tarifa, no se
+-- mueve). tipo empresa queda para el abono de las concesionarias.
+CREATE TABLE IF NOT EXISTS cobro_afiliacion (
+  tipo        VARCHAR(12)   NOT NULL CHECK (tipo IN ('plataforma', 'empresa')),
+  socio       VARCHAR(60)   NOT NULL,                  -- la fuente de la plataforma (o el id de la empresa)
+  mes         DATE          NOT NULL CHECK (mes = date_trunc('month', mes)::date),
+  cantidad    INTEGER       NOT NULL,                  -- clics válidos del mes
+  monto       NUMERIC(14,2) NOT NULL,
+  cobrado_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  cobrado_por INTEGER       REFERENCES usuario(id) ON DELETE SET NULL,
+  PRIMARY KEY (tipo, socio, mes)
+);
+
+-- 033: empresas (concesionarias), visitas a las publicaciones y su precio contra el mercado, y límite de autos de un particular
+INSERT INTO rol (nombre, descripcion) VALUES
+  ('empresa', 'Concesionaria o agencia: publica sin límite, con su insignia, su vitrina y su panel')
+ON CONFLICT (nombre) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS empresa (
+  usuario_id     INTEGER      PRIMARY KEY REFERENCES usuario(id) ON DELETE CASCADE,
+  razon_social   VARCHAR(100) NOT NULL,                 -- el nombre que se ve en la insignia y la vitrina
+  cuit           VARCHAR(13)  NOT NULL,                 -- 30-12345678-9
+  localidad      VARCHAR(100) NOT NULL,
+  telefono       VARCHAR(30)  NOT NULL,
+  sitio_web      VARCHAR(200),
+  estado         VARCHAR(10)  NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente', 'aprobado', 'rechazado')),
+  motivo_rechazo VARCHAR(300),
+  resuelto_por   INTEGER      REFERENCES usuario(id) ON DELETE SET NULL,
+  resuelto_at    TIMESTAMPTZ,
+  created_at     TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  updated_at     TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_empresa_estado ON empresa (estado, created_at);
+
+CREATE TABLE IF NOT EXISTS vehiculo_visita (
+  vehiculo_id INTEGER     NOT NULL REFERENCES vehiculo(id) ON DELETE CASCADE,
+  visitante   VARCHAR(64) NOT NULL,                     -- u:<id> con sesión; si no, una marca anónima del día
+  dia         DATE        NOT NULL,                     -- en hora de Argentina
+  PRIMARY KEY (vehiculo_id, visitante, dia)
+);
+CREATE INDEX IF NOT EXISTS idx_vehiculo_visita_dia ON vehiculo_visita (dia, vehiculo_id);
+
+CREATE TABLE IF NOT EXISTS vehiculo_mercado (
+  vehiculo_id    INTEGER       PRIMARY KEY REFERENCES vehiculo(id) ON DELETE CASCADE,
+  precio         NUMERIC(14,2) NOT NULL,                -- con qué datos del auto se calculó (si cambian, se recalcula)
+  kilometraje    INTEGER       NOT NULL,
+  anio           SMALLINT      NOT NULL,
+  suficientes    BOOLEAN       NOT NULL,                -- hay al menos 5 autos parecidos
+  diferencia_pct NUMERIC(7,1),                          -- % contra el precio típico de los parecidos
+  mediana_precio NUMERIC(14,2),
+  mediana_km     INTEGER,
+  comparables    INTEGER       NOT NULL,
+  calculado_at   TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+
+ALTER TABLE parametro DROP CONSTRAINT IF EXISTS parametro_unidad_check;
+ALTER TABLE parametro ADD CONSTRAINT parametro_unidad_check
+  CHECK (unidad IN ('porcentaje', 'pesos', 'dias', 'veces', 'horas', 'puntos', 'autos'));
+
+INSERT INTO parametro (clave, valor, minimo, maximo, unidad, descripcion, orden) VALUES
+  ('limite_autos_particular', 3,     1, 50,       'autos', 'Autos activos (publicados o en revisión) que puede tener un particular; las empresas no tienen límite', 37),
+  ('abono_empresa_mensual',   50000, 0, 10000000, 'pesos', 'Abono mensual de cada empresa (incluye mantenimiento y aparición); el mismo para todas', 38)
+ON CONFLICT (clave) DO NOTHING;

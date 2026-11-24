@@ -15,7 +15,9 @@ if (PHP_SAPI !== 'cli') {
 require dirname(__DIR__) . '/autoload.php';
 
 $limite = isset($argv[1]) ? max(1, (int)$argv[1]) : 2000;
-$http = new Http(3.0);
+// Más lento que el resto: el 21 y 22/11 Autocosmos respondió 503 desde GitHub Actions a las pocas páginas.
+// 10 s entre páginas y, si responde 503, 5 intentos esperando 1, 2, 3 y 4 minutos.
+$http = new Http(10.0, 5, 60);
 $autos = [];
 $errores = [];
 $fin = false;

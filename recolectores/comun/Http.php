@@ -12,13 +12,15 @@ use RuntimeException;
 final class Http
 {
     private const AGENTE = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
-    private const REINTENTOS = 3;
-
     private float $ultimo = 0.0;
     public int $pedidos = 0;
 
-    /** @param float $pausa segundos mínimos entre un pedido y el siguiente */
-    public function __construct(private float $pausa = 3.0)
+    /**
+     * @param float $pausa segundos mínimos entre un pedido y el siguiente
+     * @param int $reintentos intentos por página antes de darla por fallada
+     * @param int $espera segundos antes del primer reintento (después crece: 1×, 2×, 3×…)
+     */
+    public function __construct(private float $pausa = 3.0, private int $reintentos = 3, private int $espera = 10)
     {
     }
 
@@ -30,10 +32,10 @@ final class Http
             if ($codigo === 200 && $cuerpo !== '') {
                 return $cuerpo;
             }
-            if (!self::transitorio($codigo, $error) || $intento >= self::REINTENTOS) {
+            if (!self::transitorio($codigo, $error) || $intento >= $this->reintentos) {
                 throw new RuntimeException("GET $url respondió $codigo" . ($error !== '' ? " ($error)" : ''));
             }
-            sleep(10 * $intento);
+            sleep($this->espera * $intento);
         }
     }
 
