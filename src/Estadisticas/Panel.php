@@ -4,6 +4,8 @@ declare(strict_types=1);
 namespace AutoCar\Estadisticas;
 
 use AutoCar\Core\Database;
+use DateTimeImmutable;
+use DateTimeZone;
 use PDO;
 
 /**
@@ -25,25 +27,46 @@ final class Panel
     }
 
     /**
-     * Totales del período y del anterior: nuevos usuarios, inspecciones pagadas, compradores, firmadas,
-     * facturado y ganancia de AutoCar.
+     * Contra qué se compara cada período, siempre del mismo largo: 7 días contra los mismos 7 días del mes pasado (un
+     * martes contra un martes, sin la semana de al lado que puede tener un feriado); 30 días y 3 meses contra el tramo
+     * de antes. Devuelve [desde, hasta) del período actual y del anterior.
+     * @return array{actual: array{0: DateTimeImmutable, 1: DateTimeImmutable}, anterior: array{0: DateTimeImmutable, 1: DateTimeImmutable}}
+     */
+    public static function rangos(int $dias, ?DateTimeImmutable $ahora = null): array
+    {
+        $hasta = $ahora ?? new DateTimeImmutable('now', new DateTimeZone(self::ZONA));
+        $desde = $hasta->modify("-$dias days");
+        $corrimiento = $dias === 7 ? '-1 month' : "-$dias days";
+        return [
+            'actual'   => [$desde, $hasta],
+            'anterior' => [$desde->modify($corrimiento), $hasta->modify($corrimiento)],
+        ];
+    }
+
+    /**
+     * Totales del período y del anterior (ver rangos()): nuevos usuarios, inspecciones pagadas, compradores, firmadas,
+     * facturado y ganancia de AutoCar. "rangos" dice las fechas de cada uno (desde incluido, hasta excluido).
      * Los ingresos incluyen cobros de afiliación por fecha de cobro y la comisión de AutoCar de las firmadas (también las
      * pocas reembolsadas antes del 23/11, cuando había reclamos) menos los créditos usados; por cobrar = la comisión de
      * las firmadas que todavía no se cobraron.
-     * @return array{actual: array<string, float|int>, anterior: array<string, float|int>}
+     * @return array{actual: array<string, float|int>, anterior: array<string, float|int>, rangos: array<string, array{desde: string, hasta: string}>}
      */
     public static function resumen(int $dias): array
     {
-        return ['actual' => self::totales($dias, 0), 'anterior' => self::totales($dias, $dias)];
+        $rangos = self::rangos($dias);
+        $fechas = static fn(array $r): array => ['desde' => $r[0]->format(DATE_ATOM), 'hasta' => $r[1]->format(DATE_ATOM)];
+        return [
+            'actual'   => self::totales(...$rangos['actual']),
+            'anterior' => self::totales(...$rangos['anterior']),
+            'rangos'   => ['actual' => $fechas($rangos['actual']), 'anterior' => $fechas($rangos['anterior'])],
+        ];
     }
 
     /** @return array<string, float|int> */
-    private static function totales(int $dias, int $corrimiento): array
+    private static function totales(DateTimeImmutable $desde, DateTimeImmutable $hasta): array
     {
-        // $dias y $corrimiento son enteros (dias() valida el período): van en la consulta como números
-        $desde = $dias + $corrimiento;
-        $st = Database::pdo()->query(
-            "WITH r AS (SELECT now() - make_interval(days => $desde) AS desde, now() - make_interval(days => $corrimiento) AS hasta),
+        $st = Database::pdo()->prepare(
+            "WITH r AS (SELECT CAST(:desde AS timestamptz) AS desde, CAST(:hasta AS timestamptz) AS hasta),
              cobros AS (
                 SELECT COALESCE(sum(monto) FILTER (WHERE tipo = 'plataforma'), 0) AS ingresos_clics,
                        COALESCE(sum(monto) FILTER (WHERE tipo = 'empresa'), 0) AS ingresos_abonos,
@@ -78,6 +101,7 @@ final class Panel
                       WHERE estado = 'firmada' AND pago = 'retenido' AND firmada_at >= r.desde AND firmada_at < r.hasta) AS por_cobrar
                FROM cobros CROSS JOIN pendientes CROSS JOIN clics"
         );
+        $st->execute(['desde' => $desde->format(DATE_ATOM), 'hasta' => $hasta->format(DATE_ATOM)]);
         $t = $st->fetch();
         return [
             'nuevos_usuarios' => (int)$t['nuevos_usuarios'],
