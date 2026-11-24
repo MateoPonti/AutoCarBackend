@@ -68,14 +68,15 @@ final class EstadisticasTest extends ApiTestCase
             }
         }
         foreach ($m['serie']['puntos'] as $p) {
-            self::assertArrayHasKey('ingresos', $p);
+            self::assertEquals($p['ingresos'], $p['ingresos_inspecciones'] + $p['ingresos_clics'] + $p['ingresos_abonos']);
             self::assertArrayNotHasKey('reclamos', $p);
         }
     }
 
     public function testPlataDistingueClicsPendientesYLiquidacionesCobradas(): void
     {
-        $antes = $this->metricas(90)['resumen']['actual'];
+        $inicial = $this->metricas(90);
+        $antes = $inicial['resumen']['actual'];
         $db = Entorno::pdo();
         $db->exec("INSERT INTO convenio_plataforma (fuente, nombre, tarifa_clic) VALUES ('prueba_plata', 'Prueba', 125)");
         $db->exec("INSERT INTO clic_salida (fuente, auto_id, valido, created_at) VALUES
@@ -83,11 +84,18 @@ final class EstadisticasTest extends ApiTestCase
             ('prueba_plata', 'liquidado', true, now() - interval '1 month')");
         $db->exec("INSERT INTO cobro_afiliacion (tipo, socio, mes, cantidad, monto) VALUES
             ('plataforma', 'prueba_plata', date_trunc('month', (now() AT TIME ZONE 'America/Argentina/Buenos_Aires') - interval '1 month'), 1, 95)");
-        $m = $this->metricas(90)['resumen']['actual'];
+        $db->exec("INSERT INTO cobro_afiliacion (tipo, socio, mes, cantidad, monto) VALUES
+            ('empresa', '101', date_trunc('month', now() - interval '1 month'), 1, 210)");
+        $final = $this->metricas(90);
+        $m = $final['resumen']['actual'];
+        $ultima = array_key_last($final['serie']['puntos']);
+        foreach (['ingresos_clics' => 95, 'ingresos_abonos' => 210, 'ingresos_inspecciones' => 0] as $clave => $extra) {
+            self::assertEquals($inicial['serie']['puntos'][$ultima][$clave] + $extra, $final['serie']['puntos'][$ultima][$clave]);
+        }
         self::assertEquals($antes['clics_por_cobrar'] + 125, $m['clics_por_cobrar']);
         self::assertEquals($antes['clics_pendientes'] + 1, $m['clics_pendientes']);
         self::assertEquals($antes['ingresos_clics'] + 95, $m['ingresos_clics']);
-        self::assertEquals($antes['ingresos'] + 95, $m['ingresos']);
+        self::assertEquals($antes['ingresos'] + 305, $m['ingresos']);
     }
 
     public function testLosEventosSonSoloDeCuentasPersonalesYElPeriodoSeValida(): void
