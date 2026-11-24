@@ -47,6 +47,9 @@ final class Vehiculo
         } elseif (($f['completa'] ?? '') === '0') {
             $where[] = 'NOT ' . self::COMPLETA_SQL;
         }
+        if ($soloDisponibles && ($f['zona'] ?? '') !== '') {
+            $where[] = Localidad::condicion($f['zona'], $params);
+        }
         if (($f['marca'] ?? '') !== '') {
             $where[] = 'marca = :marca';
             $params['marca'] = $f['marca'];
@@ -383,7 +386,7 @@ final class Vehiculo
             'combustible' => $v['combustible'], 'transmision' => $v['transmision'], 'estado' => $v['estado'],
             'descripcion' => $v['descripcion'], 'imagen_url' => $v['imagen_url'],
             'version' => $v['version'], 'condicion' => $v['condicion'], 'acepta_canje' => (bool)$v['acepta_canje'],
-            'busca_canje' => $v['busca_canje'], 'localidad' => $v['localidad'],
+            'busca_canje' => $v['busca_canje'], 'localidad' => Localidad::nombre($v['localidad']),
             'motivo_rechazo' => $v['motivo_rechazo'] ?? null,
             // Ruta relativa a la API: el front le antepone API_URL
             'foto' => isset($v['foto_id']) ? '/api/fotos/' . (int)$v['foto_id'] : null,

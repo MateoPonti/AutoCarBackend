@@ -110,6 +110,14 @@ final class CatalogoController
     }
 
     /** GET /api/marcas-modelos: las marcas y modelos que se pueden publicar, para armar el formulario. */
+    public function zonas(): void
+    {
+        $zonas = Localidad::disponibles();
+        $actual = Localidad::nombre(self::filtros($_GET)['zona']);
+        Response::json(['zonas' => array_column($zonas, 'nombre'),
+            'seleccionada' => $zonas[Localidad::clave($actual)]['nombre'] ?? $actual]);
+    }
+
     public function marcasModelos(): void
     {
         Response::json(['marcas' => MarcaModelo::lista()]);
@@ -143,6 +151,7 @@ final class CatalogoController
             'completa'    => in_array($texto('completa', 1), ['0', '1'], true) ? $texto('completa', 1) : '', // sólo el admin
             'q'           => $texto('q', 60),
             'marca'       => $texto('marca', 50),
+            'zona'        => $texto('zona', 100),
             'combustible' => in_array($comb, Vehiculo::COMBUSTIBLES, true) ? $comb : '',
             'precio_max'  => preg_match('/^\d{1,9}(\.\d{1,2})?$/', $precio) ? $precio : null,
             'vendedor'    => in_array($vendedor, ['particular', 'empresa'], true) ? $vendedor : '',
