@@ -64,6 +64,11 @@ final class Vehiculo
         } elseif (($f['vendedor'] ?? '') === 'particular') {
             $where[] = 'usuario_id NOT IN (' . \AutoCar\Empresas\Empresa::APROBADAS_SQL . ')';
         }
+        // Explorar: los de una concesionaria (solo si está aprobada y activa)
+        if (($f['empresa'] ?? null) !== null) {
+            $where[] = 'usuario_id = :empresa AND usuario_id IN (' . \AutoCar\Empresas\Empresa::APROBADAS_SQL . ')';
+            $params['empresa'] = $f['empresa'];
+        }
         if (($f['precio_max'] ?? null) !== null) {
             $where[] = 'precio <= :precio_max';
             $params['precio_max'] = $f['precio_max'];

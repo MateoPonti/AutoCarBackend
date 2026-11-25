@@ -104,6 +104,25 @@ final class Empresa
         return $st->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Filtro "Concesionaria" de Explorar: las aprobadas con al menos un auto disponible, por nombre.
+     * @return list<array{id: int, nombre: string, autos: int}>
+     */
+    public static function conAutos(): array
+    {
+        $st = Database::pdo()->query(
+            "SELECT e.usuario_id, e.razon_social, COUNT(*) AS autos
+               FROM empresa e JOIN usuario u ON u.id = e.usuario_id
+               JOIN vehiculo v ON v.usuario_id = e.usuario_id AND v.estado = 'disponible'
+              WHERE e.estado = 'aprobado' AND u.activo
+              GROUP BY e.usuario_id, e.razon_social
+              ORDER BY e.razon_social, e.usuario_id"
+        );
+        return array_map(static fn(array $f): array => [
+            'id' => (int)$f['usuario_id'], 'nombre' => $f['razon_social'], 'autos' => (int)$f['autos'],
+        ], $st->fetchAll(PDO::FETCH_ASSOC));
+    }
+
     /** Aprueba o rechaza (dentro de una transacción, con la solicitud bloqueada y pendiente). La cuenta ya es empresa. */
     public static function resolver(int $usuarioId, bool $aprobar, ?string $motivo, int $resueltoPor): void
     {

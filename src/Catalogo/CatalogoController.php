@@ -155,6 +155,8 @@ final class CatalogoController
             'combustible' => in_array($comb, Vehiculo::COMBUSTIBLES, true) ? $comb : '',
             'precio_max'  => preg_match('/^\d{1,9}(\.\d{1,2})?$/', $precio) ? $precio : null,
             'vendedor'    => in_array($vendedor, ['particular', 'empresa'], true) ? $vendedor : '',
+            // Explorar: los autos de una concesionaria (su id de usuario)
+            'empresa'     => preg_match('/^[1-9][0-9]{0,9}$/', $texto('empresa', 10)) === 1 ? (int)$texto('empresa', 10) : null,
             // Explorar: "Más relevantes" (el ranking) salvo que se pida "recientes" (los más nuevos primero)
             'orden'       => $orden === 'recientes' ? 'recientes' : 'relevantes',
         ];
