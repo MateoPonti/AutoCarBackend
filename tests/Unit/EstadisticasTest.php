@@ -5,6 +5,7 @@ namespace AutoCar\Tests\Unit;
 
 use AutoCar\Estadisticas\Eventos;
 use AutoCar\Estadisticas\Panel;
+use AutoCar\Estadisticas\PlataEscapada;
 use AutoCar\Estadisticas\PorPerfil;
 use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
@@ -182,5 +183,32 @@ final class EstadisticasTest extends TestCase
         self::assertSame(30, Panel::dias(null));
         self::assertSame(30, Panel::dias('5'));
         self::assertSame(30, Panel::dias('abc'));
+    }
+
+    public function testLaPlataEscapadaCuentaCadaPasoDondeSeFueLaGente(): void
+    {
+        // 100 vieron, 20 tocaron, 5 pagaron; 300 avisos mostrados y 40 clics; $10.000 por inspección, $150 por clic
+        $e = PlataEscapada::calcular(['vieron' => 100, 'tocaron' => 20, 'pagaron' => 5], ['mostrados' => 300, 'clics' => 40], 10000.0, 150.0);
+        self::assertSame(15, $e['sin_pagar']['cantidad']);
+        self::assertEqualsWithDelta(150000, $e['sin_pagar']['monto'], 0.01);
+        // 80 sin tocar × 25 % de los que tocan pagan × $10.000
+        self::assertSame(80, $e['sin_tocar']['cantidad']);
+        self::assertEqualsWithDelta(0.25, $e['sin_tocar']['conversion'], 0.0001);
+        self::assertEqualsWithDelta(200000, $e['sin_tocar']['monto'], 0.01);
+        self::assertSame(260, $e['sin_clic']['cantidad']);
+        self::assertEqualsWithDelta(39000, $e['sin_clic']['monto'], 0.01);
+        self::assertEqualsWithDelta(389000, $e['total'], 0.01);
+    }
+
+    public function testSinDatosParaCalcularElMontoQuedaNull(): void
+    {
+        // Nadie tocó, sin inspecciones cobradas ni convenios activos; más clics que avisos no da negativo
+        $e = PlataEscapada::calcular(['vieron' => 10, 'tocaron' => 0, 'pagaron' => 0], ['mostrados' => 2, 'clics' => 5], null, null);
+        self::assertNull($e['sin_tocar']['conversion']);
+        self::assertNull($e['sin_tocar']['monto']);
+        self::assertNull($e['sin_pagar']['monto']);
+        self::assertSame(0, $e['sin_clic']['cantidad']);
+        self::assertNull($e['sin_clic']['monto']);
+        self::assertSame(0.0, $e['total']);
     }
 }
