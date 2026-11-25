@@ -187,28 +187,40 @@ final class EstadisticasTest extends TestCase
 
     public function testLaPlataEscapadaCuentaCadaPasoDondeSeFueLaGente(): void
     {
-        // 100 vieron, 20 tocaron, 5 pagaron; 300 avisos mostrados y 40 clics; $10.000 por inspección, $150 por clic
-        $e = PlataEscapada::calcular(['vieron' => 100, 'tocaron' => 20, 'pagaron' => 5], ['mostrados' => 300, 'clics' => 40], 10000.0, 150.0);
+        // 100 vieron, 20 tocaron, 5 pagaron y se ganaron $50.000; $10.000 por inspección.
+        // MercadoLibre: 300 vistos y 40 clics a $150; Kavak: 10 vistos y 0 clics a $200
+        $e = PlataEscapada::calcular(['vieron' => 100, 'tocaron' => 20, 'pagaron' => 5, 'ganancia' => 50000],
+            ['mercadolibre' => ['mostrados' => 300, 'clics' => 40, 'tarifa' => 150.0], 'kavak' => ['mostrados' => 10, 'clics' => 0, 'tarifa' => 200.0]], 10000.0);
         self::assertSame(15, $e['sin_pagar']['cantidad']);
         self::assertEqualsWithDelta(150000, $e['sin_pagar']['monto'], 0.01);
         // 80 sin tocar × 25 % de los que tocan pagan × $10.000
         self::assertSame(80, $e['sin_tocar']['cantidad']);
         self::assertEqualsWithDelta(0.25, $e['sin_tocar']['conversion'], 0.0001);
         self::assertEqualsWithDelta(200000, $e['sin_tocar']['monto'], 0.01);
-        self::assertSame(260, $e['sin_clic']['cantidad']);
-        self::assertEqualsWithDelta(39000, $e['sin_clic']['monto'], 0.01);
-        self::assertEqualsWithDelta(389000, $e['total'], 0.01);
+        // Inspecciones: ganamos 50.000, se escaparon 350.000, pudimos ganar 400.000
+        self::assertEqualsWithDelta(50000, $e['inspecciones']['ganado'], 0.01);
+        self::assertEqualsWithDelta(350000, $e['inspecciones']['escapado'], 0.01);
+        self::assertEqualsWithDelta(400000, $e['inspecciones']['posible'], 0.01);
+        // Clics, cada plataforma con su tarifa: 260 × 150 + 10 × 200 = 41.000; ganado 40 × 150 = 6.000
+        self::assertSame(270, $e['sin_clic']['cantidad']);
+        self::assertEqualsWithDelta(41000, $e['clics']['escapado'], 0.01);
+        self::assertEqualsWithDelta(6000, $e['clics']['ganado'], 0.01);
+        self::assertEqualsWithDelta(47000, $e['clics']['posible'], 0.01);
+        self::assertEqualsWithDelta(2000, $e['sin_clic']['por_fuente']['kavak']['escapado'], 0.01);
+        self::assertEqualsWithDelta(391000, $e['total'], 0.01);
     }
 
     public function testSinDatosParaCalcularElMontoQuedaNull(): void
     {
-        // Nadie tocó, sin inspecciones cobradas ni convenios activos; más clics que avisos no da negativo
-        $e = PlataEscapada::calcular(['vieron' => 10, 'tocaron' => 0, 'pagaron' => 0], ['mostrados' => 2, 'clics' => 5], null, null);
+        // Nadie tocó, sin inspecciones cobradas ni convenios activos; más clics que autos vistos no da negativo
+        $e = PlataEscapada::calcular(['vieron' => 10, 'tocaron' => 0, 'pagaron' => 0], [], null);
         self::assertNull($e['sin_tocar']['conversion']);
         self::assertNull($e['sin_tocar']['monto']);
         self::assertNull($e['sin_pagar']['monto']);
         self::assertSame(0, $e['sin_clic']['cantidad']);
-        self::assertNull($e['sin_clic']['monto']);
         self::assertSame(0.0, $e['total']);
+        $e = PlataEscapada::calcular(['vieron' => 0, 'tocaron' => 0, 'pagaron' => 0], ['kavak' => ['mostrados' => 2, 'clics' => 5, 'tarifa' => 200.0]], null);
+        self::assertSame(0, $e['sin_clic']['cantidad']);
+        self::assertEqualsWithDelta(1000, $e['clics']['ganado'], 0.01);
     }
 }
