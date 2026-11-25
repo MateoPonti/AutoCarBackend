@@ -105,6 +105,12 @@ final class EmpresaController
         Response::json(['solicitud' => Empresa::paraApi(Empresa::delUsuario($id))]);
     }
 
+    /** GET /api/empresas: las concesionarias con autos publicados → {empresas: [{id, nombre, autos}]} (filtro de Explorar) */
+    public function publicas(): void
+    {
+        Response::json(['empresas' => Empresa::conAutos()]);
+    }
+
     /** GET /api/empresas/{id}: la vitrina de una empresa aprobada → {empresa, vehiculos} (sus autos publicados) */
     public function vitrina(int $id): void
     {

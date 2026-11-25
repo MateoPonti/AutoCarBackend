@@ -78,6 +78,13 @@ final class EmpresasTest extends ApiTestCase
         self::assertSame([$ids[0]], array_column($deEmpresas, 'id'));
         self::assertSame($datos['razon_social'], $deEmpresas[0]['empresa']['nombre']);
         self::assertSame([], $this->pedir('GET', '/api/vehiculos?vendedor=particular&q=' . $marca)['json']['items']);
+        // Filtro "Concesionaria": la lista trae solo las que tienen autos publicados, y el filtro sus autos
+        $empresas = array_column($this->pedir('GET', '/api/empresas')['json']['empresas'], null, 'id');
+        self::assertSame(['id' => $empresaId, 'nombre' => $datos['razon_social'], 'autos' => 1], $empresas[$empresaId]);
+        $deLaEmpresa = $this->pedir('GET', "/api/vehiculos?empresa=$empresaId&orden=recientes&q=$marca")['json']['items'];
+        self::assertSame([$ids[0]], array_column($deLaEmpresa, 'id'));
+        self::assertSame([$ids[0]], array_column($this->pedir('GET', "/api/vehiculos?empresa=$empresaId&q=$marca")['json']['items'], 'id'));
+        self::assertSame([], $this->pedir('GET', "/api/vehiculos?empresa=999999999&q=$marca")['json']['items']);
         $relevantes = $this->pedir('GET', '/api/vehiculos?q=' . $marca);
         self::assertSame('relevantes', $relevantes['json']['orden']);
         self::assertSame([$ids[0]], array_column($relevantes['json']['items'], 'id'));
