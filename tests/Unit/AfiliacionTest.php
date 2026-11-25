@@ -77,4 +77,25 @@ final class AfiliacionTest extends TestCase
         self::assertSame(2700.0, $porMes['2026-10-01']['total']);  // 1.200 cobrado + 10 × 150 sin cobrar
         self::assertSame('cobrado', $porMes['2026-08-01']['estado'], 'sin nada que cobrar no queda pendiente');
     }
+
+    public function testLoSinLiquidarSeparaElMesEnCursoDeLosMesesCerradosSinCobrar(): void
+    {
+        $clics = [
+            ['mes' => '2026-10-01', 'fuente' => 'kavak', 'clics' => 6, 'validos' => 6],
+            ['mes' => '2026-10-01', 'fuente' => 'mercadolibre', 'clics' => 10, 'validos' => 10],
+            ['mes' => '2026-11-01', 'fuente' => 'kavak', 'clics' => 3, 'validos' => 3],
+        ];
+        $cobros = [
+            ['tipo' => 'plataforma', 'mes' => '2026-10-01', 'socio' => 'kavak', 'cantidad' => 6, 'monto' => 1200, 'cobrado_at' => '2026-11-03'],
+            ['tipo' => 'empresa', 'mes' => '2026-09-01', 'socio' => '7', 'cantidad' => 0, 'monto' => 50000, 'cobrado_at' => '2026-10-05'],
+        ];
+        $empresas = [['id' => 7, 'nombre' => 'Autos SA', 'desde' => '2026-09-01']];
+        $e = Afiliacion::evolucion(self::CONVENIOS, $clics, $cobros, new DateTimeImmutable('2026-11-20T12:00:00-03:00'), $empresas, 50000.0);
+
+        self::assertSame([
+            'mes' => '2026-11-01',
+            'clics' => ['en_curso' => 600.0, 'cerrados' => 1500.0],     // 3 × 200 de noviembre; MercadoLibre de octubre
+            'abonos' => ['en_curso' => 50000.0, 'cerrados' => 50000.0], // noviembre en curso; octubre sin cobrar (septiembre sí)
+        ], Afiliacion::sinLiquidar($e));
+    }
 }
