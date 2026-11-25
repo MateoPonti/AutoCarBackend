@@ -39,7 +39,7 @@ final class Explorar
               SELECT g.*, row_number() OVER (PARTITION BY tipo ORDER BY turno, created_at DESC, id DESC) AS puesto
                 FROM por_vendedor g
             )
-            SELECT p.tipo, p.concesionaria, v.*, f.id AS foto_id, (ver.id IS NOT NULL) AS verificado
+            SELECT p.tipo, p.concesionaria, v.*, f.id AS foto_id, (ver.id IS NOT NULL) AS verificado, ver.verificado_at
               FROM posiciones p JOIN vehiculo v USING (id)
               LEFT JOIN verificados ver ON ver.id = v.id
               LEFT JOIN LATERAL (SELECT id FROM vehiculo_foto WHERE vehiculo_id = v.id ORDER BY orden, id LIMIT 1) f ON true
@@ -53,6 +53,7 @@ final class Explorar
         foreach ($st as $v) {
             $filas[$v['tipo']]['items'][] = [
                 'verificado' => (bool)$v['verificado'],
+                'verificado_at' => $v['verificado_at'] !== null ? Verificacion::fecha($v['verificado_at']) : null,
                 'empresa' => $v['concesionaria'] === null ? null : ['id' => (int)$v['usuario_id'], 'nombre' => $v['concesionaria']],
                 'id' => (int)$v['id'], 'marca' => $v['marca'], 'modelo' => $v['modelo'], 'anio' => (int)$v['anio'],
                 'kilometraje' => (int)$v['kilometraje'], 'precio' => (float)$v['precio'], 'localidad' => Localidad::nombre($v['localidad']),

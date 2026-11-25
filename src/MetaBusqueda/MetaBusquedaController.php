@@ -5,6 +5,7 @@ namespace AutoCar\MetaBusqueda;
 
 use AutoCar\Auth\Auth;
 use AutoCar\Auth\Preferencias;
+use AutoCar\Catalogo\Verificacion;
 use AutoCar\Core\Database;
 use AutoCar\Core\Logger;
 use AutoCar\Core\Request;
@@ -133,7 +134,7 @@ final class MetaBusquedaController
         // El perfil del comprador ordena los resultados "para vos" (las cuentas del equipo no tienen)
         $uso = Preferencias::delUsuario((int)Auth::id())['uso'] ?? null;
         $cotizacion = Cotizacion::actual(); // dólar blue, se actualiza solo cada 12 horas
-        $respuesta = self::intentar(static fn() => $reporte->construir($b, $_GET, $uso, $cotizacion));
+        $respuesta = self::conVerificacion(self::intentar(static fn() => $reporte->construir($b, $_GET, $uso, $cotizacion)));
         // Para las estadísticas del admin: buscó en el metabuscador (la primera página, con el orden elegido)
         if ((int)($_GET['page'] ?? 1) <= 1 && (Auth::usuario()['rol'] ?? null) === 'usuario') {
             Eventos::busco((int)Auth::id(), $_GET['orden'] ?? null);
@@ -214,6 +215,30 @@ final class MetaBusquedaController
      * @param callable(): T $accion
      * @return T
      */
+    /**
+     * Marca "verificado" (y la fecha de la última verificación) en los autos de la página y en los destacados. Si
+     * falla, los resultados se muestran igual, sin la marca.
+     */
+    private static function conVerificacion(array $r): array
+    {
+        $destacados = array_filter($r['destacados'] ?? []);
+        try {
+            $fechas = Verificacion::deAutos(array_merge($r['resultados']['items'], array_column($destacados, 'auto')));
+        } catch (Throwable $e) {
+            Logger::error('Metabuscador, verificados: ' . $e->getMessage());
+            return $r;
+        }
+        $marcar = static fn(array $a): array => $a + [
+            'verificado'    => isset($fechas[(string)$a['id']]),
+            'verificado_at' => $fechas[(string)$a['id']] ?? null,
+        ];
+        $r['resultados']['items'] = array_map($marcar, $r['resultados']['items']);
+        foreach ($destacados as $clave => $d) {
+            $r['destacados'][$clave]['auto'] = $marcar($d['auto']);
+        }
+        return $r;
+    }
+
     private static function intentar(callable $accion): mixed
     {
         try {
