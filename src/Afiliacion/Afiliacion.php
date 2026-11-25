@@ -162,6 +162,30 @@ final class Afiliacion
         return $salida;
     }
 
+    /**
+     * Lo que todavía no se liquidó, por fuente (clics y abonos), para mostrarlo al lado de lo cobrado en el informe de
+     * Estadísticas: en_curso = lo que va del mes actual (se cobra cuando cierra); cerrados = meses que ya terminaron y
+     * falta marcar cobrados. Sale de la misma evolución que la grilla de liquidaciones, así los números coinciden.
+     * Función pura.
+     * @param list<array<string, mixed>> $evolucion la de evolucion()
+     * @return array{mes: ?string, clics: array{en_curso: float, cerrados: float}, abonos: array{en_curso: float, cerrados: float}}
+     */
+    public static function sinLiquidar(array $evolucion): array
+    {
+        $salida = ['mes' => null, 'clics' => ['en_curso' => 0.0, 'cerrados' => 0.0], 'abonos' => ['en_curso' => 0.0, 'cerrados' => 0.0]];
+        foreach ($evolucion as $m) {
+            if ($m['en_curso']) {
+                $salida['mes'] = $m['mes'];
+            }
+            foreach ($m['filas'] as $f) {
+                if ($f['cobrado_at'] === null && $f['monto'] > 0) {
+                    $salida[$f['tipo'] === 'empresa' ? 'abonos' : 'clics'][$m['en_curso'] ? 'en_curso' : 'cerrados'] += (float)$f['monto'];
+                }
+            }
+        }
+        return $salida;
+    }
+
     /** Las filas de un mes y sus totales, separados en clics (plataformas) y abonos (empresas). */
     private static function totales(array $filas): array
     {
