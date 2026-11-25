@@ -3,12 +3,14 @@ declare(strict_types=1);
 
 namespace AutoCar\Admin;
 
+use AutoCar\Afiliacion\Afiliacion;
 use AutoCar\Auth\Preferencias;
 use AutoCar\Core\Database;
 use AutoCar\Estadisticas\Panel;
 use AutoCar\Estadisticas\PlataEscapada;
 use AutoCar\Estadisticas\PorPerfil;
 use AutoCar\Core\Response;
+use DateTimeImmutable;
 use PDO;
 
 /**
@@ -25,6 +27,8 @@ final class AdminMetricasController
         Response::json([
             'periodo'       => ['dias' => $dias, 'opciones' => Panel::PERIODOS],
             'resumen'       => Panel::resumen($dias),
+            // Clics y abonos que todavía no se cobraron (el resumen cuenta solo lo cobrado): para mostrarlo al lado
+            'sin_liquidar'  => Afiliacion::sinLiquidar(Afiliacion::panel(new DateTimeImmutable())['evolucion']),
             'serie'         => Panel::serie($dias),
             'embudo'        => $embudo,
             // Lo que se dejó de ganar donde la gente se fue (sin pagar, sin tocar, sin clic), en pesos

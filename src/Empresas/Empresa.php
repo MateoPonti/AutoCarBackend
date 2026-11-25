@@ -167,7 +167,11 @@ final class Empresa
             'desde'  => $f['desde'],
         ], Database::pdo()->query(
             "SELECT e.usuario_id, e.razon_social,
-                    to_char(date_trunc('month', COALESCE(e.resuelto_at, e.created_at) AT TIME ZONE 'America/Argentina/Buenos_Aires'), 'YYYY-MM-01') AS desde
+                    to_char(LEAST(
+                        date_trunc('month', COALESCE(e.resuelto_at, e.created_at) AT TIME ZONE 'America/Argentina/Buenos_Aires')::date,
+                        -- un abono cobrado antes (cargado a mano o de demo) también cuenta: si no, ese mes no aparecería
+                        (SELECT min(c.mes) FROM cobro_afiliacion c WHERE c.tipo = 'empresa' AND c.socio = e.usuario_id::text)
+                    ), 'YYYY-MM-01') AS desde
                FROM empresa e JOIN usuario u ON u.id = e.usuario_id
               WHERE e.estado = 'aprobado' AND u.activo ORDER BY e.razon_social"
         )->fetchAll(PDO::FETCH_ASSOC));
