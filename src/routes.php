@@ -143,6 +143,7 @@ $router->patch('/api/mecanico/presupuestos/{id}', [PresupuestoController::class,
 $router->post('/api/solicitudes-taller', [SolicitudTallerController::class, 'enviar']);
 // "Sumá tu concesionaria" (033): la empresa pide sumarse (crea su cuenta), el admin la aprueba; su vitrina y su panel
 $router->post('/api/solicitudes-empresa', [EmpresaController::class, 'enviar']);
+$router->get('/api/empresas', [EmpresaController::class, 'publicas']);
 $router->get('/api/empresas/{id}', [EmpresaController::class, 'vitrina']);
 $router->get('/api/empresa/panel', [EmpresaController::class, 'panel'], 'empresa');
 $router->get('/api/admin/solicitudes-empresa', [EmpresaController::class, 'index'], 'permiso:usuarios.editar');
