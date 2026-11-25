@@ -6,6 +6,7 @@ namespace AutoCar\Admin;
 use AutoCar\Auth\Preferencias;
 use AutoCar\Core\Database;
 use AutoCar\Estadisticas\Panel;
+use AutoCar\Estadisticas\PlataEscapada;
 use AutoCar\Estadisticas\PorPerfil;
 use AutoCar\Core\Response;
 use PDO;
@@ -20,11 +21,14 @@ final class AdminMetricasController
     public function index(): void
     {
         $dias = Panel::dias($_GET['dias'] ?? null);
+        $embudo = Panel::embudo($dias);
         Response::json([
             'periodo'       => ['dias' => $dias, 'opciones' => Panel::PERIODOS],
             'resumen'       => Panel::resumen($dias),
             'serie'         => Panel::serie($dias),
-            'embudo'        => Panel::embudo($dias),
+            'embudo'        => $embudo,
+            // Lo que se dejó de ganar donde la gente se fue (sin pagar, sin tocar, sin clic), en pesos
+            'escapado'      => PlataEscapada::del($dias, $embudo['total']),
             // Plata, recomendaciones, búsquedas y órdenes separados por tipo de usuario ("¿Para qué buscás el auto?")
             'por_perfil'    => PorPerfil::todo($dias),
             'inspecciones'  => Panel::inspecciones($dias),
