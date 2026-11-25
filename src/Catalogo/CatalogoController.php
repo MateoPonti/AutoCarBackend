@@ -81,6 +81,7 @@ final class CatalogoController
         return array_map(static fn(array $v): array => Vehiculo::paraApi($v) + [
             'empresa' => $insignias[(int)$v['usuario_id']] ?? null,
             'verificado' => isset($verificados[$v['id']]),
+            'verificado_at' => $verificados[$v['id']] ?? null, // la última verificación, aunque haya varias
         ], $filas);
     }
 
