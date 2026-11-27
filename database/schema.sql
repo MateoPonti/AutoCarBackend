@@ -1422,7 +1422,7 @@ CREATE INDEX IF NOT EXISTS idx_taller_localidad ON taller (localidad);
 CREATE INDEX IF NOT EXISTS idx_taller_estado ON taller (estado, created_at);
 
 -- El auto puede ser de cualquier sitio: url + fuente siempre; vehiculo_id solo si es de AutoCar.
--- Los montos se guardan al pedirla (el taller puede cambiar su precio después). El pago es simulado.
+-- Los montos se guardan al pedirla (el taller puede cambiar su precio después). El cobro con Mercado Pago, cuando está activo, se registra en la tabla cobro.
 -- Al firmar se copian el nombre del mecánico y del taller, y huella = SHA-256 del informe (ver Inspecciones\Huella).
 CREATE TABLE IF NOT EXISTS inspeccion (
   id               INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

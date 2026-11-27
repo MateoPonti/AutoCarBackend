@@ -139,6 +139,16 @@ final class InspeccionesMecanicoTest extends ApiTestCase
         self::assertSame(200, $borrador['status'], json_encode($borrador['json']));
         self::assertCount(3, $borrador['json']['inspeccion']['items']);
 
+        foreach (['codigo', 'resultado', 'nota'] as $campo) {
+            $item = ['codigo' => 'motor', 'resultado' => 'ok', 'nota' => null];
+            $item[$campo] = ['texto'];
+            $rechazado = $this->pedir('PUT', "/api/mecanico/inspecciones/$id/informe", ['items' => [$item]]);
+            self::assertSame(422, $rechazado['status'], $campo);
+            self::assertArrayHasKey('items', $rechazado['json']['errores']);
+        }
+        $detalle = $this->pedir('GET', "/api/inspecciones/$id");
+        self::assertSame($borrador['json']['inspeccion']['items'], $detalle['json']['inspeccion']['items']);
+
         $incompleta = $this->pedir('POST', "/api/mecanico/inspecciones/$id/firma", []);
         self::assertSame(422, $incompleta['status']);
         self::assertSame('informe_incompleto', $incompleta['json']['error']);

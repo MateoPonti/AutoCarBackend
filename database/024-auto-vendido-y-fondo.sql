@@ -33,18 +33,34 @@ CREATE TABLE IF NOT EXISTS credito (
 );
 CREATE INDEX IF NOT EXISTS idx_credito_usuario ON credito (usuario_id, created_at) WHERE usado_en IS NULL;
 
--- 4. Lo que pagó el fondo y lo que puso el mecánico en cada reclamo que procedió
-ALTER TABLE reclamo ADD COLUMN IF NOT EXISTS devolucion NUMERIC(11,2) CHECK (devolucion >= 0);
-ALTER TABLE reclamo ADD COLUMN IF NOT EXISTS franquicia NUMERIC(11,2) CHECK (franquicia >= 0);
--- Los que ya procedieron: se devolvió el precio y el mecánico no pagó franquicia (todavía no existía)
-UPDATE reclamo r SET devolucion = i.precio, franquicia = 0
-  FROM inspeccion i WHERE i.id = r.inspeccion_id AND r.estado = 'procede' AND r.devolucion IS NULL;
+DO $migracion$
+BEGIN
+  -- La 034 retiró el fondo. Conservar ese estado al repetir la migración.
+  IF to_regclass('reclamo') IS NOT NULL THEN
+    -- 4. Lo que pagó el fondo y lo que puso el mecánico en cada reclamo que procedió
+    ALTER TABLE reclamo ADD COLUMN IF NOT EXISTS devolucion NUMERIC(11,2) CHECK (devolucion >= 0);
+    ALTER TABLE reclamo ADD COLUMN IF NOT EXISTS franquicia NUMERIC(11,2) CHECK (franquicia >= 0);
+    -- Los que ya procedieron: se devolvió el precio y el mecánico no pagó franquicia (todavía no existía)
+    UPDATE reclamo r SET devolucion = i.precio, franquicia = 0
+      FROM inspeccion i WHERE i.id = r.inspeccion_id AND r.estado = 'procede' AND r.devolucion IS NULL;
+    INSERT INTO parametro (clave, valor, minimo, maximo, unidad, descripcion, orden)
+    VALUES ('franquicia', 40, 0, 100, 'porcentaje', 'Parte de lo que cobró el mecánico que paga al fondo si un reclamo procede', 9)
+    ON CONFLICT (clave) DO NOTHING;
+  END IF;
 
--- Parámetros nuevos (la unidad 'horas' es para la ventana del cupón)
-ALTER TABLE parametro DROP CONSTRAINT IF EXISTS parametro_unidad_check;
-ALTER TABLE parametro ADD CONSTRAINT parametro_unidad_check CHECK (unidad IN ('porcentaje', 'pesos', 'dias', 'veces', 'horas'));
+  -- Las migraciones posteriores amplían esta misma restricción con otras unidades.
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'parametro'::regclass AND conname = 'parametro_unidad_check'
+      AND position('''horas''' in pg_get_constraintdef(oid)) > 0
+  ) THEN
+    ALTER TABLE parametro DROP CONSTRAINT IF EXISTS parametro_unidad_check;
+    ALTER TABLE parametro ADD CONSTRAINT parametro_unidad_check CHECK (unidad IN ('porcentaje', 'pesos', 'dias', 'veces', 'horas'));
+  END IF;
+END;
+$migracion$;
+
 INSERT INTO parametro (clave, valor, minimo, maximo, unidad, descripcion, orden) VALUES
-  ('franquicia',      40, 0, 100, 'porcentaje', 'Parte de lo que cobró el mecánico que paga al fondo si un reclamo procede', 9),
   ('credito_vendido', 30, 0, 100, 'porcentaje', 'Crédito para el comprador, en % del precio, si el auto se vendió (firmada con el auto vendido o cupón)', 10),
   ('horas_cupon',     48, 1, 720, 'horas',      'Horas después de la firma en las que, si el auto se vende con el turno confirmado, el comprador recibe el cupón', 11)
 ON CONFLICT (clave) DO NOTHING;
