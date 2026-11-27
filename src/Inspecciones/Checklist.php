@@ -38,18 +38,22 @@ final class Checklist
         }
         $validos = [];
         foreach ($items as $item) {
-            $codigo = is_array($item) ? trim((string)($item['codigo'] ?? '')) : '';
+            $codigo = is_array($item) && is_string($item['codigo'] ?? null) ? trim($item['codigo']) : '';
             if (!isset(self::ITEMS[$codigo])) {
                 return [[], 'Hay un ítem del checklist que no existe.'];
             }
             if (isset($validos[$codigo])) {
                 return [[], "El ítem \"$codigo\" está repetido."];
             }
-            $resultado = (string)($item['resultado'] ?? '');
+            $resultado = $item['resultado'] ?? null;
             if (!in_array($resultado, self::RESULTADOS, true)) {
                 return [[], "El resultado de \"$codigo\" tiene que ser ok, observado o falla."];
             }
-            $nota = trim((string)($item['nota'] ?? ''));
+            $nota = $item['nota'] ?? '';
+            if (!is_string($nota)) {
+                return [[], "La nota de \"$codigo\" tiene que ser texto."];
+            }
+            $nota = trim($nota);
             if (mb_strlen($nota) > self::MAX_NOTA) {
                 return [[], "La nota de \"$codigo\" puede tener hasta " . self::MAX_NOTA . ' caracteres.'];
             }

@@ -8,11 +8,11 @@ El comprador encuentra un auto en cualquier sitio (MercadoLibre, Kavak, Autocosm
 
 **El informe reduce el riesgo, no lo elimina.** Si al mecánico se le pasa algo, ese es el punto ciego del servicio, y es un riesgo que asume el comprador: no hay reclamo ni devolución después de la firma. Se sacaron el 23/11 (después de la devolución del profe) porque no se pueden verificar (nadie puede saber si la falla estaba el día de la inspección o apareció después) y porque llegan cuando el comprador ya compró, o sea cuando la decisión ya está tomada. Tampoco hay historial por patente: un auto puede dejar de estar publicado a las dos semanas y las inspecciones viejas quedan sin sentido.
 
-AutoCar se queda una parte de cada inspección. El pago, por ahora, es **simulado**: se guarda el desglose, pero no se cobra.
+AutoCar se queda una parte de cada inspección. Con el proveedor activo, el comprador paga en Checkout Pro y AutoCar consulta el resultado en la API de Orders. Con el proveedor desactivado, se usa el flujo simulado. [Ensayo de pago en desarrollo](demo-pago.md).
 
 ## 2. Los componentes
 
-Las reglas son **funciones puras** en `src/Inspecciones/`: no tocan la base ni la red, así que se prueban solas (`tests/Unit/InspeccionesTest.php`). Los controladores, cuando estén, solo van a leer el pedido, llamar a estas reglas y guardar.
+Las reglas son **funciones puras** en `src/Inspecciones/`: no tocan la base ni la red, así que se prueban solas (`tests/Unit/InspeccionesTest.php`). Los controladores validan el pedido con estas reglas y guardan el resultado.
 
 | Componente | Qué resuelve | Lo usa |
 |---|---|---|
@@ -59,7 +59,7 @@ erDiagram
 | Tabla | Qué guarda |
 |---|---|
 | `taller` | El perfil del mecánico: nombre, dirección, localidad, teléfono y precio de la inspección. La clave es el `usuario_id` del mecánico. `demo = true` en los talleres de ejemplo |
-| `inspeccion` | El pedido entero: quién pide, a qué mecánico, el link y la fuente, los datos del auto, el estado, los montos que se fijaron al pedir, el pago simulado y, al firmar, la conclusión, el nombre del mecánico y del taller, la fecha y la huella |
+| `inspeccion` | El pedido entero: quién pide, a qué mecánico, el link y la fuente, los datos del auto, el estado, los montos que se fijaron al pedir, el estado interno del pago y, al firmar, la conclusión, el nombre del mecánico y del taller, la fecha y la huella |
 | `inspeccion_item` | Un renglón por ítem del checklist: código, resultado y nota |
 
 **La base también controla** lo más importante, por si un endpoint se equivoca: los montos del mecánico y de AutoCar suman el precio, nadie se inspecciona a sí mismo y una inspección firmada tiene que tener conclusión, firmante, fecha y huella.
@@ -140,7 +140,7 @@ Todas están en el back (el front repite algunas para avisar antes, pero la que 
 - Solo mecánicos **de la red**: taller aprobado y activo, cuenta activa y con `verificaciones.realizar`.
 - 409 si hay interés propio: el mecánico no se pide una a sí mismo (`mecanico_propio`), el vendedor no la pide para su auto (`vehiculo_propio`), no se elige al mecánico que publicó el auto (`mecanico_vendedor`), y no se pide dos veces el mismo link mientras hay una en curso (`duplicada`).
 
-**Plata (`Precio`, el pago todavía es simulado)**
+**Plata (`Precio` y `Pagos/Cobros`)**
 - Precio sugerido **$ 100.000**; cada taller pone el suyo entre **$ 70.000 y $ 150.000** (parámetros `precio_minimo`, `precio_sugerido` y `precio_maximo`). **77 %** para el mecánico y **23 %** para AutoCar (`comision_autocar`). Se redondea a $ 1.000. No hay fondo de garantía.
 - Los montos se guardan al pedirla: si el taller cambia el precio después, no afecta a las pedidas.
 - Pago: `retenido` al pedir → `liberado` al firmar, o `reembolsado` si el mecánico la rechaza, el comprador la cancela, no se hace o se cae.

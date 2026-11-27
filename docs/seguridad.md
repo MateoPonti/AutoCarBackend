@@ -1,6 +1,6 @@
 # Seguridad de AutoCar
 
-Todo lo que protege al sitio hoy, en el front (Vercel), el back (Render) y la infraestructura. Al día el **17/11/2026**.
+Todo lo que protege al sitio hoy, en el front (Vercel), el back (Render) y la infraestructura. Controles revisados contra el código de la entrega final el **27/11/2026**. Las comprobaciones históricas sobre el despliegue conservan su fecha.
 Lo que dice "verificado" se probó contra producción (`https://autocar-zeta.vercel.app` y `https://autocarbackend-1.onrender.com`).
 
 ## 1. Resumen
@@ -55,7 +55,7 @@ Lo que dice "verificado" se probó contra producción (`https://autocar-zeta.ver
 
 - Cada ruta declara lo que pide en `src/routes.php`: `auth` (con sesión), `usuario` (compra y vende), o un permiso (`permiso:vehiculos.moderar`, `permiso:parametros.editar`…).
 - El rol **no se guarda en la sesión**: en cada pedido se leen de la base el usuario (si sigue activo) y los permisos de su rol (`rol`, `permiso`, `rol_permiso`). Una baja o un cambio de rol surten efecto al instante.
-- Roles: `usuario`, `mecanico`, `moderador` y `admin`. El equipo y los talleres no compran ni venden (403).
+- Roles: `usuario`, `empresa`, `mecanico`, `moderador` y `admin`. El guard `vendedor` permite publicar a cuentas personales y empresas. El guard `empresa` protege el panel de la concesionaria.
 - **Reglas de dueño y conflicto de interés**, aparte de los permisos: solo el dueño ve y cambia lo suyo (publicaciones, chats, inspecciones, búsquedas); nadie modera su propia publicación (409); no se puede guardar en favoritos ni abrir un chat sobre un auto propio (409).
 - **Cambios concurrentes:** los `UPDATE` de estado exigen el estado que se leyó (`AND estado = :desde`). Si dos personas deciden a la vez, la segunda recibe 409. Un solo pedido de inspección en curso por comprador y aviso, con índice único (`020-seguridad.sql`).
 
@@ -115,6 +115,10 @@ Los dos mandan **HSTS** (`Strict-Transport-Security`): después de la primera vi
 - **Firestore con mínimo privilegio:** Render usa una cuenta de **solo lectura** ("Cloud Datastore Viewer"). La de escritura está solo en la PC del scraper y en GitHub Actions.
 - **GitHub Actions:** secretos por Environment (`prod` solo desde `main`, `dev` solo desde `dev`): correr el scraper desde `dev` nunca puede tocar prod.
 - **Flujo de ramas:** los cambios entran por PR con CI en verde (`feat/*` → `dev` → `main`) y nunca con `push --force`. Es una regla del grupo: en GitHub las ramas `main` no tienen protección configurada (ver sección 13).
+
+## Cobros e informes de la entrega final
+
+El token de Mercado Pago permanece en el servidor. Al recibir el retorno del comprador o un aviso del proveedor, la API consulta el estado de la orden asociada a esa inspección. El mecánico asignado puede aceptar cuando el cobro está confirmado. El checklist rechaza campos de tipo incorrecto antes de guardar. La huella protege el contenido firmado y la insignia pública comunica únicamente el estado de verificación. La decisión del 23/11 retiró el circuito de compensación poscompra.
 
 ## 12. Pruebas que lo cubren
 

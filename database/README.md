@@ -45,12 +45,13 @@
 | 33 | `033-empresas-y-ranking.sql` | Empresas (concesionarias): rol `empresa` y tabla `empresa` (razón social, CUIT, estado pendiente/aprobado/rechazado, como los talleres), `vehiculo_visita` (una visita por visitante, auto y día, para el panel de la empresa), `vehiculo_mercado` (el precio de cada publicación contra autos parecidos de otros sitios, guardado para el ranking de Explorar: se calcula al aprobarla y una vez por día, así Explorar no lee Firestore) y los parámetros `limite_autos_particular` (3) y `abono_empresa_mensual`. Suma la unidad `autos` a los parámetros. Correrla **antes** de desplegar el back que la usa |
 | 34 | `034-sin-reclamos-ni-fondo.sql` | 23/11: sin reclamos ni fondo de garantía (el reclamo no se puede verificar y llega cuando el comprador ya compró). Borra la tabla `reclamo`, las columnas `monto_fondo`, `tope_veces` y `dias_reclamo` de `inspeccion`, los parámetros `parte_fondo`, `tope_veces`, `dias_reclamo`, `franquicia`, `ranking_veces_reclamo` y `ranking_especialidad_buena`, y el permiso `reclamos.resolver`. El ranking de mecánicos pasa a ser por experiencia (inspecciones firmadas). |
 | 35 | `035-sin-historial-por-patente.sql` | 23/11: el informe ya no trae las inspecciones anteriores de la misma patente (un auto puede dejar de estar publicado y ese historial queda sin sentido). La patente y la foto de la chapa se quedan; se borra solo el índice `idx_inspeccion_patente`, que servía para buscarlas. |
+| 36 | `036-tope-talleres-demo.sql` | Ajusta al máximo configurado los precios publicados de talleres de muestra que lo superan. Los importes de inspecciones ya pedidas quedan en cada inspección. |
 
 Se copian y pegan enteras en el **SQL Editor de Neon**, primero en el proyecto de Neon de dev y en el de main recién cuando se pasa `dev` → `main` (son dos proyectos separados).
 
 ### Estado al 11/11/2026
 
-Verificado con una consulta de solo lectura contra las dos bases: **Neon dev y Neon main tienen corridas todas las migraciones, de la `001` a la `020`**. La próxima migración nueva es la `021`. La `021` (14/11) se corre en dev con el back nuevo y en main en el próximo pase.
+Verificado con una consulta de solo lectura contra las dos bases: **Neon dev y Neon main tienen corridas todas las migraciones, de la `001` a la `020`**. Es un registro histórico de esa fecha. Para una instalación actual, usar el esquema completo o continuar desde la última migración efectivamente aplicada.
 
 La `007` (mecánicos `mecanicoN@demo.autocar.com.ar`) está solo en dev, como corresponde. Main tiene **sus propios talleres de demo**, cargados el 11/11 desde el sitio: 5 talleres aprobados (`*@autocar.test`: Acosta, Benítez, Gómez, Medina y Ferreyra), 3 compradores y 15 inspecciones firmadas (3 por mecánico). No se borran: son los que permiten hacer la demo sobre la URL pública.
 
